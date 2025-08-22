@@ -1,0 +1,248 @@
+[
+    {
+        "arguments": [
+            "/usr/bin/gcc",
+            "-pthread",
+            "-O2",
+            "-g",
+            "-W",
+            "-Wall",
+            "-Wno-unused-parameter",
+            "-Wbad-function-cast",
+            "-Wuninitialized",
+            "-c",
+            "mdb.c"
+        ],
+        "directory": "/Users/clementrenault/Documents/lmdb/libraries/liblmdb",
+        "file": "/Users/clementrenault/Documents/lmdb/libraries/liblmdb/mdb.c"
+    },
+    {
+        "arguments": [
+            "/usr/bin/gcc",
+            "-pthread",
+            "-O2",
+            "-g",
+            "-W",
+            "-Wall",
+            "-Wno-unused-parameter",
+            "-Wbad-function-cast",
+            "-Wuninitialized",
+            "-c",
+            "midl.c"
+        ],
+        "directory": "/Users/clementrenault/Documents/lmdb/libraries/liblmdb",
+        "file": "/Users/clementrenault/Documents/lmdb/libraries/liblmdb/midl.c"
+    },
+    {
+        "arguments": [
+            "/usr/bin/gcc",
+            "-pthread",
+            "-O2",
+            "-g",
+            "-W",
+            "-Wall",
+            "-Wno-unused-parameter",
+            "-Wbad-function-cast",
+            "-Wuninitialized",
+            "-fPIC",
+            "-c",
+            "-o",
+            "mdb.lo",
+            "mdb.c"
+        ],
+        "directory": "/Users/clementrenault/Documents/lmdb/libraries/liblmdb",
+        "file": "/Users/clementrenault/Documents/lmdb/libraries/liblmdb/mdb.c",
+        "output": "/Users/clementrenault/Documents/lmdb/libraries/liblmdb/mdb.lo"
+    },
+    {
+        "arguments": [
+            "/usr/bin/gcc",
+            "-pthread",
+            "-O2",
+            "-g",
+            "-W",
+            "-Wall",
+            "-Wno-unused-parameter",
+            "-Wbad-function-cast",
+            "-Wuninitialized",
+            "-fPIC",
+            "-c",
+            "-o",
+            "midl.lo",
+            "midl.c"
+        ],
+        "directory": "/Users/clementrenault/Documents/lmdb/libraries/liblmdb",
+        "file": "/Users/clementrenault/Documents/lmdb/libraries/liblmdb/midl.c",
+        "output": "/Users/clementrenault/Documents/lmdb/libraries/liblmdb/midl.lo"
+    },
+    {
+        "arguments": [
+            "/usr/bin/gcc",
+            "-pthread",
+            "-O2",
+            "-g",
+            "-W",
+            "-Wall",
+            "-Wno-unused-parameter",
+            "-Wbad-function-cast",
+            "-Wuninitialized",
+            "-c",
+            "mdb_stat.c"
+        ],
+        "directory": "/Users/clementrenault/Documents/lmdb/libraries/liblmdb",
+        "file": "/Users/clementrenault/Documents/lmdb/libraries/liblmdb/mdb_stat.c"
+    },
+    {
+        "arguments": [
+            "/usr/bin/gcc",
+            "-pthread",
+            "-O2",
+            "-g",
+            "-W",
+            "-Wall",
+            "-Wno-unused-parameter",
+            "-Wbad-function-cast",
+            "-Wuninitialized",
+            "-c",
+            "mdb_copy.c"
+        ],
+        "directory": "/Users/clementrenault/Documents/lmdb/libraries/liblmdb",
+        "file": "/Users/clementrenault/Documents/lmdb/libraries/liblmdb/mdb_copy.c"
+    },
+    {
+        "arguments": [
+            "/usr/bin/gcc",
+            "-pthread",
+            "-O2",
+            "-g",
+            "-W",
+            "-Wall",
+            "-Wno-unused-parameter",
+            "-Wbad-function-cast",
+            "-Wuninitialized",
+            "-c",
+            "mdb_dump.c"
+        ],
+        "directory": "/Users/clementrenault/Documents/lmdb/libraries/liblmdb",
+        "file": "/Users/clementrenault/Documents/lmdb/libraries/liblmdb/mdb_dump.c"
+    },
+    {
+        "arguments": [
+            "/usr/bin/gcc",
+            "-pthread",
+            "-O2",
+            "-g",
+            "-W",
+            "-Wall",
+            "-Wno-unused-parameter",
+            "-Wbad-function-cast",
+            "-Wuninitialized",
+            "-c",
+            "mdb_load.c"
+        ],
+        "directory": "/Users/clementrenault/Documents/lmdb/libraries/liblmdb",
+        "file": "/Users/clementrenault/Documents/lmdb/libraries/liblmdb/mdb_load.c"
+    },
+    {
+        "arguments": [
+            "/usr/bin/gcc",
+            "-pthread",
+            "-O2",
+            "-g",
+            "-W",
+            "-Wall",
+            "-Wno-unused-parameter",
+            "-Wbad-function-cast",
+            "-Wuninitialized",
+            "-c",
+            "mdb_drop.c"
+        ],
+        "directory": "/Users/clementrenault/Documents/lmdb/libraries/liblmdb",
+        "file": "/Users/clementrenault/Documents/lmdb/libraries/liblmdb/mdb_drop.c"
+    },
+    {
+        "arguments": [
+            "/usr/bin/gcc",
+            "-pthread",
+            "-O2",
+            "-g",
+            "-W",
+            "-Wall",
+            "-Wno-unused-parameter",
+            "-Wbad-function-cast",
+            "-Wuninitialized",
+            "-c",
+            "mtest.c"
+        ],
+        "directory": "/Users/clementrenault/Documents/lmdb/libraries/liblmdb",
+        "file": "/Users/clementrenault/Documents/lmdb/libraries/liblmdb/mtest.c"
+    },
+    {
+        "arguments": [
+            "/usr/bin/gcc",
+            "-pthread",
+            "-O2",
+            "-g",
+            "-W",
+            "-Wall",
+            "-Wno-unused-parameter",
+            "-Wbad-function-cast",
+            "-Wuninitialized",
+            "-c",
+            "mtest2.c"
+        ],
+        "directory": "/Users/clementrenault/Documents/lmdb/libraries/liblmdb",
+        "file": "/Users/clementrenault/Documents/lmdb/libraries/liblmdb/mtest2.c"
+    },
+    {
+        "arguments": [
+            "/usr/bin/gcc",
+            "-pthread",
+            "-O2",
+            "-g",
+            "-W",
+            "-Wall",
+            "-Wno-unused-parameter",
+            "-Wbad-function-cast",
+            "-Wuninitialized",
+            "-c",
+            "mtest3.c"
+        ],
+        "directory": "/Users/clementrenault/Documents/lmdb/libraries/liblmdb",
+        "file": "/Users/clementrenault/Documents/lmdb/libraries/liblmdb/mtest3.c"
+    },
+    {
+        "arguments": [
+            "/usr/bin/gcc",
+            "-pthread",
+            "-O2",
+            "-g",
+            "-W",
+            "-Wall",
+            "-Wno-unused-parameter",
+            "-Wbad-function-cast",
+            "-Wuninitialized",
+            "-c",
+            "mtest4.c"
+        ],
+        "directory": "/Users/clementrenault/Documents/lmdb/libraries/liblmdb",
+        "file": "/Users/clementrenault/Documents/lmdb/libraries/liblmdb/mtest4.c"
+    },
+    {
+        "arguments": [
+            "/usr/bin/gcc",
+            "-pthread",
+            "-O2",
+            "-g",
+            "-W",
+            "-Wall",
+            "-Wno-unused-parameter",
+            "-Wbad-function-cast",
+            "-Wuninitialized",
+            "-c",
+            "mtest5.c"
+        ],
+        "directory": "/Users/clementrenault/Documents/lmdb/libraries/liblmdb",
+        "file": "/Users/clementrenault/Documents/lmdb/libraries/liblmdb/mtest5.c"
+    }
+]
