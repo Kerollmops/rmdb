@@ -9645,7 +9645,10 @@ unsafe extern "C" fn mdb_node_shrink(mut mp: *mut MDB_page, mut indx: indx_t) {
     }
     (*(sp as *mut std::ffi::c_void as *mut MDB_page2)).mp2_upper =
         (*(sp as *mut std::ffi::c_void as *mut MDB_page2)).mp2_lower;
-    (*sp).mp_p.p_pgno = (*mp).mp_p.p_pgno;
+    // (*sp).mp_p.p_pgno = (*mp).mp_p.p_pgno;
+    let mut new_sp = sp.read_unaligned();
+    new_sp.mp_p.p_pgno = (*mp).mp_p.p_pgno;
+    sp.write_unaligned(new_sp);
     (*node).mn_lo = (nsize as std::ffi::c_int & 0xffff as std::ffi::c_int) as std::ffi::c_ushort;
     (*node).mn_hi = (nsize as std::ffi::c_int >> 16 as std::ffi::c_int) as std::ffi::c_ushort;
     base = (mp as *mut std::ffi::c_char)
