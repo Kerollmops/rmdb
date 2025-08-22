@@ -9740,7 +9740,7 @@ unsafe extern "C" fn mdb_xcursor_init1(mut mc: *mut MDB_cursor, mut node: *mut M
                 }),
             ))
             >> 1 as std::ffi::c_int) as mdb_size_t;
-        (*mx).mx_db.md_root = (*fp).mp_p.p_pgno;
+        (*mx).mx_db.md_root = fp.read_unaligned().mp_p.p_pgno;
         (*mx).mx_cursor.mc_snum = 1 as std::ffi::c_ushort;
         (*mx).mx_cursor.mc_top = 0 as std::ffi::c_ushort;
         (*mx).mx_cursor.mc_flags |= 0x1 as std::ffi::c_uint;
