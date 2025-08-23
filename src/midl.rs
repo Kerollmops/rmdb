@@ -186,7 +186,7 @@ pub unsafe extern "C" fn mdb_midl_append_list(
             .offset((*ids.offset(0 as std::ffi::c_int as isize)).wrapping_add(1 as MDB_ID) as isize)
             as *mut MDB_ID as *mut std::ffi::c_void,
         &mut *app.offset(1 as std::ffi::c_int as isize) as *mut MDB_ID as *const std::ffi::c_void,
-        (*app.offset(0 as isize)).wrapping_mul(::core::mem::size_of::<MDB_ID>() as u64) as usize,
+        (*app.offset(0 as isize)).wrapping_mul(::core::mem::size_of::<MDB_ID>() as _) as usize,
     );
     let ref mut fresh5 = *ids.offset(0 as std::ffi::c_int as isize);
     *fresh5 = (*fresh5 as std::ffi::c_ulong)
