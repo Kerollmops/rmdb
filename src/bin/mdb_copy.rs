@@ -12,11 +12,25 @@ unsafe extern "C" {
     pub type _IO_wide_data;
     pub type _IO_codecvt;
     pub type _IO_marker;
-    static mut stderr: *mut FILE;
     fn fprintf(__stream: *mut FILE, __format: *const std::ffi::c_char, ...) -> std::ffi::c_int;
     fn printf(__format: *const std::ffi::c_char, ...) -> std::ffi::c_int;
     fn exit(__status: std::ffi::c_int) -> !;
     fn signal(__sig: std::ffi::c_int, __handler: __sighandler_t) -> __sighandler_t;
+}
+
+#[cfg(all(target_endian = "little", target_os = "linux", target_pointer_width = "64"))]
+const unsafe fn get_stderr() -> *mut FILE {
+    unsafe extern "C" {
+        static mut stderr: *mut FILE;
+    }
+    unsafe { stderr }
+}
+#[cfg(all(target_endian = "little", target_os = "macos", target_pointer_width = "64"))]
+const unsafe fn get_stderr() -> *mut FILE {
+    unsafe extern "C" {
+        static mut __stderrp: *mut FILE;
+    }
+    unsafe { __stderrp }
 }
 
 use rmdb::*;
@@ -133,7 +147,7 @@ unsafe fn main_0(
     }
     if argc < 2 as std::ffi::c_int || argc > 3 as std::ffi::c_int {
         fprintf(
-            stderr,
+            get_stderr(),
             b"usage: %s [-V] [-c] [-n] [-v] srcpath [dstpath]\n\0" as *const u8
                 as *const std::ffi::c_char,
             progname,
@@ -164,7 +178,7 @@ unsafe fn main_0(
     }
     if rc != 0 {
         fprintf(
-            stderr,
+            get_stderr(),
             b"%s: %s failed, error %d (%s)\n\0" as *const u8 as *const std::ffi::c_char,
             progname,
             act,

@@ -12,8 +12,6 @@ unsafe extern "C" {
     pub type _IO_wide_data;
     pub type _IO_codecvt;
     pub type _IO_marker;
-    static mut __stdoutp: *mut FILE;
-    static mut __stderrp: *mut FILE;
     fn fprintf(__stream: *mut FILE, __format: *const std::ffi::c_char, ...) -> std::ffi::c_int;
     fn printf(__format: *const std::ffi::c_char, ...) -> std::ffi::c_int;
     fn fputs(__s: *const std::ffi::c_char, __stream: *mut FILE) -> std::ffi::c_int;
@@ -37,6 +35,36 @@ unsafe extern "C" {
         ___argv: *const *mut std::ffi::c_char,
         __shortopts: *const std::ffi::c_char,
     ) -> std::ffi::c_int;
+}
+
+#[cfg(all(target_endian = "little", target_os = "linux", target_pointer_width = "64"))]
+const unsafe fn get_stderr() -> *mut FILE {
+    unsafe extern "C" {
+        static mut stderr: *mut FILE;
+    }
+    unsafe { stderr }
+}
+#[cfg(all(target_endian = "little", target_os = "macos", target_pointer_width = "64"))]
+const unsafe fn get_stderr() -> *mut FILE {
+    unsafe extern "C" {
+        static mut __stderrp: *mut FILE;
+    }
+    unsafe { __stderrp }
+}
+
+#[cfg(all(target_endian = "little", target_os = "linux", target_pointer_width = "64"))]
+const unsafe fn get_stdout() -> *mut FILE {
+    unsafe extern "C" {
+        static mut stdout: *mut FILE;
+    }
+    unsafe { stdout }
+}
+#[cfg(all(target_endian = "little", target_os = "macos", target_pointer_width = "64"))]
+const unsafe fn get_stdout() -> *mut FILE {
+    unsafe extern "C" {
+        static mut __stdoutp: *mut FILE;
+    }
+    unsafe { __stdoutp }
 }
 
 use rmdb::*;
@@ -127,7 +155,7 @@ unsafe extern "C" fn prstat(mut ms: *mut MDB_stat) {
 }
 unsafe extern "C" fn usage(mut prog: *mut std::ffi::c_char) {
     fprintf(
-        __stderrp,
+        get_stderr(),
         b"usage: %s [-V] [-n] [-e] [-r[r]] [-f[f[f]]] [-v] [-a|-s subdb] dbpath\n\0" as *const u8
             as *const std::ffi::c_char,
         prog,
@@ -231,7 +259,7 @@ unsafe fn main_0(
     rc = mdb_env_create(&mut env);
     if rc != 0 {
         fprintf(
-            __stderrp,
+            get_stderr(),
             b"mdb_env_create failed, error %d %s\n\0" as *const u8 as *const std::ffi::c_char,
             rc,
             mdb_strerror(rc),
@@ -249,7 +277,7 @@ unsafe fn main_0(
     );
     if rc != 0 {
         fprintf(
-            __stderrp,
+            get_stderr(),
             b"mdb_env_open failed, error %d %s\n\0" as *const u8 as *const std::ffi::c_char,
             rc,
             mdb_strerror(rc),
@@ -302,7 +330,7 @@ unsafe fn main_0(
                             *mut FILE,
                         ) -> std::ffi::c_int,
                 )),
-                __stdoutp as *mut std::ffi::c_void,
+                get_stdout() as *mut std::ffi::c_void,
             );
             if rdrinfo > 1 as std::ffi::c_int {
                 let mut dead: std::ffi::c_int = 0;
@@ -328,7 +356,7 @@ unsafe fn main_0(
                                 *mut FILE,
                             ) -> std::ffi::c_int,
                     )),
-                    __stdoutp as *mut std::ffi::c_void,
+                    get_stdout() as *mut std::ffi::c_void,
                 );
             }
             if !(!subname.is_null() || alldbs != 0 || freinfo != 0) {
@@ -345,7 +373,7 @@ unsafe fn main_0(
                 rc = mdb_txn_begin(env, 0 as *mut MDB_txn, 0x20000 as std::ffi::c_uint, &mut txn);
                 if rc != 0 {
                     fprintf(
-                        __stderrp,
+                        get_stderr(),
                         b"mdb_txn_begin failed, error %d %s\n\0" as *const u8
                             as *const std::ffi::c_char,
                         rc,
@@ -365,7 +393,7 @@ unsafe fn main_0(
                         rc = mdb_cursor_open(txn, dbi, &mut cursor);
                         if rc != 0 {
                             fprintf(
-                                __stderrp,
+                                get_stderr(),
                                 b"mdb_cursor_open failed, error %d %s\n\0" as *const u8
                                     as *const std::ffi::c_char,
                                 rc,
@@ -376,7 +404,7 @@ unsafe fn main_0(
                             rc = mdb_stat(txn, dbi, &mut mst);
                             if rc != 0 {
                                 fprintf(
-                                    __stderrp,
+                                    get_stderr(),
                                     b"mdb_stat failed, error %d %s\n\0" as *const u8
                                         as *const std::ffi::c_char,
                                     rc,
@@ -492,7 +520,7 @@ unsafe fn main_0(
                             rc = mdb_dbi_open(txn, subname, 0 as std::ffi::c_uint, &mut dbi);
                             if rc != 0 {
                                 fprintf(
-                                    __stderrp,
+                                    get_stderr(),
                                     b"mdb_open failed, error %d %s\n\0" as *const u8
                                         as *const std::ffi::c_char,
                                     rc,
@@ -502,7 +530,7 @@ unsafe fn main_0(
                                 rc = mdb_stat(txn, dbi, &mut mst);
                                 if rc != 0 {
                                     fprintf(
-                                        __stderrp,
+                                        get_stderr(),
                                         b"mdb_stat failed, error %d %s\n\0" as *const u8
                                             as *const std::ffi::c_char,
                                         rc,
@@ -527,7 +555,7 @@ unsafe fn main_0(
                                         rc = mdb_cursor_open(txn, dbi, &mut cursor_0);
                                         if rc != 0 {
                                             fprintf(
-                                                __stderrp,
+                                                get_stderr(),
                                                 b"mdb_cursor_open failed, error %d %s\n\0"
                                                     as *const u8
                                                     as *const std::ffi::c_char,
@@ -590,7 +618,7 @@ unsafe fn main_0(
                                                 rc = mdb_stat(txn, db2, &mut mst);
                                                 if rc != 0 {
                                                     fprintf(
-                                                        __stderrp,
+                                                        get_stderr(),
                                                         b"mdb_stat failed, error %d %s\n\0"
                                                             as *const u8
                                                             as *const std::ffi::c_char,

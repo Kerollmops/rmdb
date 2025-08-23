@@ -12,7 +12,6 @@ unsafe extern "C" {
     pub type _IO_wide_data;
     pub type _IO_codecvt;
     pub type _IO_marker;
-    static mut stderr: *mut FILE;
     fn fprintf(__stream: *mut FILE, __format: *const std::ffi::c_char, ...) -> std::ffi::c_int;
     fn printf(__format: *const std::ffi::c_char, ...) -> std::ffi::c_int;
     fn exit(__status: std::ffi::c_int) -> !;
@@ -24,6 +23,21 @@ unsafe extern "C" {
         __shortopts: *const std::ffi::c_char,
     ) -> std::ffi::c_int;
     fn signal(__sig: std::ffi::c_int, __handler: __sighandler_t) -> __sighandler_t;
+}
+
+#[cfg(all(target_endian = "little", target_os = "linux", target_pointer_width = "64"))]
+const unsafe fn get_stderr() -> *mut FILE {
+    unsafe extern "C" {
+        static mut stderr: *mut FILE;
+    }
+    unsafe { stderr }
+}
+#[cfg(all(target_endian = "little", target_os = "macos", target_pointer_width = "64"))]
+const unsafe fn get_stderr() -> *mut FILE {
+    unsafe extern "C" {
+        static mut __stderrp: *mut FILE;
+    }
+    unsafe { __stderrp }
 }
 
 use rmdb::*;
@@ -85,7 +99,7 @@ unsafe extern "C" fn dumpsig(mut sig: std::ffi::c_int) {
 }
 unsafe extern "C" fn usage(mut prog: *mut std::ffi::c_char) {
     fprintf(
-        stderr,
+        get_stderr(),
         b"usage: %s [-V] [-n] [-d] [-s subdb] dbpath\n\0" as *const u8 as *const std::ffi::c_char,
         prog,
     );
@@ -150,7 +164,7 @@ unsafe fn main_0(
     rc = mdb_env_create(&mut env);
     if rc != 0 {
         fprintf(
-            stderr,
+            get_stderr(),
             b"mdb_env_create failed, error %d %s\n\0" as *const u8 as *const std::ffi::c_char,
             rc,
             mdb_strerror(rc),
@@ -161,7 +175,7 @@ unsafe fn main_0(
     rc = mdb_env_open(env, envname, envflags as std::ffi::c_uint, 0o664 as mdb_mode_t);
     if rc != 0 {
         fprintf(
-            stderr,
+            get_stderr(),
             b"mdb_env_open failed, error %d %s\n\0" as *const u8 as *const std::ffi::c_char,
             rc,
             mdb_strerror(rc),
@@ -170,7 +184,7 @@ unsafe fn main_0(
         rc = mdb_txn_begin(env, 0 as *mut MDB_txn, 0 as std::ffi::c_uint, &mut txn);
         if rc != 0 {
             fprintf(
-                stderr,
+                get_stderr(),
                 b"mdb_txn_begin failed, error %d %s\n\0" as *const u8 as *const std::ffi::c_char,
                 rc,
                 mdb_strerror(rc),
@@ -179,7 +193,7 @@ unsafe fn main_0(
             rc = mdb_dbi_open(txn, subname, 0 as std::ffi::c_uint, &mut dbi);
             if rc != 0 {
                 fprintf(
-                    stderr,
+                    get_stderr(),
                     b"mdb_open failed, error %d %s\n\0" as *const u8 as *const std::ffi::c_char,
                     rc,
                     mdb_strerror(rc),
@@ -188,7 +202,7 @@ unsafe fn main_0(
                 rc = mdb_drop(txn, dbi, delete);
                 if rc != 0 {
                     fprintf(
-                        stderr,
+                        get_stderr(),
                         b"mdb_drop failed, error %d %s\n\0" as *const u8 as *const std::ffi::c_char,
                         rc,
                         mdb_strerror(rc),
@@ -197,7 +211,7 @@ unsafe fn main_0(
                     rc = mdb_txn_commit(txn);
                     if rc != 0 {
                         fprintf(
-                            stderr,
+                            get_stderr(),
                             b"mdb_txn_commit failed, error %d %s\n\0" as *const u8
                                 as *const std::ffi::c_char,
                             rc,

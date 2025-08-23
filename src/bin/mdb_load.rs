@@ -12,8 +12,6 @@ unsafe extern "C" {
     pub type _IO_wide_data;
     pub type _IO_codecvt;
     pub type _IO_marker;
-    static mut stdin: *mut FILE;
-    static mut stderr: *mut FILE;
     fn freopen(
         __filename: *const std::ffi::c_char,
         __modes: *const std::ffi::c_char,
@@ -41,7 +39,6 @@ unsafe extern "C" {
     fn realloc(__ptr: *mut std::ffi::c_void, __size: size_t) -> *mut std::ffi::c_void;
     fn free(__ptr: *mut std::ffi::c_void);
     fn exit(__status: std::ffi::c_int) -> !;
-    fn __errno_location() -> *mut std::ffi::c_int;
     fn memcpy(
         __dest: *mut std::ffi::c_void,
         __src: *const std::ffi::c_void,
@@ -65,7 +62,6 @@ unsafe extern "C" {
     fn strdup(__s: *const std::ffi::c_char) -> *mut std::ffi::c_char;
     fn strlen(__s: *const std::ffi::c_char) -> size_t;
     fn strerror(__errnum: std::ffi::c_int) -> *mut std::ffi::c_char;
-    fn __ctype_b_loc() -> *mut *const std::ffi::c_ushort;
     static mut optarg: *mut std::ffi::c_char;
     static mut optind: std::ffi::c_int;
     fn getopt(
@@ -73,6 +69,51 @@ unsafe extern "C" {
         ___argv: *const *mut std::ffi::c_char,
         __shortopts: *const std::ffi::c_char,
     ) -> std::ffi::c_int;
+}
+
+#[cfg(all(target_endian = "little", target_os = "linux", target_pointer_width = "64"))]
+const unsafe fn get_stderr() -> *mut FILE {
+    unsafe extern "C" {
+        static mut stderr: *mut FILE;
+    }
+    unsafe { stderr }
+}
+#[cfg(all(target_endian = "little", target_os = "macos", target_pointer_width = "64"))]
+const unsafe fn get_stderr() -> *mut FILE {
+    unsafe extern "C" {
+        static mut __stderrp: *mut FILE;
+    }
+    unsafe { __stderrp }
+}
+
+#[cfg(all(target_endian = "little", target_os = "linux", target_pointer_width = "64"))]
+const unsafe fn get_stdin() -> *mut FILE {
+    unsafe extern "C" {
+        static mut stdin: *mut FILE;
+    }
+    unsafe { stdin }
+}
+#[cfg(all(target_endian = "little", target_os = "macos", target_pointer_width = "64"))]
+const unsafe fn get_stdin() -> *mut FILE {
+    unsafe extern "C" {
+        static mut __stdinp: *mut FILE;
+    }
+    unsafe { __stdinp }
+}
+
+#[cfg(all(target_endian = "little", target_os = "linux", target_pointer_width = "64"))]
+unsafe fn get_errno_location() -> *mut std::ffi::c_int {
+    unsafe extern "C" {
+        fn __errno_location() -> *mut std::ffi::c_int;
+    }
+    unsafe { __errno_location() }
+}
+#[cfg(all(target_endian = "little", target_os = "macos", target_pointer_width = "64"))]
+unsafe fn get_errno_location() -> *mut std::ffi::c_int {
+    unsafe extern "C" {
+        fn __error() -> *mut std::ffi::c_int;
+    }
+    unsafe { __error() }
 }
 
 use rmdb::*;
@@ -214,8 +255,12 @@ pub static mut dbflags: [flagbit; 7] =
 unsafe extern "C" fn readhdr() {
     let mut ptr: *mut std::ffi::c_char = 0 as *mut std::ffi::c_char;
     flags = 0 as std::ffi::c_int;
-    while !(fgets(dbuf.mv_data as *mut std::ffi::c_char, dbuf.mv_size as std::ffi::c_int, stdin))
-        .is_null()
+    while !(fgets(
+        dbuf.mv_data as *mut std::ffi::c_char,
+        dbuf.mv_size as std::ffi::c_int,
+        get_stdin(),
+    ))
+    .is_null()
     {
         lineno = lineno.wrapping_add(1);
         lineno;
@@ -233,7 +278,7 @@ unsafe extern "C" fn readhdr() {
             );
             if version > 3 as std::ffi::c_int {
                 fprintf(
-                    stderr,
+                    get_stderr(),
                     b"%s: line %zu: unsupported VERSION %d\n\0" as *const u8
                         as *const std::ffi::c_char,
                     prog,
@@ -281,7 +326,7 @@ unsafe extern "C" fn readhdr() {
                 ) != 0
                 {
                     fprintf(
-                        stderr,
+                        get_stderr(),
                         b"%s: line %zu: unsupported FORMAT %s\n\0" as *const u8
                             as *const std::ffi::c_char,
                         prog,
@@ -332,7 +377,7 @@ unsafe extern "C" fn readhdr() {
                 ) != 0
                 {
                     fprintf(
-                        stderr,
+                        get_stderr(),
                         b"%s: line %zu: unsupported type %s\n\0" as *const u8
                             as *const std::ffi::c_char,
                         prog,
@@ -367,7 +412,7 @@ unsafe extern "C" fn readhdr() {
                 );
                 if i != 1 as std::ffi::c_int {
                     fprintf(
-                        stderr,
+                        get_stderr(),
                         b"%s: line %zu: invalid mapaddr %s\n\0" as *const u8
                             as *const std::ffi::c_char,
                         prog,
@@ -402,7 +447,7 @@ unsafe extern "C" fn readhdr() {
                 );
                 if i_0 != 1 as std::ffi::c_int {
                     fprintf(
-                        stderr,
+                        get_stderr(),
                         b"%s: line %zu: invalid mapsize %s\n\0" as *const u8
                             as *const std::ffi::c_char,
                         prog,
@@ -437,7 +482,7 @@ unsafe extern "C" fn readhdr() {
                 );
                 if i_1 != 1 as std::ffi::c_int {
                     fprintf(
-                        stderr,
+                        get_stderr(),
                         b"%s: line %zu: invalid maxreaders %s\n\0" as *const u8
                             as *const std::ffi::c_char,
                         prog,
@@ -475,7 +520,7 @@ unsafe extern "C" fn readhdr() {
                     ptr = memchr(dbuf.mv_data, '=' as i32, dbuf.mv_size) as *mut std::ffi::c_char;
                     if ptr.is_null() {
                         fprintf(
-                            stderr,
+                            get_stderr(),
                             b"%s: line %zu: unexpected format\n\0" as *const u8
                                 as *const std::ffi::c_char,
                             prog,
@@ -485,7 +530,7 @@ unsafe extern "C" fn readhdr() {
                     } else {
                         *ptr = '\0' as i32 as std::ffi::c_char;
                         fprintf(
-                            stderr,
+                            get_stderr(),
                             b"%s: line %zu: unrecognized keyword ignored: %s\n\0" as *const u8
                                 as *const std::ffi::c_char,
                             prog,
@@ -500,7 +545,7 @@ unsafe extern "C" fn readhdr() {
 }
 unsafe extern "C" fn badend() {
     fprintf(
-        stderr,
+        get_stderr(),
         b"%s: line %zu: unexpected end of input\n\0" as *const u8 as *const std::ffi::c_char,
         prog,
         lineno,
@@ -531,7 +576,7 @@ unsafe extern "C" fn readline(mut out: *mut MDB_val, mut buf: *mut MDB_val) -> s
     let mut l2: size_t = 0;
     let mut c: std::ffi::c_int = 0;
     if mode & NOHDR == 0 {
-        c = fgetc(stdin);
+        c = fgetc(get_stdin());
         if c == -(1 as std::ffi::c_int) {
             Eof = 1 as std::ffi::c_int;
             return -(1 as std::ffi::c_int);
@@ -542,7 +587,7 @@ unsafe extern "C" fn readline(mut out: *mut MDB_val, mut buf: *mut MDB_val) -> s
             if !(fgets(
                 (*buf).mv_data as *mut std::ffi::c_char,
                 (*buf).mv_size as std::ffi::c_int,
-                stdin,
+                get_stdin(),
             ))
             .is_null()
             {
@@ -562,8 +607,12 @@ unsafe extern "C" fn readline(mut out: *mut MDB_val, mut buf: *mut MDB_val) -> s
             return -(1 as std::ffi::c_int);
         }
     }
-    if (fgets((*buf).mv_data as *mut std::ffi::c_char, (*buf).mv_size as std::ffi::c_int, stdin))
-        .is_null()
+    if (fgets(
+        (*buf).mv_data as *mut std::ffi::c_char,
+        (*buf).mv_size as std::ffi::c_int,
+        get_stdin(),
+    ))
+    .is_null()
     {
         Eof = 1 as std::ffi::c_int;
         return -(1 as std::ffi::c_int);
@@ -578,7 +627,7 @@ unsafe extern "C" fn readline(mut out: *mut MDB_val, mut buf: *mut MDB_val) -> s
         if ((*buf).mv_data).is_null() {
             Eof = 1 as std::ffi::c_int;
             fprintf(
-                stderr,
+                get_stderr(),
                 b"%s: line %zu: out of memory, line too long\n\0" as *const u8
                     as *const std::ffi::c_char,
                 prog,
@@ -591,7 +640,7 @@ unsafe extern "C" fn readline(mut out: *mut MDB_val, mut buf: *mut MDB_val) -> s
         if (fgets(
             c1 as *mut std::ffi::c_char,
             ((*buf).mv_size).wrapping_add(1 as size_t) as std::ffi::c_int,
-            stdin,
+            get_stdin(),
         ))
         .is_null()
         {
@@ -619,16 +668,8 @@ unsafe extern "C" fn readline(mut out: *mut MDB_val, mut buf: *mut MDB_val) -> s
                     *fresh1 = *c2;
                 } else {
                     if c2.offset(3 as std::ffi::c_int as isize) > end
-                        || *(*__ctype_b_loc())
-                            .offset(*c2.offset(1 as std::ffi::c_int as isize) as std::ffi::c_int
-                                as isize) as std::ffi::c_int
-                            & _ISxdigit as std::ffi::c_int as std::ffi::c_ushort as std::ffi::c_int
-                            == 0
-                        || *(*__ctype_b_loc())
-                            .offset(*c2.offset(2 as std::ffi::c_int as isize) as std::ffi::c_int
-                                as isize) as std::ffi::c_int
-                            & _ISxdigit as std::ffi::c_int as std::ffi::c_ushort as std::ffi::c_int
-                            == 0
+                        || !(*c2.offset(1 as std::ffi::c_int as isize) as u8).is_ascii_hexdigit()
+                        || !(*c2.offset(2 as std::ffi::c_int as isize) as u8).is_ascii_hexdigit()
                     {
                         Eof = 1 as std::ffi::c_int;
                         badend();
@@ -655,14 +696,8 @@ unsafe extern "C" fn readline(mut out: *mut MDB_val, mut buf: *mut MDB_val) -> s
             return -(1 as std::ffi::c_int);
         }
         while c2 < end {
-            if *(*__ctype_b_loc()).offset(*c2 as std::ffi::c_int as isize) as std::ffi::c_int
-                & _ISxdigit as std::ffi::c_int as std::ffi::c_ushort as std::ffi::c_int
-                == 0
-                || *(*__ctype_b_loc())
-                    .offset(*c2.offset(1 as std::ffi::c_int as isize) as std::ffi::c_int as isize)
-                    as std::ffi::c_int
-                    & _ISxdigit as std::ffi::c_int as std::ffi::c_ushort as std::ffi::c_int
-                    == 0
+            if !((*c2 as std::ffi::c_int as isize) as u8).is_ascii_hexdigit()
+                || !(*c2.offset(1 as std::ffi::c_int as isize) as u8).is_ascii_hexdigit()
             {
                 Eof = 1 as std::ffi::c_int;
                 badend();
@@ -681,7 +716,7 @@ unsafe extern "C" fn readline(mut out: *mut MDB_val, mut buf: *mut MDB_val) -> s
 }
 unsafe extern "C" fn usage() {
     fprintf(
-        stderr,
+        get_stderr(),
         b"usage: %s [-V] [-a] [-f input] [-n] [-s name] [-N] [-T] dbpath\n\0" as *const u8
             as *const std::ffi::c_char,
         prog,
@@ -734,15 +769,15 @@ unsafe fn main_0(
                 append = 1 as std::ffi::c_int;
             }
             102 => {
-                if (freopen(optarg, b"r\0" as *const u8 as *const std::ffi::c_char, stdin))
+                if (freopen(optarg, b"r\0" as *const u8 as *const std::ffi::c_char, get_stdin()))
                     .is_null()
                 {
                     fprintf(
-                        stderr,
+                        get_stderr(),
                         b"%s: %s: reopen: %s\n\0" as *const u8 as *const std::ffi::c_char,
                         prog,
                         optarg,
-                        strerror(*__errno_location()),
+                        strerror(*get_errno_location()),
                     );
                     exit(EXIT_FAILURE);
                 }
@@ -779,7 +814,7 @@ unsafe fn main_0(
     rc = mdb_env_create(&mut env);
     if rc != 0 {
         fprintf(
-            stderr,
+            get_stderr(),
             b"mdb_env_create failed, error %d %s\n\0" as *const u8 as *const std::ffi::c_char,
             rc,
             mdb_strerror(rc),
@@ -799,7 +834,7 @@ unsafe fn main_0(
     rc = mdb_env_open(env, envname, envflags as std::ffi::c_uint, 0o664 as mdb_mode_t);
     if rc != 0 {
         fprintf(
-            stderr,
+            get_stderr(),
             b"mdb_env_open failed, error %d %s\n\0" as *const u8 as *const std::ffi::c_char,
             rc,
             mdb_strerror(rc),
@@ -835,7 +870,7 @@ unsafe fn main_0(
             rc = mdb_txn_begin(env, 0 as *mut MDB_txn, 0 as std::ffi::c_uint, &mut txn);
             if rc != 0 {
                 fprintf(
-                    stderr,
+                    get_stderr(),
                     b"mdb_txn_begin failed, error %d %s\n\0" as *const u8
                         as *const std::ffi::c_char,
                     rc,
@@ -847,7 +882,7 @@ unsafe fn main_0(
                 rc = mdb_dbi_open(txn, subname, (flags | MDB_CREATE) as std::ffi::c_uint, &mut dbi);
                 if rc != 0 {
                     fprintf(
-                        stderr,
+                        get_stderr(),
                         b"mdb_dbi_open failed, error %d %s\n\0" as *const u8
                             as *const std::ffi::c_char,
                         rc,
@@ -888,7 +923,7 @@ unsafe fn main_0(
                     rc = mdb_cursor_open(txn, dbi, &mut mc);
                     if rc != 0 {
                         fprintf(
-                            stderr,
+                            get_stderr(),
                             b"mdb_cursor_open failed, error %d %s\n\0" as *const u8
                                 as *const std::ffi::c_char,
                             rc,
@@ -905,7 +940,7 @@ unsafe fn main_0(
                             rc = readline(&mut data, &raw mut dbuf);
                             if rc != 0 {
                                 fprintf(
-                                    stderr,
+                                    get_stderr(),
                                     b"%s: line %zu: failed to read key value\n\0" as *const u8
                                         as *const std::ffi::c_char,
                                     prog,
@@ -940,7 +975,7 @@ unsafe fn main_0(
                                 }
                                 if rc != 0 {
                                     fprintf(
-                                        stderr,
+                                        get_stderr(),
                                         b"%s: line %zu: mdb_cursor_put failed, error %d %s\n\0"
                                             as *const u8
                                             as *const std::ffi::c_char,
@@ -960,7 +995,7 @@ unsafe fn main_0(
                                     rc = mdb_txn_commit(txn);
                                     if rc != 0 {
                                         fprintf(
-                                            stderr,
+                                            get_stderr(),
                                             b"%s: line %zu: txn_commit: %s\n\0" as *const u8
                                                 as *const std::ffi::c_char,
                                             prog,
@@ -978,7 +1013,7 @@ unsafe fn main_0(
                                         );
                                         if rc != 0 {
                                             fprintf(
-                                                stderr,
+                                                get_stderr(),
                                                 b"mdb_txn_begin failed, error %d %s\n\0"
                                                     as *const u8
                                                     as *const std::ffi::c_char,
@@ -991,7 +1026,7 @@ unsafe fn main_0(
                                             rc = mdb_cursor_open(txn, dbi, &mut mc);
                                             if rc != 0 {
                                                 fprintf(
-                                                    stderr,
+                                                    get_stderr(),
                                                     b"mdb_cursor_open failed, error %d %s\n\0"
                                                         as *const u8
                                                         as *const std::ffi::c_char,
@@ -1027,7 +1062,7 @@ unsafe fn main_0(
                         txn = 0 as *mut MDB_txn;
                         if rc != 0 {
                             fprintf(
-                                stderr,
+                                get_stderr(),
                                 b"%s: line %zu: txn_commit: %s\n\0" as *const u8
                                     as *const std::ffi::c_char,
                                 prog,
@@ -1041,7 +1076,7 @@ unsafe fn main_0(
                                 rc = mdb_env_sync(env, 1 as std::ffi::c_int);
                                 if rc != 0 {
                                     fprintf(
-                                        stderr,
+                                        get_stderr(),
                                         b"mdb_env_sync failed, error %d %s\n\0" as *const u8
                                             as *const std::ffi::c_char,
                                         rc,
