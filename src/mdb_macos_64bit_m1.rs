@@ -124,7 +124,7 @@ unsafe extern "C" {
     fn semop(_: std::ffi::c_int, _: *mut sembuf, _: size_t) -> std::ffi::c_int;
 }
 
-use crate::midl_macos_64bit_m1::*;
+use crate::midl::*;
 
 pub type __uint16_t = std::ffi::c_ushort;
 pub type __int32_t = std::ffi::c_int;
