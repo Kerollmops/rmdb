@@ -50,7 +50,7 @@ unsafe extern "C" {
 
 use rmdb::*;
 
-pub type size_t = usize;
+use crate::mdb_mode_t;
 pub type __mode_t = std::ffi::c_uint;
 pub type __off_t = std::ffi::c_long;
 pub type __off64_t = std::ffi::c_long;
@@ -106,7 +106,6 @@ pub const _ISlower: C2RustUnnamed = 512;
 pub const _ISupper: C2RustUnnamed = 256;
 pub type sig_atomic_t = __sig_atomic_t;
 pub type __sighandler_t = Option<unsafe extern "C" fn(std::ffi::c_int) -> ()>;
-pub type mdb_mode_t = mode_t;
 pub type mdb_size_t = size_t;
 pub type MDB_dbi = std::ffi::c_uint;
 pub type MDB_cursor_op = std::ffi::c_uint;
@@ -269,14 +268,8 @@ unsafe extern "C" fn dumpit(
         ms_overflow_pages: 0,
         ms_entries: 0,
     };
-    let mut key: MDB_val = MDB_val {
-        mv_size: 0,
-        mv_data: 0 as *mut std::ffi::c_void,
-    };
-    let mut data: MDB_val = MDB_val {
-        mv_size: 0,
-        mv_data: 0 as *mut std::ffi::c_void,
-    };
+    let mut key: MDB_val = MDB_val { mv_size: 0, mv_data: 0 as *mut std::ffi::c_void };
+    let mut data: MDB_val = MDB_val { mv_size: 0, mv_data: 0 as *mut std::ffi::c_void };
     let mut info: MDB_envinfo = MDB_envinfo {
         me_mapaddr: 0 as *mut std::ffi::c_void,
         me_mapsize: 0,
@@ -310,44 +303,26 @@ unsafe extern "C" fn dumpit(
         },
     );
     if !name.is_null() {
-        printf(
-            b"database=%s\n\0" as *const u8 as *const std::ffi::c_char,
-            name,
-        );
+        printf(b"database=%s\n\0" as *const u8 as *const std::ffi::c_char, name);
     }
     printf(b"type=btree\n\0" as *const u8 as *const std::ffi::c_char);
-    printf(
-        b"mapsize=%zu\n\0" as *const u8 as *const std::ffi::c_char,
-        info.me_mapsize,
-    );
+    printf(b"mapsize=%zu\n\0" as *const u8 as *const std::ffi::c_char, info.me_mapsize);
     if !(info.me_mapaddr).is_null() {
-        printf(
-            b"mapaddr=%p\n\0" as *const u8 as *const std::ffi::c_char,
-            info.me_mapaddr,
-        );
+        printf(b"mapaddr=%p\n\0" as *const u8 as *const std::ffi::c_char, info.me_mapaddr);
     }
-    printf(
-        b"maxreaders=%u\n\0" as *const u8 as *const std::ffi::c_char,
-        info.me_maxreaders,
-    );
+    printf(b"maxreaders=%u\n\0" as *const u8 as *const std::ffi::c_char, info.me_maxreaders);
     if flags & 0x4 as std::ffi::c_uint != 0 {
         printf(b"duplicates=1\n\0" as *const u8 as *const std::ffi::c_char);
     }
     i = 0 as std::ffi::c_int;
     while dbflags[i as usize].bit != 0 {
         if flags & dbflags[i as usize].bit as std::ffi::c_uint != 0 {
-            printf(
-                b"%s=1\n\0" as *const u8 as *const std::ffi::c_char,
-                dbflags[i as usize].name,
-            );
+            printf(b"%s=1\n\0" as *const u8 as *const std::ffi::c_char, dbflags[i as usize].name);
         }
         i += 1;
         i;
     }
-    printf(
-        b"db_pagesize=%d\n\0" as *const u8 as *const std::ffi::c_char,
-        ms.ms_psize,
-    );
+    printf(b"db_pagesize=%d\n\0" as *const u8 as *const std::ffi::c_char, ms.ms_psize);
     printf(b"HEADER=END\n\0" as *const u8 as *const std::ffi::c_char);
     rc = mdb_cursor_open(txn, dbi, &mut mc);
     if rc != 0 {
@@ -429,12 +404,8 @@ unsafe fn main_0(
                 current_block_19 = 8780738868093770578;
             }
             102 => {
-                if (freopen(
-                    optarg,
-                    b"w\0" as *const u8 as *const std::ffi::c_char,
-                    stdout,
-                ))
-                .is_null()
+                if (freopen(optarg, b"w\0" as *const u8 as *const std::ffi::c_char, stdout))
+                    .is_null()
                 {
                     fprintf(
                         stderr,
@@ -485,22 +456,10 @@ unsafe fn main_0(
     if optind != argc - 1 as std::ffi::c_int {
         usage(prog);
     }
-    signal(
-        SIGPIPE,
-        Some(dumpsig as unsafe extern "C" fn(std::ffi::c_int) -> ()),
-    );
-    signal(
-        SIGHUP,
-        Some(dumpsig as unsafe extern "C" fn(std::ffi::c_int) -> ()),
-    );
-    signal(
-        SIGINT,
-        Some(dumpsig as unsafe extern "C" fn(std::ffi::c_int) -> ()),
-    );
-    signal(
-        SIGTERM,
-        Some(dumpsig as unsafe extern "C" fn(std::ffi::c_int) -> ()),
-    );
+    signal(SIGPIPE, Some(dumpsig as unsafe extern "C" fn(std::ffi::c_int) -> ()));
+    signal(SIGHUP, Some(dumpsig as unsafe extern "C" fn(std::ffi::c_int) -> ()));
+    signal(SIGINT, Some(dumpsig as unsafe extern "C" fn(std::ffi::c_int) -> ()));
+    signal(SIGTERM, Some(dumpsig as unsafe extern "C" fn(std::ffi::c_int) -> ()));
     envname = *argv.offset(optind as isize);
     rc = mdb_env_create(&mut env);
     if rc != 0 {
@@ -529,12 +488,7 @@ unsafe fn main_0(
             mdb_strerror(rc),
         );
     } else {
-        rc = mdb_txn_begin(
-            env,
-            0 as *mut MDB_txn,
-            0x20000 as std::ffi::c_uint,
-            &mut txn,
-        );
+        rc = mdb_txn_begin(env, 0 as *mut MDB_txn, 0x20000 as std::ffi::c_uint, &mut txn);
         if rc != 0 {
             fprintf(
                 stderr,
@@ -554,10 +508,8 @@ unsafe fn main_0(
             } else {
                 if alldbs != 0 {
                     let mut cursor: *mut MDB_cursor = 0 as *mut MDB_cursor;
-                    let mut key: MDB_val = MDB_val {
-                        mv_size: 0,
-                        mv_data: 0 as *mut std::ffi::c_void,
-                    };
+                    let mut key: MDB_val =
+                        MDB_val { mv_size: 0, mv_data: 0 as *mut std::ffi::c_void };
                     let mut count: std::ffi::c_int = 0 as std::ffi::c_int;
                     rc = mdb_cursor_open(txn, dbi, &mut cursor);
                     if rc != 0 {

@@ -9,39 +9,29 @@
 )]
 unsafe extern "C" {
     fn memcpy(
-        __dest: *mut std::ffi::c_void,
-        __src: *const std::ffi::c_void,
-        __n: size_t,
+        _: *mut std::ffi::c_void,
+        _: *const std::ffi::c_void,
+        _: std::ffi::c_ulong,
     ) -> *mut std::ffi::c_void;
-    fn malloc(__size: size_t) -> *mut std::ffi::c_void;
-    fn realloc(__ptr: *mut std::ffi::c_void, __size: size_t) -> *mut std::ffi::c_void;
-    fn free(__ptr: *mut std::ffi::c_void);
+    fn malloc(_: std::ffi::c_ulong) -> *mut std::ffi::c_void;
+    fn free(_: *mut std::ffi::c_void);
+    fn realloc(_: *mut std::ffi::c_void, _: std::ffi::c_ulong) -> *mut std::ffi::c_void;
 }
-pub type size_t = usize;
+pub type __darwin_size_t = std::ffi::c_ulong;
+pub type size_t = __darwin_size_t;
 pub type mdb_size_t = size_t;
-// pub type MDB_ID = mdb_size_t;
-// pub type MDB_IDL = *mut MDB_ID;
-// #[derive(Copy, Clone)]
-// #[repr(C)]
-// pub struct MDB_ID2 {
-//     pub mid: MDB_ID,
-//     pub mptr: *mut std::ffi::c_void,
-// }
-// pub type MDB_ID2L = *mut MDB_ID2;
 
 use crate::{MDB_ID, MDB_ID2, MDB_ID2L, MDB_IDL};
 
-pub const MDB_IDL_LOGN: std::ffi::c_int = 16 as std::ffi::c_int;
-pub const ENOMEM: std::ffi::c_int = 12 as std::ffi::c_int;
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mdb_midl_search(mut ids: MDB_IDL, mut id: MDB_ID) -> std::ffi::c_uint {
-    let mut base: std::ffi::c_uint = 0 as std::ffi::c_uint;
-    let mut cursor: std::ffi::c_uint = 1 as std::ffi::c_uint;
+    let mut base: std::ffi::c_uint = 0 as std::ffi::c_int as std::ffi::c_uint;
+    let mut cursor: std::ffi::c_uint = 1 as std::ffi::c_int as std::ffi::c_uint;
     let mut val: std::ffi::c_int = 0 as std::ffi::c_int;
     let mut n: std::ffi::c_uint = *ids.offset(0 as std::ffi::c_int as isize) as std::ffi::c_uint;
-    while (0 as std::ffi::c_uint) < n {
+    while (0 as std::ffi::c_int as std::ffi::c_uint) < n {
         let mut pivot: std::ffi::c_uint = n >> 1 as std::ffi::c_int;
-        cursor = base.wrapping_add(pivot).wrapping_add(1 as std::ffi::c_uint);
+        cursor = base.wrapping_add(pivot).wrapping_add(1 as std::ffi::c_int as std::ffi::c_uint);
         val = if *ids.offset(cursor as isize) < id {
             -(1 as std::ffi::c_int)
         } else {
@@ -51,7 +41,7 @@ pub unsafe extern "C" fn mdb_midl_search(mut ids: MDB_IDL, mut id: MDB_ID) -> st
             n = pivot;
         } else if val > 0 as std::ffi::c_int {
             base = cursor;
-            n = n.wrapping_sub(pivot.wrapping_add(1 as std::ffi::c_uint));
+            n = n.wrapping_sub(pivot.wrapping_add(1 as std::ffi::c_int as std::ffi::c_uint));
         } else {
             return cursor;
         }
@@ -65,14 +55,14 @@ pub unsafe extern "C" fn mdb_midl_search(mut ids: MDB_IDL, mut id: MDB_ID) -> st
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mdb_midl_alloc(mut num: std::ffi::c_int) -> MDB_IDL {
     let mut ids: MDB_IDL = malloc(
-        ((num + 2 as std::ffi::c_int) as size_t)
-            .wrapping_mul(::core::mem::size_of::<MDB_ID>() as size_t),
+        ((num + 2 as std::ffi::c_int) as std::ffi::c_ulong)
+            .wrapping_mul(::core::mem::size_of::<MDB_ID>() as std::ffi::c_ulong),
     ) as MDB_IDL;
     if !ids.is_null() {
         let fresh0 = ids;
         ids = ids.offset(1);
         *fresh0 = num as MDB_ID;
-        *ids = 0 as MDB_ID;
+        *ids = 0 as std::ffi::c_int as MDB_ID;
     }
     return ids;
 }
@@ -87,22 +77,22 @@ pub unsafe extern "C" fn mdb_midl_shrink(mut idp: *mut MDB_IDL) {
     let mut ids: MDB_IDL = *idp;
     ids = ids.offset(-1);
     if *ids
-        > (((1 as std::ffi::c_int) << MDB_IDL_LOGN + 1 as std::ffi::c_int) - 1 as std::ffi::c_int)
-            as MDB_ID
+        > (((1 as std::ffi::c_int) << 16 as std::ffi::c_int + 1 as std::ffi::c_int)
+            - 1 as std::ffi::c_int) as MDB_ID
         && {
             ids = realloc(
                 ids as *mut std::ffi::c_void,
-                ((((1 as std::ffi::c_int) << MDB_IDL_LOGN + 1 as std::ffi::c_int)
+                ((((1 as std::ffi::c_int) << 16 as std::ffi::c_int + 1 as std::ffi::c_int)
                     - 1 as std::ffi::c_int
-                    + 2 as std::ffi::c_int) as size_t)
-                    .wrapping_mul(::core::mem::size_of::<MDB_ID>() as size_t),
+                    + 2 as std::ffi::c_int) as std::ffi::c_ulong)
+                    .wrapping_mul(::core::mem::size_of::<MDB_ID>() as std::ffi::c_ulong),
             ) as MDB_IDL;
             !ids.is_null()
         }
     {
         let fresh1 = ids;
         ids = ids.offset(1);
-        *fresh1 = (((1 as std::ffi::c_int) << MDB_IDL_LOGN + 1 as std::ffi::c_int)
+        *fresh1 = (((1 as std::ffi::c_int) << 16 as std::ffi::c_int + 1 as std::ffi::c_int)
             - 1 as std::ffi::c_int) as MDB_ID;
         *idp = ids;
     }
@@ -115,17 +105,16 @@ unsafe extern "C" fn mdb_midl_grow(
     idn = realloc(
         idn as *mut std::ffi::c_void,
         (*idn)
-            .wrapping_add(num as size_t)
-            .wrapping_add(2 as size_t)
-            .wrapping_mul(::core::mem::size_of::<MDB_ID>() as size_t),
+            .wrapping_add(num as MDB_ID)
+            .wrapping_add(2 as std::ffi::c_int as MDB_ID)
+            .wrapping_mul(::core::mem::size_of::<MDB_ID>() as std::ffi::c_ulong),
     ) as MDB_IDL;
     if idn.is_null() {
-        return ENOMEM;
+        return 12 as std::ffi::c_int;
     }
     let fresh2 = idn;
     idn = idn.offset(1);
-    *fresh2 =
-        (*fresh2 as std::ffi::c_ulong).wrapping_add(num as std::ffi::c_ulong) as MDB_ID as MDB_ID;
+    *fresh2 = (*fresh2).wrapping_add(num as MDB_ID);
     *idp = idn;
     return 0 as std::ffi::c_int;
 }
@@ -135,24 +124,24 @@ pub unsafe extern "C" fn mdb_midl_need(
     mut num: std::ffi::c_uint,
 ) -> std::ffi::c_int {
     let mut ids: MDB_IDL = *idp;
-    num = (num as std::ffi::c_ulong)
-        .wrapping_add(*ids.offset(0 as std::ffi::c_int as isize) as std::ffi::c_ulong)
+    num = (num as MDB_ID).wrapping_add(*ids.offset(0 as std::ffi::c_int as isize))
         as std::ffi::c_uint as std::ffi::c_uint;
     if num as MDB_ID > *ids.offset(-(1 as std::ffi::c_int) as isize) {
         num = num
-            .wrapping_add(num.wrapping_div(4 as std::ffi::c_uint))
+            .wrapping_add(num.wrapping_div(4 as std::ffi::c_int as std::ffi::c_uint))
             .wrapping_add((256 as std::ffi::c_int + 2 as std::ffi::c_int) as std::ffi::c_uint)
             & -(256 as std::ffi::c_int) as std::ffi::c_uint;
         ids = realloc(
             ids.offset(-(1 as std::ffi::c_int as isize)) as *mut std::ffi::c_void,
-            (num as size_t).wrapping_mul(::core::mem::size_of::<MDB_ID>() as size_t),
+            (num as std::ffi::c_ulong)
+                .wrapping_mul(::core::mem::size_of::<MDB_ID>() as std::ffi::c_ulong),
         ) as MDB_IDL;
         if ids.is_null() {
-            return ENOMEM;
+            return 12 as std::ffi::c_int;
         }
         let fresh3 = ids;
         ids = ids.offset(1);
-        *fresh3 = num.wrapping_sub(2 as std::ffi::c_uint) as MDB_ID;
+        *fresh3 = num.wrapping_sub(2 as std::ffi::c_int as std::ffi::c_uint) as MDB_ID;
         *idp = ids;
     }
     return 0 as std::ffi::c_int;
@@ -163,10 +152,11 @@ pub unsafe extern "C" fn mdb_midl_append(mut idp: *mut MDB_IDL, mut id: MDB_ID) 
     if *ids.offset(0 as std::ffi::c_int as isize) >= *ids.offset(-(1 as std::ffi::c_int) as isize) {
         if mdb_midl_grow(
             idp,
-            ((1 as std::ffi::c_int) << MDB_IDL_LOGN + 1 as std::ffi::c_int) - 1 as std::ffi::c_int,
+            ((1 as std::ffi::c_int) << 16 as std::ffi::c_int + 1 as std::ffi::c_int)
+                - 1 as std::ffi::c_int,
         ) != 0
         {
-            return ENOMEM;
+            return 12 as std::ffi::c_int;
         }
         ids = *idp;
     }
@@ -186,27 +176,22 @@ pub unsafe extern "C" fn mdb_midl_append_list(
         .wrapping_add(*app.offset(0 as std::ffi::c_int as isize))
         >= *ids.offset(-(1 as std::ffi::c_int) as isize)
     {
-        if mdb_midl_grow(
-            idp,
-            *app.offset(0 as std::ffi::c_int as isize) as std::ffi::c_int,
-        ) != 0
-        {
-            return ENOMEM;
+        if mdb_midl_grow(idp, *app.offset(0 as std::ffi::c_int as isize) as std::ffi::c_int) != 0 {
+            return 12 as std::ffi::c_int;
         }
         ids = *idp;
     }
     memcpy(
-        &mut *ids
-            .offset((*ids.offset(0 as std::ffi::c_int as isize)).wrapping_add(1 as MDB_ID) as isize)
-            as *mut MDB_ID as *mut std::ffi::c_void,
+        &mut *ids.offset(
+            (*ids.offset(0 as std::ffi::c_int as isize))
+                .wrapping_add(1 as std::ffi::c_int as MDB_ID) as isize,
+        ) as *mut MDB_ID as *mut std::ffi::c_void,
         &mut *app.offset(1 as std::ffi::c_int as isize) as *mut MDB_ID as *const std::ffi::c_void,
         (*app.offset(0 as std::ffi::c_int as isize))
-            .wrapping_mul(::core::mem::size_of::<MDB_ID>() as size_t),
+            .wrapping_mul(::core::mem::size_of::<MDB_ID>() as std::ffi::c_ulong),
     );
     let ref mut fresh5 = *ids.offset(0 as std::ffi::c_int as isize);
-    *fresh5 = (*fresh5 as std::ffi::c_ulong)
-        .wrapping_add(*app.offset(0 as std::ffi::c_int as isize) as std::ffi::c_ulong)
-        as MDB_ID as MDB_ID;
+    *fresh5 = (*fresh5).wrapping_add(*app.offset(0 as std::ffi::c_int as isize));
     return 0 as std::ffi::c_int;
 }
 #[unsafe(no_mangle)]
@@ -220,13 +205,13 @@ pub unsafe extern "C" fn mdb_midl_append_range(
     if len.wrapping_add(n as MDB_ID) > *ids.offset(-(1 as std::ffi::c_int) as isize) {
         if mdb_midl_grow(
             idp,
-            (n | (((1 as std::ffi::c_int) << MDB_IDL_LOGN + 1 as std::ffi::c_int)
+            (n | (((1 as std::ffi::c_int) << 16 as std::ffi::c_int + 1 as std::ffi::c_int)
                 - 1 as std::ffi::c_int) as std::ffi::c_uint) as std::ffi::c_int,
         ) != 0
         {
-            return ENOMEM;
+            return 12 as std::ffi::c_int;
         }
-        ids = *idp as *mut MDB_ID;
+        ids = *idp;
     }
     *ids.offset(0 as std::ffi::c_int as isize) = len.wrapping_add(n as MDB_ID);
     ids = ids.offset(len as isize);
@@ -266,7 +251,6 @@ pub unsafe extern "C" fn mdb_midl_xmerge(mut idl: MDB_IDL, mut merge: MDB_IDL) {
     }
     *idl.offset(0 as std::ffi::c_int as isize) = total;
 }
-pub const SMALL: std::ffi::c_int = 8 as std::ffi::c_int;
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mdb_midl_sort(mut ids: MDB_IDL) {
     let mut istack: [std::ffi::c_int; 64] = [0; 64];
@@ -282,7 +266,7 @@ pub unsafe extern "C" fn mdb_midl_sort(mut ids: MDB_IDL) {
     l = 1 as std::ffi::c_int;
     jstack = 0 as std::ffi::c_int;
     loop {
-        if ir - l < SMALL {
+        if ir - l < 8 as std::ffi::c_int {
             j = l + 1 as std::ffi::c_int;
             while j <= ir {
                 a = *ids.offset(j as isize);
@@ -370,14 +354,14 @@ pub unsafe extern "C" fn mdb_midl_sort(mut ids: MDB_IDL) {
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mdb_mid2l_search(mut ids: MDB_ID2L, mut id: MDB_ID) -> std::ffi::c_uint {
-    let mut base: std::ffi::c_uint = 0 as std::ffi::c_uint;
-    let mut cursor: std::ffi::c_uint = 1 as std::ffi::c_uint;
+    let mut base: std::ffi::c_uint = 0 as std::ffi::c_int as std::ffi::c_uint;
+    let mut cursor: std::ffi::c_uint = 1 as std::ffi::c_int as std::ffi::c_uint;
     let mut val: std::ffi::c_int = 0 as std::ffi::c_int;
     let mut n: std::ffi::c_uint =
         (*ids.offset(0 as std::ffi::c_int as isize)).mid as std::ffi::c_uint;
-    while (0 as std::ffi::c_uint) < n {
+    while (0 as std::ffi::c_int as std::ffi::c_uint) < n {
         let mut pivot: std::ffi::c_uint = n >> 1 as std::ffi::c_int;
-        cursor = base.wrapping_add(pivot).wrapping_add(1 as std::ffi::c_uint);
+        cursor = base.wrapping_add(pivot).wrapping_add(1 as std::ffi::c_int as std::ffi::c_uint);
         val = if id < (*ids.offset(cursor as isize)).mid {
             -(1 as std::ffi::c_int)
         } else {
@@ -387,7 +371,7 @@ pub unsafe extern "C" fn mdb_mid2l_search(mut ids: MDB_ID2L, mut id: MDB_ID) -> 
             n = pivot;
         } else if val > 0 as std::ffi::c_int {
             base = cursor;
-            n = n.wrapping_sub(pivot.wrapping_add(1 as std::ffi::c_uint));
+            n = n.wrapping_sub(pivot.wrapping_add(1 as std::ffi::c_int as std::ffi::c_uint));
         } else {
             return cursor;
         }
@@ -406,7 +390,7 @@ pub unsafe extern "C" fn mdb_mid2l_insert(
     let mut x: std::ffi::c_uint = 0;
     let mut i: std::ffi::c_uint = 0;
     x = mdb_mid2l_search(ids, (*id).mid);
-    if x < 1 as std::ffi::c_uint {
+    if x < 1 as std::ffi::c_int as std::ffi::c_uint {
         return -(2 as std::ffi::c_int);
     }
     if x as MDB_ID <= (*ids.offset(0 as std::ffi::c_int as isize)).mid
@@ -415,8 +399,8 @@ pub unsafe extern "C" fn mdb_mid2l_insert(
         return -(1 as std::ffi::c_int);
     }
     if (*ids.offset(0 as std::ffi::c_int as isize)).mid
-        >= (((1 as std::ffi::c_int) << MDB_IDL_LOGN + 1 as std::ffi::c_int) - 1 as std::ffi::c_int)
-            as MDB_ID
+        >= (((1 as std::ffi::c_int) << 16 as std::ffi::c_int + 1 as std::ffi::c_int)
+            - 1 as std::ffi::c_int) as MDB_ID
     {
         return -(2 as std::ffi::c_int);
     } else {
@@ -425,7 +409,8 @@ pub unsafe extern "C" fn mdb_mid2l_insert(
         *fresh13;
         i = (*ids.offset(0 as std::ffi::c_int as isize)).mid as std::ffi::c_uint;
         while i > x {
-            *ids.offset(i as isize) = *ids.offset(i.wrapping_sub(1 as std::ffi::c_uint) as isize);
+            *ids.offset(i as isize) =
+                *ids.offset(i.wrapping_sub(1 as std::ffi::c_int as std::ffi::c_uint) as isize);
             i = i.wrapping_sub(1);
             i;
         }
@@ -439,8 +424,8 @@ pub unsafe extern "C" fn mdb_mid2l_append(
     mut id: *mut MDB_ID2,
 ) -> std::ffi::c_int {
     if (*ids.offset(0 as std::ffi::c_int as isize)).mid
-        >= (((1 as std::ffi::c_int) << MDB_IDL_LOGN + 1 as std::ffi::c_int) - 1 as std::ffi::c_int)
-            as MDB_ID
+        >= (((1 as std::ffi::c_int) << 16 as std::ffi::c_int + 1 as std::ffi::c_int)
+            - 1 as std::ffi::c_int) as MDB_ID
     {
         return -(2 as std::ffi::c_int);
     }

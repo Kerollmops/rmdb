@@ -21,7 +21,7 @@ unsafe extern "C" {
 
 use rmdb::*;
 
-pub type size_t = usize;
+use crate::mdb_mode_t;
 pub type __mode_t = std::ffi::c_uint;
 pub type __off_t = std::ffi::c_long;
 pub type __off64_t = std::ffi::c_long;
@@ -62,7 +62,6 @@ pub type _IO_lock_t = ();
 pub type FILE = _IO_FILE;
 pub type mode_t = __mode_t;
 pub type __sighandler_t = Option<unsafe extern "C" fn(std::ffi::c_int) -> ()>;
-pub type mdb_mode_t = mode_t;
 pub type mdb_filehandle_t = std::ffi::c_int;
 pub const MDB_STDOUT: std::ffi::c_int = 1 as std::ffi::c_int;
 pub const EXIT_FAILURE: std::ffi::c_int = 1 as std::ffi::c_int;
@@ -141,22 +140,10 @@ unsafe fn main_0(
         );
         exit(EXIT_FAILURE);
     }
-    signal(
-        SIGPIPE,
-        Some(sighandle as unsafe extern "C" fn(std::ffi::c_int) -> ()),
-    );
-    signal(
-        SIGHUP,
-        Some(sighandle as unsafe extern "C" fn(std::ffi::c_int) -> ()),
-    );
-    signal(
-        SIGINT,
-        Some(sighandle as unsafe extern "C" fn(std::ffi::c_int) -> ()),
-    );
-    signal(
-        SIGTERM,
-        Some(sighandle as unsafe extern "C" fn(std::ffi::c_int) -> ()),
-    );
+    signal(SIGPIPE, Some(sighandle as unsafe extern "C" fn(std::ffi::c_int) -> ()));
+    signal(SIGHUP, Some(sighandle as unsafe extern "C" fn(std::ffi::c_int) -> ()));
+    signal(SIGINT, Some(sighandle as unsafe extern "C" fn(std::ffi::c_int) -> ()));
+    signal(SIGTERM, Some(sighandle as unsafe extern "C" fn(std::ffi::c_int) -> ()));
     act = b"opening environment\0" as *const u8 as *const std::ffi::c_char;
     rc = mdb_env_create(&mut env);
     if rc == MDB_SUCCESS {

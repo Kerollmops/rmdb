@@ -77,7 +77,7 @@ unsafe extern "C" {
 
 use rmdb::*;
 
-pub type size_t = usize;
+use crate::mdb_mode_t;
 pub type __mode_t = std::ffi::c_uint;
 pub type __off_t = std::ffi::c_long;
 pub type __off64_t = std::ffi::c_long;
@@ -130,7 +130,6 @@ pub const _ISdigit: C2RustUnnamed = 2048;
 pub const _ISalpha: C2RustUnnamed = 1024;
 pub const _ISlower: C2RustUnnamed = 512;
 pub const _ISupper: C2RustUnnamed = 256;
-pub type mdb_mode_t = mode_t;
 pub type mdb_size_t = size_t;
 pub type MDB_dbi = std::ffi::c_uint;
 pub type MDB_cmp_func = unsafe extern "C" fn(*const MDB_val, *const MDB_val) -> std::ffi::c_int;
