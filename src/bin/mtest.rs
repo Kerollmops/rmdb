@@ -12,7 +12,6 @@ unsafe extern "C" {
     pub type _IO_wide_data;
     pub type _IO_codecvt;
     pub type _IO_marker;
-    static mut stderr: *mut FILE;
     fn fprintf(__stream: *mut FILE, __format: *const std::ffi::c_char, ...) -> std::ffi::c_int;
     fn printf(__format: *const std::ffi::c_char, ...) -> std::ffi::c_int;
     fn sprintf(
@@ -28,9 +27,24 @@ unsafe extern "C" {
     fn time(__timer: *mut time_t) -> time_t;
 }
 
+#[cfg(all(target_endian = "little", target_os = "linux", target_pointer_width = "64"))]
+const unsafe fn get_stderr() -> *mut FILE {
+    unsafe extern "C" {
+        static mut stderr: *mut FILE;
+    }
+    unsafe { stderr }
+}
+#[cfg(all(target_endian = "little", target_os = "macos", target_pointer_width = "64"))]
+const unsafe fn get_stderr() -> *mut FILE {
+    unsafe extern "C" {
+        static mut __stderrp: *mut FILE;
+    }
+    unsafe { __stderrp }
+}
+
 use rmdb::*;
 
-pub type size_t = usize;
+use crate::size_t;
 pub type __mode_t = std::ffi::c_uint;
 pub type __off_t = std::ffi::c_long;
 pub type __off64_t = std::ffi::c_long;
@@ -72,8 +86,7 @@ pub type _IO_lock_t = ();
 pub type FILE = _IO_FILE;
 pub type mode_t = __mode_t;
 pub type time_t = __time_t;
-pub type mdb_mode_t = mode_t;
-pub type mdb_size_t = size_t;
+use crate::{mdb_mode_t, mdb_size_t};
 pub type MDB_dbi = std::ffi::c_uint;
 pub type MDB_cursor_op = std::ffi::c_uint;
 pub const MDB_PREV_MULTIPLE: MDB_cursor_op = 18;
@@ -104,14 +117,8 @@ unsafe fn main_0(
     let mut rc: std::ffi::c_int = 0;
     let mut env: *mut MDB_env = 0 as *mut MDB_env;
     let mut dbi: MDB_dbi = 0;
-    let mut key: MDB_val = MDB_val {
-        mv_size: 0,
-        mv_data: 0 as *mut std::ffi::c_void,
-    };
-    let mut data: MDB_val = MDB_val {
-        mv_size: 0,
-        mv_data: 0 as *mut std::ffi::c_void,
-    };
+    let mut key: MDB_val = MDB_val { mv_size: 0, mv_data: 0 as *mut std::ffi::c_void };
+    let mut data: MDB_val = MDB_val { mv_size: 0, mv_data: 0 as *mut std::ffi::c_void };
     let mut txn: *mut MDB_txn = 0 as *mut MDB_txn;
     let mut mst: MDB_stat = MDB_stat {
         ms_psize: 0,
@@ -145,7 +152,7 @@ unsafe fn main_0(
     if rc == 0 as std::ffi::c_int {
     } else {
         fprintf(
-            stderr,
+            get_stderr(),
             b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
             b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
             47 as std::ffi::c_int,
@@ -158,7 +165,7 @@ unsafe fn main_0(
     if rc == 0 as std::ffi::c_int {
     } else {
         fprintf(
-            stderr,
+            get_stderr(),
             b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
             b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
             48 as std::ffi::c_int,
@@ -171,7 +178,7 @@ unsafe fn main_0(
     if rc == 0 as std::ffi::c_int {
     } else {
         fprintf(
-            stderr,
+            get_stderr(),
             b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
             b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
             49 as std::ffi::c_int,
@@ -189,7 +196,7 @@ unsafe fn main_0(
     if rc == 0 as std::ffi::c_int {
     } else {
         fprintf(
-            stderr,
+            get_stderr(),
             b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
             b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
             50 as std::ffi::c_int,
@@ -203,7 +210,7 @@ unsafe fn main_0(
     if rc == 0 as std::ffi::c_int {
     } else {
         fprintf(
-            stderr,
+            get_stderr(),
             b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
             b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
             52 as std::ffi::c_int,
@@ -212,16 +219,11 @@ unsafe fn main_0(
         );
         abort();
     };
-    rc = mdb_dbi_open(
-        txn,
-        0 as *const std::ffi::c_char,
-        0 as std::ffi::c_uint,
-        &mut dbi,
-    );
+    rc = mdb_dbi_open(txn, 0 as *const std::ffi::c_char, 0 as std::ffi::c_uint, &mut dbi);
     if rc == 0 as std::ffi::c_int {
     } else {
         fprintf(
-            stderr,
+            get_stderr(),
             b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
             b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
             53 as std::ffi::c_int,
@@ -232,10 +234,7 @@ unsafe fn main_0(
     };
     key.mv_size = ::core::mem::size_of::<std::ffi::c_int>() as std::ffi::c_ulong as size_t;
     key.mv_data = sval.as_mut_ptr() as *mut std::ffi::c_void;
-    printf(
-        b"Adding %d values\n\0" as *const u8 as *const std::ffi::c_char,
-        count,
-    );
+    printf(b"Adding %d values\n\0" as *const u8 as *const std::ffi::c_char, count);
     i = 0 as std::ffi::c_int;
     while i < count {
         sprintf(
@@ -252,7 +251,7 @@ unsafe fn main_0(
             if rc == 0 {
             } else {
                 fprintf(
-                    stderr,
+                    get_stderr(),
                     b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
                     b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
                     64 as std::ffi::c_int,
@@ -274,16 +273,13 @@ unsafe fn main_0(
         i;
     }
     if j != 0 {
-        printf(
-            b"%d duplicates skipped\n\0" as *const u8 as *const std::ffi::c_char,
-            j,
-        );
+        printf(b"%d duplicates skipped\n\0" as *const u8 as *const std::ffi::c_char, j);
     }
     rc = mdb_txn_commit(txn);
     if rc == 0 as std::ffi::c_int {
     } else {
         fprintf(
-            stderr,
+            get_stderr(),
             b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
             b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
             71 as std::ffi::c_int,
@@ -296,7 +292,7 @@ unsafe fn main_0(
     if rc == 0 as std::ffi::c_int {
     } else {
         fprintf(
-            stderr,
+            get_stderr(),
             b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
             b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
             72 as std::ffi::c_int,
@@ -305,16 +301,11 @@ unsafe fn main_0(
         );
         abort();
     };
-    rc = mdb_txn_begin(
-        env,
-        0 as *mut MDB_txn,
-        0x20000 as std::ffi::c_uint,
-        &mut txn,
-    );
+    rc = mdb_txn_begin(env, 0 as *mut MDB_txn, 0x20000 as std::ffi::c_uint, &mut txn);
     if rc == 0 as std::ffi::c_int {
     } else {
         fprintf(
-            stderr,
+            get_stderr(),
             b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
             b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
             74 as std::ffi::c_int,
@@ -327,7 +318,7 @@ unsafe fn main_0(
     if rc == 0 as std::ffi::c_int {
     } else {
         fprintf(
-            stderr,
+            get_stderr(),
             b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
             b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
             75 as std::ffi::c_int,
@@ -354,7 +345,7 @@ unsafe fn main_0(
     if rc == -(30798 as std::ffi::c_int) {
     } else {
         fprintf(
-            stderr,
+            get_stderr(),
             b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
             b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
             81 as std::ffi::c_int,
@@ -376,7 +367,7 @@ unsafe fn main_0(
         if rc == 0 as std::ffi::c_int {
         } else {
             fprintf(
-                stderr,
+                get_stderr(),
                 b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
                 b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
                 90 as std::ffi::c_int,
@@ -395,7 +386,7 @@ unsafe fn main_0(
             if rc == 0 {
             } else {
                 fprintf(
-                    stderr,
+                    get_stderr(),
                     b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
                     b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
                     92 as std::ffi::c_int,
@@ -414,7 +405,7 @@ unsafe fn main_0(
             if rc == 0 as std::ffi::c_int {
             } else {
                 fprintf(
-                    stderr,
+                    get_stderr(),
                     b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
                     b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
                     96 as std::ffi::c_int,
@@ -427,15 +418,12 @@ unsafe fn main_0(
         i -= rand() % 5 as std::ffi::c_int;
     }
     free(values as *mut std::ffi::c_void);
-    printf(
-        b"Deleted %d values\n\0" as *const u8 as *const std::ffi::c_char,
-        j,
-    );
+    printf(b"Deleted %d values\n\0" as *const u8 as *const std::ffi::c_char, j);
     rc = mdb_env_stat(env, &mut mst);
     if rc == 0 as std::ffi::c_int {
     } else {
         fprintf(
-            stderr,
+            get_stderr(),
             b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
             b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
             102 as std::ffi::c_int,
@@ -444,16 +432,11 @@ unsafe fn main_0(
         );
         abort();
     };
-    rc = mdb_txn_begin(
-        env,
-        0 as *mut MDB_txn,
-        0x20000 as std::ffi::c_uint,
-        &mut txn,
-    );
+    rc = mdb_txn_begin(env, 0 as *mut MDB_txn, 0x20000 as std::ffi::c_uint, &mut txn);
     if rc == 0 as std::ffi::c_int {
     } else {
         fprintf(
-            stderr,
+            get_stderr(),
             b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
             b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
             103 as std::ffi::c_int,
@@ -466,7 +449,7 @@ unsafe fn main_0(
     if rc == 0 as std::ffi::c_int {
     } else {
         fprintf(
-            stderr,
+            get_stderr(),
             b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
             b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
             104 as std::ffi::c_int,
@@ -492,7 +475,7 @@ unsafe fn main_0(
     if rc == -(30798 as std::ffi::c_int) {
     } else {
         fprintf(
-            stderr,
+            get_stderr(),
             b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
             b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
             111 as std::ffi::c_int,
@@ -506,7 +489,7 @@ unsafe fn main_0(
     if rc == 0 as std::ffi::c_int {
     } else {
         fprintf(
-            stderr,
+            get_stderr(),
             b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
             b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
             113 as std::ffi::c_int,
@@ -540,7 +523,7 @@ unsafe fn main_0(
     if rc == -(30798 as std::ffi::c_int) {
     } else {
         fprintf(
-            stderr,
+            get_stderr(),
             b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
             b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
             123 as std::ffi::c_int,
@@ -554,7 +537,7 @@ unsafe fn main_0(
     if rc == 0 as std::ffi::c_int {
     } else {
         fprintf(
-            stderr,
+            get_stderr(),
             b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
             b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
             125 as std::ffi::c_int,
@@ -575,7 +558,7 @@ unsafe fn main_0(
     if rc == 0 as std::ffi::c_int {
     } else {
         fprintf(
-            stderr,
+            get_stderr(),
             b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
             b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
             129 as std::ffi::c_int,
@@ -599,7 +582,7 @@ unsafe fn main_0(
     if rc == 0 as std::ffi::c_int {
     } else {
         fprintf(
-            stderr,
+            get_stderr(),
             b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
             b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
             138 as std::ffi::c_int,
@@ -612,7 +595,7 @@ unsafe fn main_0(
     if rc == 0 as std::ffi::c_int {
     } else {
         fprintf(
-            stderr,
+            get_stderr(),
             b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
             b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
             139 as std::ffi::c_int,
@@ -628,7 +611,7 @@ unsafe fn main_0(
             if rc == 0 {
             } else {
                 fprintf(
-                    stderr,
+                    get_stderr(),
                     b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
                     b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
                     141 as std::ffi::c_int,
@@ -655,7 +638,7 @@ unsafe fn main_0(
         if rc == 0 as std::ffi::c_int {
         } else {
             fprintf(
-                stderr,
+                get_stderr(),
                 b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
                 b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
                 146 as std::ffi::c_int,
@@ -676,7 +659,7 @@ unsafe fn main_0(
             if rc == 0 {
             } else {
                 fprintf(
-                    stderr,
+                    get_stderr(),
                     b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
                     b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
                     151 as std::ffi::c_int,
@@ -708,7 +691,7 @@ unsafe fn main_0(
     if rc == 0 as std::ffi::c_int {
     } else {
         fprintf(
-            stderr,
+            get_stderr(),
             b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
             b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
             158 as std::ffi::c_int,
@@ -722,7 +705,7 @@ unsafe fn main_0(
     if rc == 0 as std::ffi::c_int {
     } else {
         fprintf(
-            stderr,
+            get_stderr(),
             b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
             b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
             161 as std::ffi::c_int,
@@ -735,7 +718,7 @@ unsafe fn main_0(
     if rc == 0 as std::ffi::c_int {
     } else {
         fprintf(
-            stderr,
+            get_stderr(),
             b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
             b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
             162 as std::ffi::c_int,
@@ -752,7 +735,7 @@ unsafe fn main_0(
             if rc == 0 {
             } else {
                 fprintf(
-                    stderr,
+                    get_stderr(),
                     b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
                     b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
                     164 as std::ffi::c_int,

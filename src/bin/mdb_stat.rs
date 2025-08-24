@@ -12,11 +12,6 @@ unsafe extern "C" {
     pub type _IO_wide_data;
     pub type _IO_codecvt;
     pub type _IO_marker;
-    // pub type MDB_env;
-    // pub type MDB_txn;
-    // pub type MDB_cursor;
-    static mut stdout: *mut FILE;
-    static mut stderr: *mut FILE;
     fn fprintf(__stream: *mut FILE, __format: *const std::ffi::c_char, ...) -> std::ffi::c_int;
     fn printf(__format: *const std::ffi::c_char, ...) -> std::ffi::c_int;
     fn fputs(__s: *const std::ffi::c_char, __stream: *mut FILE) -> std::ffi::c_int;
@@ -42,9 +37,39 @@ unsafe extern "C" {
     ) -> std::ffi::c_int;
 }
 
+#[cfg(all(target_endian = "little", target_os = "linux", target_pointer_width = "64"))]
+const unsafe fn get_stderr() -> *mut FILE {
+    unsafe extern "C" {
+        static mut stderr: *mut FILE;
+    }
+    unsafe { stderr }
+}
+#[cfg(all(target_endian = "little", target_os = "macos", target_pointer_width = "64"))]
+const unsafe fn get_stderr() -> *mut FILE {
+    unsafe extern "C" {
+        static mut __stderrp: *mut FILE;
+    }
+    unsafe { __stderrp }
+}
+
+#[cfg(all(target_endian = "little", target_os = "linux", target_pointer_width = "64"))]
+const unsafe fn get_stdout() -> *mut FILE {
+    unsafe extern "C" {
+        static mut stdout: *mut FILE;
+    }
+    unsafe { stdout }
+}
+#[cfg(all(target_endian = "little", target_os = "macos", target_pointer_width = "64"))]
+const unsafe fn get_stdout() -> *mut FILE {
+    unsafe extern "C" {
+        static mut __stdoutp: *mut FILE;
+    }
+    unsafe { __stdoutp }
+}
+
 use rmdb::*;
 
-pub type size_t = usize;
+use crate::mdb_mode_t;
 pub type __mode_t = std::ffi::c_uint;
 pub type __off_t = std::ffi::c_long;
 pub type __off64_t = std::ffi::c_long;
@@ -86,7 +111,6 @@ pub type _IO_lock_t = ();
 pub type FILE = _IO_FILE;
 pub type ssize_t = __ssize_t;
 pub type mode_t = __mode_t;
-pub type mdb_mode_t = mode_t;
 pub type mdb_size_t = size_t;
 pub type MDB_dbi = std::ffi::c_uint;
 pub type MDB_cursor_op = std::ffi::c_uint;
@@ -117,30 +141,21 @@ pub const MDB_NOSUBDIR: std::ffi::c_int = 0x4000 as std::ffi::c_int;
 pub const MDB_PREVSNAPSHOT: std::ffi::c_int = 0x2000000 as std::ffi::c_int;
 pub const MDB_SUCCESS: std::ffi::c_int = 0 as std::ffi::c_int;
 unsafe extern "C" fn prstat(mut ms: *mut MDB_stat) {
-    printf(
-        b"  Tree depth: %u\n\0" as *const u8 as *const std::ffi::c_char,
-        (*ms).ms_depth,
-    );
+    printf(b"  Tree depth: %u\n\0" as *const u8 as *const std::ffi::c_char, (*ms).ms_depth);
     printf(
         b"  Branch pages: %zu\n\0" as *const u8 as *const std::ffi::c_char,
         (*ms).ms_branch_pages,
     );
-    printf(
-        b"  Leaf pages: %zu\n\0" as *const u8 as *const std::ffi::c_char,
-        (*ms).ms_leaf_pages,
-    );
+    printf(b"  Leaf pages: %zu\n\0" as *const u8 as *const std::ffi::c_char, (*ms).ms_leaf_pages);
     printf(
         b"  Overflow pages: %zu\n\0" as *const u8 as *const std::ffi::c_char,
         (*ms).ms_overflow_pages,
     );
-    printf(
-        b"  Entries: %zu\n\0" as *const u8 as *const std::ffi::c_char,
-        (*ms).ms_entries,
-    );
+    printf(b"  Entries: %zu\n\0" as *const u8 as *const std::ffi::c_char, (*ms).ms_entries);
 }
 unsafe extern "C" fn usage(mut prog: *mut std::ffi::c_char) {
     fprintf(
-        stderr,
+        get_stderr(),
         b"usage: %s [-V] [-n] [-e] [-r[r]] [-f[f[f]]] [-v] [-a|-s subdb] dbpath\n\0" as *const u8
             as *const std::ffi::c_char,
         prog,
@@ -244,7 +259,7 @@ unsafe fn main_0(
     rc = mdb_env_create(&mut env);
     if rc != 0 {
         fprintf(
-            stderr,
+            get_stderr(),
             b"mdb_env_create failed, error %d %s\n\0" as *const u8 as *const std::ffi::c_char,
             rc,
             mdb_strerror(rc),
@@ -258,11 +273,11 @@ unsafe fn main_0(
         env,
         envname,
         (envflags | 0x20000 as std::ffi::c_int) as std::ffi::c_uint,
-        0o664 as mdb_mode_t,
+        0o664 as mdb_mode_t as _,
     );
     if rc != 0 {
         fprintf(
-            stderr,
+            get_stderr(),
             b"mdb_env_open failed, error %d %s\n\0" as *const u8 as *const std::ffi::c_char,
             rc,
             mdb_strerror(rc),
@@ -276,21 +291,15 @@ unsafe fn main_0(
                 b"  Map address: %p\n\0" as *const u8 as *const std::ffi::c_char,
                 mei.me_mapaddr,
             );
-            printf(
-                b"  Map size: %zu\n\0" as *const u8 as *const std::ffi::c_char,
-                mei.me_mapsize,
-            );
-            printf(
-                b"  Page size: %u\n\0" as *const u8 as *const std::ffi::c_char,
-                mst.ms_psize,
-            );
+            printf(b"  Map size: %zu\n\0" as *const u8 as *const std::ffi::c_char, mei.me_mapsize);
+            printf(b"  Page size: %u\n\0" as *const u8 as *const std::ffi::c_char, mst.ms_psize);
             printf(
                 b"  Max pages: %zu\n\0" as *const u8 as *const std::ffi::c_char,
-                (mei.me_mapsize).wrapping_div(mst.ms_psize as mdb_size_t),
+                (mei.me_mapsize).wrapping_div(mst.ms_psize as mdb_size_t as _),
             );
             printf(
                 b"  Number of pages used: %zu\n\0" as *const u8 as *const std::ffi::c_char,
-                (mei.me_last_pgno).wrapping_add(1 as mdb_size_t),
+                (mei.me_last_pgno).wrapping_add(1 as mdb_size_t as _),
             );
             printf(
                 b"  Last transaction ID: %zu\n\0" as *const u8 as *const std::ffi::c_char,
@@ -321,7 +330,7 @@ unsafe fn main_0(
                             *mut FILE,
                         ) -> std::ffi::c_int,
                 )),
-                stdout as *mut std::ffi::c_void,
+                get_stdout() as *mut std::ffi::c_void,
             );
             if rdrinfo > 1 as std::ffi::c_int {
                 let mut dead: std::ffi::c_int = 0;
@@ -347,7 +356,7 @@ unsafe fn main_0(
                                 *mut FILE,
                             ) -> std::ffi::c_int,
                     )),
-                    stdout as *mut std::ffi::c_void,
+                    get_stdout() as *mut std::ffi::c_void,
                 );
             }
             if !(!subname.is_null() || alldbs != 0 || freinfo != 0) {
@@ -361,15 +370,10 @@ unsafe fn main_0(
         match current_block {
             9536332248080802547 => {}
             _ => {
-                rc = mdb_txn_begin(
-                    env,
-                    0 as *mut MDB_txn,
-                    0x20000 as std::ffi::c_uint,
-                    &mut txn,
-                );
+                rc = mdb_txn_begin(env, 0 as *mut MDB_txn, 0x20000 as std::ffi::c_uint, &mut txn);
                 if rc != 0 {
                     fprintf(
-                        stderr,
+                        get_stderr(),
                         b"mdb_txn_begin failed, error %d %s\n\0" as *const u8
                             as *const std::ffi::c_char,
                         rc,
@@ -378,14 +382,10 @@ unsafe fn main_0(
                 } else {
                     if freinfo != 0 {
                         let mut cursor: *mut MDB_cursor = 0 as *mut MDB_cursor;
-                        let mut key: MDB_val = MDB_val {
-                            mv_size: 0,
-                            mv_data: 0 as *mut std::ffi::c_void,
-                        };
-                        let mut data: MDB_val = MDB_val {
-                            mv_size: 0,
-                            mv_data: 0 as *mut std::ffi::c_void,
-                        };
+                        let mut key: MDB_val =
+                            MDB_val { mv_size: 0, mv_data: 0 as *mut std::ffi::c_void };
+                        let mut data: MDB_val =
+                            MDB_val { mv_size: 0, mv_data: 0 as *mut std::ffi::c_void };
                         let mut pages: mdb_size_t = 0 as mdb_size_t;
                         let mut iptr: *mut mdb_size_t = 0 as *mut mdb_size_t;
                         printf(b"Freelist Status\n\0" as *const u8 as *const std::ffi::c_char);
@@ -393,7 +393,7 @@ unsafe fn main_0(
                         rc = mdb_cursor_open(txn, dbi, &mut cursor);
                         if rc != 0 {
                             fprintf(
-                                stderr,
+                                get_stderr(),
                                 b"mdb_cursor_open failed, error %d %s\n\0" as *const u8
                                     as *const std::ffi::c_char,
                                 rc,
@@ -404,7 +404,7 @@ unsafe fn main_0(
                             rc = mdb_stat(txn, dbi, &mut mst);
                             if rc != 0 {
                                 fprintf(
-                                    stderr,
+                                    get_stderr(),
                                     b"mdb_stat failed, error %d %s\n\0" as *const u8
                                         as *const std::ffi::c_char,
                                     rc,
@@ -520,7 +520,7 @@ unsafe fn main_0(
                             rc = mdb_dbi_open(txn, subname, 0 as std::ffi::c_uint, &mut dbi);
                             if rc != 0 {
                                 fprintf(
-                                    stderr,
+                                    get_stderr(),
                                     b"mdb_open failed, error %d %s\n\0" as *const u8
                                         as *const std::ffi::c_char,
                                     rc,
@@ -530,7 +530,7 @@ unsafe fn main_0(
                                 rc = mdb_stat(txn, dbi, &mut mst);
                                 if rc != 0 {
                                     fprintf(
-                                        stderr,
+                                        get_stderr(),
                                         b"mdb_stat failed, error %d %s\n\0" as *const u8
                                             as *const std::ffi::c_char,
                                         rc,
@@ -555,7 +555,7 @@ unsafe fn main_0(
                                         rc = mdb_cursor_open(txn, dbi, &mut cursor_0);
                                         if rc != 0 {
                                             fprintf(
-                                                stderr,
+                                                get_stderr(),
                                                 b"mdb_cursor_open failed, error %d %s\n\0"
                                                     as *const u8
                                                     as *const std::ffi::c_char,
@@ -581,20 +581,20 @@ unsafe fn main_0(
                                                 if !(memchr(
                                                     key_0.mv_data,
                                                     '\0' as i32,
-                                                    key_0.mv_size,
+                                                    key_0.mv_size as _,
                                                 ))
                                                 .is_null()
                                                 {
                                                     continue;
                                                 }
                                                 str = malloc(
-                                                    (key_0.mv_size).wrapping_add(1 as size_t),
+                                                    (key_0.mv_size as size_t).wrapping_add(1),
                                                 )
                                                     as *mut std::ffi::c_char;
                                                 memcpy(
                                                     str as *mut std::ffi::c_void,
                                                     key_0.mv_data,
-                                                    key_0.mv_size,
+                                                    key_0.mv_size as _,
                                                 );
                                                 *str.offset(key_0.mv_size as isize) =
                                                     '\0' as i32 as std::ffi::c_char;
@@ -618,7 +618,7 @@ unsafe fn main_0(
                                                 rc = mdb_stat(txn, db2, &mut mst);
                                                 if rc != 0 {
                                                     fprintf(
-                                                        stderr,
+                                                        get_stderr(),
                                                         b"mdb_stat failed, error %d %s\n\0"
                                                             as *const u8
                                                             as *const std::ffi::c_char,

@@ -12,8 +12,6 @@ unsafe extern "C" {
     pub type _IO_wide_data;
     pub type _IO_codecvt;
     pub type _IO_marker;
-    static mut stdout: *mut FILE;
-    static mut stderr: *mut FILE;
     fn freopen(
         __filename: *const std::ffi::c_char,
         __modes: *const std::ffi::c_char,
@@ -22,7 +20,6 @@ unsafe extern "C" {
     fn fprintf(__stream: *mut FILE, __format: *const std::ffi::c_char, ...) -> std::ffi::c_int;
     fn printf(__format: *const std::ffi::c_char, ...) -> std::ffi::c_int;
     fn putc(__c: std::ffi::c_int, __stream: *mut FILE) -> std::ffi::c_int;
-    fn __errno_location() -> *mut std::ffi::c_int;
     fn malloc(__size: size_t) -> *mut std::ffi::c_void;
     fn free(__ptr: *mut std::ffi::c_void);
     fn exit(__status: std::ffi::c_int) -> !;
@@ -37,6 +34,7 @@ unsafe extern "C" {
         __n: size_t,
     ) -> *mut std::ffi::c_void;
     fn strerror(__errnum: std::ffi::c_int) -> *mut std::ffi::c_char;
+    #[cfg(all(target_endian = "little", target_os = "linux", target_pointer_width = "64"))]
     fn __ctype_b_loc() -> *mut *const std::ffi::c_ushort;
     static mut optarg: *mut std::ffi::c_char;
     static mut optind: std::ffi::c_int;
@@ -48,9 +46,54 @@ unsafe extern "C" {
     fn signal(__sig: std::ffi::c_int, __handler: __sighandler_t) -> __sighandler_t;
 }
 
+#[cfg(all(target_endian = "little", target_os = "linux", target_pointer_width = "64"))]
+const unsafe fn get_stderr() -> *mut FILE {
+    unsafe extern "C" {
+        static mut stderr: *mut FILE;
+    }
+    unsafe { stderr }
+}
+#[cfg(all(target_endian = "little", target_os = "macos", target_pointer_width = "64"))]
+const unsafe fn get_stderr() -> *mut FILE {
+    unsafe extern "C" {
+        static mut __stderrp: *mut FILE;
+    }
+    unsafe { __stderrp }
+}
+
+#[cfg(all(target_endian = "little", target_os = "linux", target_pointer_width = "64"))]
+const unsafe fn get_stdout() -> *mut FILE {
+    unsafe extern "C" {
+        static mut stdout: *mut FILE;
+    }
+    unsafe { stdout }
+}
+#[cfg(all(target_endian = "little", target_os = "macos", target_pointer_width = "64"))]
+const unsafe fn get_stdout() -> *mut FILE {
+    unsafe extern "C" {
+        static mut __stdoutp: *mut FILE;
+    }
+    unsafe { __stdoutp }
+}
+
+#[cfg(all(target_endian = "little", target_os = "linux", target_pointer_width = "64"))]
+unsafe fn get_errno_location() -> *mut std::ffi::c_int {
+    unsafe extern "C" {
+        fn __errno_location() -> *mut std::ffi::c_int;
+    }
+    unsafe { __errno_location() }
+}
+#[cfg(all(target_endian = "little", target_os = "macos", target_pointer_width = "64"))]
+unsafe fn get_errno_location() -> *mut std::ffi::c_int {
+    unsafe extern "C" {
+        fn __error() -> *mut std::ffi::c_int;
+    }
+    unsafe { __error() }
+}
+
 use rmdb::*;
 
-pub type size_t = usize;
+use crate::mdb_mode_t;
 pub type __mode_t = std::ffi::c_uint;
 pub type __off_t = std::ffi::c_long;
 pub type __off64_t = std::ffi::c_long;
@@ -106,7 +149,6 @@ pub const _ISlower: C2RustUnnamed = 512;
 pub const _ISupper: C2RustUnnamed = 256;
 pub type sig_atomic_t = __sig_atomic_t;
 pub type __sighandler_t = Option<unsafe extern "C" fn(std::ffi::c_int) -> ()>;
-pub type mdb_mode_t = mode_t;
 pub type mdb_size_t = size_t;
 pub type MDB_dbi = std::ffi::c_uint;
 pub type MDB_cursor_op = std::ffi::c_uint;
@@ -137,7 +179,7 @@ pub struct flagbit {
 }
 #[inline]
 unsafe extern "C" fn putchar(mut __c: std::ffi::c_int) -> std::ffi::c_int {
-    return putc(__c, stdout);
+    return putc(__c, get_stdout());
 }
 pub const EXIT_FAILURE: std::ffi::c_int = 1 as std::ffi::c_int;
 pub const EXIT_SUCCESS: std::ffi::c_int = 0 as std::ffi::c_int;
@@ -225,10 +267,8 @@ unsafe extern "C" fn text(mut v: *mut MDB_val) {
     c = (*v).mv_data as *mut std::ffi::c_uchar;
     end = c.offset((*v).mv_size as isize);
     while c < end {
-        if *(*__ctype_b_loc()).offset(*c as std::ffi::c_int as isize) as std::ffi::c_int
-            & _ISprint as std::ffi::c_int as std::ffi::c_ushort as std::ffi::c_int
-            != 0
-        {
+        let myc = ((*c as std::ffi::c_int as isize) as u8);
+        if myc.is_ascii_graphic() || myc == b' ' {
             if *c as std::ffi::c_int == '\\' as i32 {
                 putchar('\\' as i32);
             }
@@ -269,14 +309,8 @@ unsafe extern "C" fn dumpit(
         ms_overflow_pages: 0,
         ms_entries: 0,
     };
-    let mut key: MDB_val = MDB_val {
-        mv_size: 0,
-        mv_data: 0 as *mut std::ffi::c_void,
-    };
-    let mut data: MDB_val = MDB_val {
-        mv_size: 0,
-        mv_data: 0 as *mut std::ffi::c_void,
-    };
+    let mut key: MDB_val = MDB_val { mv_size: 0, mv_data: 0 as *mut std::ffi::c_void };
+    let mut data: MDB_val = MDB_val { mv_size: 0, mv_data: 0 as *mut std::ffi::c_void };
     let mut info: MDB_envinfo = MDB_envinfo {
         me_mapaddr: 0 as *mut std::ffi::c_void,
         me_mapsize: 0,
@@ -310,44 +344,26 @@ unsafe extern "C" fn dumpit(
         },
     );
     if !name.is_null() {
-        printf(
-            b"database=%s\n\0" as *const u8 as *const std::ffi::c_char,
-            name,
-        );
+        printf(b"database=%s\n\0" as *const u8 as *const std::ffi::c_char, name);
     }
     printf(b"type=btree\n\0" as *const u8 as *const std::ffi::c_char);
-    printf(
-        b"mapsize=%zu\n\0" as *const u8 as *const std::ffi::c_char,
-        info.me_mapsize,
-    );
+    printf(b"mapsize=%zu\n\0" as *const u8 as *const std::ffi::c_char, info.me_mapsize);
     if !(info.me_mapaddr).is_null() {
-        printf(
-            b"mapaddr=%p\n\0" as *const u8 as *const std::ffi::c_char,
-            info.me_mapaddr,
-        );
+        printf(b"mapaddr=%p\n\0" as *const u8 as *const std::ffi::c_char, info.me_mapaddr);
     }
-    printf(
-        b"maxreaders=%u\n\0" as *const u8 as *const std::ffi::c_char,
-        info.me_maxreaders,
-    );
+    printf(b"maxreaders=%u\n\0" as *const u8 as *const std::ffi::c_char, info.me_maxreaders);
     if flags & 0x4 as std::ffi::c_uint != 0 {
         printf(b"duplicates=1\n\0" as *const u8 as *const std::ffi::c_char);
     }
     i = 0 as std::ffi::c_int;
     while dbflags[i as usize].bit != 0 {
         if flags & dbflags[i as usize].bit as std::ffi::c_uint != 0 {
-            printf(
-                b"%s=1\n\0" as *const u8 as *const std::ffi::c_char,
-                dbflags[i as usize].name,
-            );
+            printf(b"%s=1\n\0" as *const u8 as *const std::ffi::c_char, dbflags[i as usize].name);
         }
         i += 1;
         i;
     }
-    printf(
-        b"db_pagesize=%d\n\0" as *const u8 as *const std::ffi::c_char,
-        ms.ms_psize,
-    );
+    printf(b"db_pagesize=%d\n\0" as *const u8 as *const std::ffi::c_char, ms.ms_psize);
     printf(b"HEADER=END\n\0" as *const u8 as *const std::ffi::c_char);
     rc = mdb_cursor_open(txn, dbi, &mut mc);
     if rc != 0 {
@@ -377,7 +393,7 @@ unsafe extern "C" fn dumpit(
 }
 unsafe extern "C" fn usage(mut prog: *mut std::ffi::c_char) {
     fprintf(
-        stderr,
+        get_stderr(),
         b"usage: %s [-V] [-f output] [-l] [-n] [-p] [-v] [-a|-s subdb] dbpath\n\0" as *const u8
             as *const std::ffi::c_char,
         prog,
@@ -429,19 +445,15 @@ unsafe fn main_0(
                 current_block_19 = 8780738868093770578;
             }
             102 => {
-                if (freopen(
-                    optarg,
-                    b"w\0" as *const u8 as *const std::ffi::c_char,
-                    stdout,
-                ))
-                .is_null()
+                if (freopen(optarg, b"w\0" as *const u8 as *const std::ffi::c_char, get_stdout()))
+                    .is_null()
                 {
                     fprintf(
-                        stderr,
+                        get_stderr(),
                         b"%s: %s: reopen: %s\n\0" as *const u8 as *const std::ffi::c_char,
                         prog,
                         optarg,
-                        strerror(*__errno_location()),
+                        strerror(*get_errno_location()),
                     );
                     exit(EXIT_FAILURE);
                 }
@@ -485,27 +497,15 @@ unsafe fn main_0(
     if optind != argc - 1 as std::ffi::c_int {
         usage(prog);
     }
-    signal(
-        SIGPIPE,
-        Some(dumpsig as unsafe extern "C" fn(std::ffi::c_int) -> ()),
-    );
-    signal(
-        SIGHUP,
-        Some(dumpsig as unsafe extern "C" fn(std::ffi::c_int) -> ()),
-    );
-    signal(
-        SIGINT,
-        Some(dumpsig as unsafe extern "C" fn(std::ffi::c_int) -> ()),
-    );
-    signal(
-        SIGTERM,
-        Some(dumpsig as unsafe extern "C" fn(std::ffi::c_int) -> ()),
-    );
+    signal(SIGPIPE, Some(dumpsig as unsafe extern "C" fn(std::ffi::c_int) -> ()));
+    signal(SIGHUP, Some(dumpsig as unsafe extern "C" fn(std::ffi::c_int) -> ()));
+    signal(SIGINT, Some(dumpsig as unsafe extern "C" fn(std::ffi::c_int) -> ()));
+    signal(SIGTERM, Some(dumpsig as unsafe extern "C" fn(std::ffi::c_int) -> ()));
     envname = *argv.offset(optind as isize);
     rc = mdb_env_create(&mut env);
     if rc != 0 {
         fprintf(
-            stderr,
+            get_stderr(),
             b"mdb_env_create failed, error %d %s\n\0" as *const u8 as *const std::ffi::c_char,
             rc,
             mdb_strerror(rc),
@@ -523,21 +523,16 @@ unsafe fn main_0(
     );
     if rc != 0 {
         fprintf(
-            stderr,
+            get_stderr(),
             b"mdb_env_open failed, error %d %s\n\0" as *const u8 as *const std::ffi::c_char,
             rc,
             mdb_strerror(rc),
         );
     } else {
-        rc = mdb_txn_begin(
-            env,
-            0 as *mut MDB_txn,
-            0x20000 as std::ffi::c_uint,
-            &mut txn,
-        );
+        rc = mdb_txn_begin(env, 0 as *mut MDB_txn, 0x20000 as std::ffi::c_uint, &mut txn);
         if rc != 0 {
             fprintf(
-                stderr,
+                get_stderr(),
                 b"mdb_txn_begin failed, error %d %s\n\0" as *const u8 as *const std::ffi::c_char,
                 rc,
                 mdb_strerror(rc),
@@ -546,7 +541,7 @@ unsafe fn main_0(
             rc = mdb_dbi_open(txn, subname, 0 as std::ffi::c_uint, &mut dbi);
             if rc != 0 {
                 fprintf(
-                    stderr,
+                    get_stderr(),
                     b"mdb_open failed, error %d %s\n\0" as *const u8 as *const std::ffi::c_char,
                     rc,
                     mdb_strerror(rc),
@@ -554,15 +549,13 @@ unsafe fn main_0(
             } else {
                 if alldbs != 0 {
                     let mut cursor: *mut MDB_cursor = 0 as *mut MDB_cursor;
-                    let mut key: MDB_val = MDB_val {
-                        mv_size: 0,
-                        mv_data: 0 as *mut std::ffi::c_void,
-                    };
+                    let mut key: MDB_val =
+                        MDB_val { mv_size: 0, mv_data: 0 as *mut std::ffi::c_void };
                     let mut count: std::ffi::c_int = 0 as std::ffi::c_int;
                     rc = mdb_cursor_open(txn, dbi, &mut cursor);
                     if rc != 0 {
                         fprintf(
-                            stderr,
+                            get_stderr(),
                             b"mdb_cursor_open failed, error %d %s\n\0" as *const u8
                                 as *const std::ffi::c_char,
                             rc,
@@ -607,7 +600,7 @@ unsafe fn main_0(
                         mdb_cursor_close(cursor);
                         if count == 0 {
                             fprintf(
-                                stderr,
+                                get_stderr(),
                                 b"%s: %s does not contain multiple databases\n\0" as *const u8
                                     as *const std::ffi::c_char,
                                 prog,
@@ -628,7 +621,7 @@ unsafe fn main_0(
                     _ => {
                         if rc != 0 && rc != -(30798 as std::ffi::c_int) {
                             fprintf(
-                                stderr,
+                                get_stderr(),
                                 b"%s: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
                                 prog,
                                 envname,
