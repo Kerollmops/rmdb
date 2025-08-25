@@ -23,7 +23,7 @@ jobs:
           - nightly
 
     steps:
-      - uses: actions/checkout@v1
+      - uses: actions/checkout@v2
       - uses: dtolnay/rust-toolchain@1.85
       - uses: actions-rs/cargo@v1
         with:
@@ -50,7 +50,7 @@ jobs:
           - nightly
 
     steps:
-      - uses: actions/checkout@v1
+      - uses: actions/checkout@v2
       - uses: dtolnay/rust-toolchain@1.85
       - uses: actions-rs/cargo@v1
         with:
@@ -65,3 +65,15 @@ jobs:
           toolchain: ${{ matrix.rust }}
           command: run
           args: --bin ${{ matrix.bins }}
+
+  clippy:
+      name: Ensure clippy is happy
+      runs-on: ubuntu-latest
+      steps:
+        - uses: actions/checkout@v2
+        - uses: dtolnay/rust-toolchain@1.85
+        - uses: actions-rs/cargo@v1
+          with:
+            toolchain: ${{ matrix.rust }}
+            command: clippy
+            args: --all-targets -- --deny warnings
