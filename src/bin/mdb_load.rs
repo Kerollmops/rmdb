@@ -205,11 +205,11 @@ pub const EXIT_FAILURE: std::ffi::c_int = 1 as std::ffi::c_int;
 pub const EXIT_SUCCESS: std::ffi::c_int = 0 as std::ffi::c_int;
 #[inline]
 unsafe extern "C" fn atoi(mut __nptr: *const std::ffi::c_char) -> std::ffi::c_int { unsafe {
-    return strtol(
+    strtol(
         __nptr,
-        0 as *mut std::ffi::c_void as *mut *mut std::ffi::c_char,
+        std::ptr::null_mut::<std::ffi::c_void>() as *mut *mut std::ffi::c_char,
         10 as std::ffi::c_int,
-    ) as std::ffi::c_int;
+    ) as std::ffi::c_int
 }}
 pub const MDB_FIXEDMAP: std::ffi::c_int = 0x1 as std::ffi::c_int;
 pub const MDB_NOSUBDIR: std::ffi::c_int = 0x4000 as std::ffi::c_int;
@@ -253,7 +253,7 @@ static mut k0buf: MDB_val =
 pub static mut dbflags: [flagbit; 7] =
     [flagbit { bit: 0, name: 0 as *mut std::ffi::c_char, len: 0 }; 7];
 unsafe extern "C" fn readhdr() { unsafe {
-    let mut ptr: *mut std::ffi::c_char = 0 as *mut std::ffi::c_char;
+    let mut ptr: *mut std::ffi::c_char = std::ptr::null_mut::<std::ffi::c_char>();
     flags = 0 as std::ffi::c_int;
     while !(fgets(
         dbuf.mv_data as *mut std::ffi::c_char,
@@ -566,12 +566,12 @@ unsafe extern "C" fn unhex(mut c2: *mut std::ffi::c_uchar) -> std::ffi::c_int { 
         x -= 55 as std::ffi::c_int;
     }
     c |= x;
-    return c;
+    c
 }}
 unsafe extern "C" fn readline(mut out: *mut MDB_val, mut buf: *mut MDB_val) -> std::ffi::c_int { unsafe {
-    let mut c1: *mut std::ffi::c_uchar = 0 as *mut std::ffi::c_uchar;
-    let mut c2: *mut std::ffi::c_uchar = 0 as *mut std::ffi::c_uchar;
-    let mut end: *mut std::ffi::c_uchar = 0 as *mut std::ffi::c_uchar;
+    let mut c1: *mut std::ffi::c_uchar = std::ptr::null_mut::<std::ffi::c_uchar>();
+    let mut c2: *mut std::ffi::c_uchar = std::ptr::null_mut::<std::ffi::c_uchar>();
+    let mut end: *mut std::ffi::c_uchar = std::ptr::null_mut::<std::ffi::c_uchar>();
     let mut len: size_t = 0;
     let mut l2: size_t = 0;
     let mut c: std::ffi::c_int = 0;
@@ -590,8 +590,7 @@ unsafe extern "C" fn readline(mut out: *mut MDB_val, mut buf: *mut MDB_val) -> s
                 get_stdin(),
             ))
             .is_null()
-            {
-                if c == 'D' as i32
+                && c == 'D' as i32
                     && strncmp(
                         (*buf).mv_data as *const std::ffi::c_char,
                         b"ATA=END\0" as *const u8 as *const std::ffi::c_char,
@@ -601,7 +600,6 @@ unsafe extern "C" fn readline(mut out: *mut MDB_val, mut buf: *mut MDB_val) -> s
                 {
                     return -(1 as std::ffi::c_int);
                 }
-            }
             Eof = 1 as std::ffi::c_int;
             badend();
             return -(1 as std::ffi::c_int);
@@ -668,8 +666,8 @@ unsafe extern "C" fn readline(mut out: *mut MDB_val, mut buf: *mut MDB_val) -> s
                     *fresh1 = *c2;
                 } else {
                     if c2.offset(3 as std::ffi::c_int as isize) > end
-                        || !(*c2.offset(1 as std::ffi::c_int as isize) as u8).is_ascii_hexdigit()
-                        || !(*c2.offset(2 as std::ffi::c_int as isize) as u8).is_ascii_hexdigit()
+                        || !(*c2.offset(1 as std::ffi::c_int as isize)).is_ascii_hexdigit()
+                        || !(*c2.offset(2 as std::ffi::c_int as isize)).is_ascii_hexdigit()
                     {
                         Eof = 1 as std::ffi::c_int;
                         badend();
@@ -697,7 +695,7 @@ unsafe extern "C" fn readline(mut out: *mut MDB_val, mut buf: *mut MDB_val) -> s
         }
         while c2 < end {
             if !((*c2 as std::ffi::c_int as isize) as u8).is_ascii_hexdigit()
-                || !(*c2.offset(1 as std::ffi::c_int as isize) as u8).is_ascii_hexdigit()
+                || !(*c2.offset(1 as std::ffi::c_int as isize)).is_ascii_hexdigit()
             {
                 Eof = 1 as std::ffi::c_int;
                 badend();
@@ -712,7 +710,7 @@ unsafe extern "C" fn readline(mut out: *mut MDB_val, mut buf: *mut MDB_val) -> s
     (*out).mv_data = (*buf).mv_data;
     c2 = (*out).mv_data as *mut std::ffi::c_uchar;
     (*out).mv_size = c1.offset_from(c2) as std::ffi::c_long as size_t;
-    return 0 as std::ffi::c_int;
+    0 as std::ffi::c_int
 }}
 unsafe extern "C" fn usage() { unsafe {
     fprintf(
@@ -724,7 +722,7 @@ unsafe extern "C" fn usage() { unsafe {
     exit(EXIT_FAILURE);
 }}
 unsafe extern "C" fn greater(mut a: *const MDB_val, mut b: *const MDB_val) -> std::ffi::c_int {
-    return 1 as std::ffi::c_int;
+    1 as std::ffi::c_int
 }
 unsafe fn main_0(
     mut argc: std::ffi::c_int,
@@ -733,17 +731,17 @@ unsafe fn main_0(
     let mut current_block: u64;
     let mut i: std::ffi::c_int = 0;
     let mut rc: std::ffi::c_int = 0;
-    let mut env: *mut MDB_env = 0 as *mut MDB_env;
-    let mut txn: *mut MDB_txn = 0 as *mut MDB_txn;
-    let mut mc: *mut MDB_cursor = 0 as *mut MDB_cursor;
+    let mut env: *mut MDB_env = std::ptr::null_mut::<MDB_env>();
+    let mut txn: *mut MDB_txn = std::ptr::null_mut::<MDB_txn>();
+    let mut mc: *mut MDB_cursor = std::ptr::null_mut::<MDB_cursor>();
     let mut dbi: MDB_dbi = 0;
-    let mut envname: *mut std::ffi::c_char = 0 as *mut std::ffi::c_char;
+    let mut envname: *mut std::ffi::c_char = std::ptr::null_mut::<std::ffi::c_char>();
     let mut envflags: std::ffi::c_int = MDB_NOSYNC;
     let mut putflags: std::ffi::c_int = 0 as std::ffi::c_int;
     let mut dohdr: std::ffi::c_int = 0 as std::ffi::c_int;
     let mut append: std::ffi::c_int = 0 as std::ffi::c_int;
     let mut prevk: MDB_val =
-        MDB_val { mv_size: 0, mv_data: 0 as *const std::ffi::c_void as *mut std::ffi::c_void };
+        MDB_val { mv_size: 0, mv_data: std::ptr::null::<std::ffi::c_void>() as *mut std::ffi::c_void };
     prog = *argv.offset(0 as std::ffi::c_int as isize);
     if argc < 2 as std::ffi::c_int {
         usage();
@@ -754,7 +752,7 @@ unsafe fn main_0(
             argv as *const *mut std::ffi::c_char,
             b"af:ns:NQTV\0" as *const u8 as *const std::ffi::c_char,
         );
-        if !(i != -(1 as std::ffi::c_int)) {
+        if i == -(1 as std::ffi::c_int) {
             break;
         }
         match i {
@@ -848,17 +846,17 @@ unsafe fn main_0(
             as *mut std::ffi::c_void;
         prevk.mv_data = k0buf.mv_data;
         's_222: loop {
-            if !(Eof == 0) {
+            if Eof != 0 {
                 current_block = 13973796120831625861;
                 break;
             }
             let mut key: MDB_val = MDB_val {
                 mv_size: 0,
-                mv_data: 0 as *const std::ffi::c_void as *mut std::ffi::c_void,
+                mv_data: std::ptr::null::<std::ffi::c_void>() as *mut std::ffi::c_void,
             };
             let mut data: MDB_val = MDB_val {
                 mv_size: 0,
-                mv_data: 0 as *const std::ffi::c_void as *mut std::ffi::c_void,
+                mv_data: std::ptr::null::<std::ffi::c_void>() as *mut std::ffi::c_void,
             };
             let mut batch: std::ffi::c_int = 0 as std::ffi::c_int;
             let mut appflag: std::ffi::c_int = 0;
@@ -867,7 +865,7 @@ unsafe fn main_0(
             } else if mode & NOHDR == 0 {
                 readhdr();
             }
-            rc = mdb_txn_begin(env, 0 as *mut MDB_txn, 0 as std::ffi::c_uint, &mut txn);
+            rc = mdb_txn_begin(env, std::ptr::null_mut::<MDB_txn>(), 0 as std::ffi::c_uint, &mut txn);
             if rc != 0 {
                 fprintf(
                     get_stderr(),
@@ -989,7 +987,7 @@ unsafe fn main_0(
                                 } else {
                                     batch += 1;
                                     batch;
-                                    if !(batch == 100 as std::ffi::c_int) {
+                                    if batch != 100 as std::ffi::c_int {
                                         continue;
                                     }
                                     rc = mdb_txn_commit(txn);
@@ -1007,7 +1005,7 @@ unsafe fn main_0(
                                     } else {
                                         rc = mdb_txn_begin(
                                             env,
-                                            0 as *mut MDB_txn,
+                                            std::ptr::null_mut::<MDB_txn>(),
                                             0 as std::ffi::c_uint,
                                             &mut txn,
                                         );
@@ -1039,12 +1037,12 @@ unsafe fn main_0(
                                                 if append != 0 {
                                                     let mut k: MDB_val = MDB_val {
                                                         mv_size: 0,
-                                                        mv_data: 0 as *const std::ffi::c_void
+                                                        mv_data: std::ptr::null::<std::ffi::c_void>()
                                                             as *mut std::ffi::c_void,
                                                     };
                                                     let mut d: MDB_val = MDB_val {
                                                         mv_size: 0,
-                                                        mv_data: 0 as *const std::ffi::c_void
+                                                        mv_data: std::ptr::null::<std::ffi::c_void>()
                                                             as *mut std::ffi::c_void,
                                                     };
                                                     mdb_cursor_get(mc, &mut k, &mut d, MDB_LAST);
@@ -1059,7 +1057,7 @@ unsafe fn main_0(
                             }
                         }
                         rc = mdb_txn_commit(txn);
-                        txn = 0 as *mut MDB_txn;
+                        txn = std::ptr::null_mut::<MDB_txn>();
                         if rc != 0 {
                             fprintf(
                                 get_stderr(),
@@ -1100,7 +1098,7 @@ unsafe fn main_0(
         }
     }
     mdb_env_close(env);
-    return if rc != 0 { EXIT_FAILURE } else { EXIT_SUCCESS };
+    if rc != 0 { EXIT_FAILURE } else { EXIT_SUCCESS }
 }}
 pub fn main() {
     let mut args: Vec<*mut std::ffi::c_char> = Vec::new();
@@ -1122,71 +1120,71 @@ pub fn main() {
 unsafe extern "C" fn run_static_initializers() { unsafe {
     dbflags = [
         {
-            let mut init = flagbit {
+            
+            flagbit {
                 bit: MDB_REVERSEKEY,
                 name: b"reversekey\0" as *const u8 as *const std::ffi::c_char
                     as *mut std::ffi::c_char,
                 len: (::core::mem::size_of::<[std::ffi::c_char; 11]>() as std::ffi::c_ulong)
                     .wrapping_sub(1 as std::ffi::c_ulong) as std::ffi::c_int,
-            };
-            init
+            }
         },
         {
-            let mut init = flagbit {
+            
+            flagbit {
                 bit: MDB_DUPSORT,
                 name: b"dupsort\0" as *const u8 as *const std::ffi::c_char as *mut std::ffi::c_char,
                 len: (::core::mem::size_of::<[std::ffi::c_char; 8]>() as std::ffi::c_ulong)
                     .wrapping_sub(1 as std::ffi::c_ulong) as std::ffi::c_int,
-            };
-            init
+            }
         },
         {
-            let mut init = flagbit {
+            
+            flagbit {
                 bit: MDB_INTEGERKEY,
                 name: b"integerkey\0" as *const u8 as *const std::ffi::c_char
                     as *mut std::ffi::c_char,
                 len: (::core::mem::size_of::<[std::ffi::c_char; 11]>() as std::ffi::c_ulong)
                     .wrapping_sub(1 as std::ffi::c_ulong) as std::ffi::c_int,
-            };
-            init
+            }
         },
         {
-            let mut init = flagbit {
+            
+            flagbit {
                 bit: MDB_DUPFIXED,
                 name: b"dupfixed\0" as *const u8 as *const std::ffi::c_char
                     as *mut std::ffi::c_char,
                 len: (::core::mem::size_of::<[std::ffi::c_char; 9]>() as std::ffi::c_ulong)
                     .wrapping_sub(1 as std::ffi::c_ulong) as std::ffi::c_int,
-            };
-            init
+            }
         },
         {
-            let mut init = flagbit {
+            
+            flagbit {
                 bit: MDB_INTEGERDUP,
                 name: b"integerdup\0" as *const u8 as *const std::ffi::c_char
                     as *mut std::ffi::c_char,
                 len: (::core::mem::size_of::<[std::ffi::c_char; 11]>() as std::ffi::c_ulong)
                     .wrapping_sub(1 as std::ffi::c_ulong) as std::ffi::c_int,
-            };
-            init
+            }
         },
         {
-            let mut init = flagbit {
+            
+            flagbit {
                 bit: MDB_REVERSEDUP,
                 name: b"reversedup\0" as *const u8 as *const std::ffi::c_char
                     as *mut std::ffi::c_char,
                 len: (::core::mem::size_of::<[std::ffi::c_char; 11]>() as std::ffi::c_ulong)
                     .wrapping_sub(1 as std::ffi::c_ulong) as std::ffi::c_int,
-            };
-            init
+            }
         },
         {
-            let mut init = flagbit {
+            
+            flagbit {
                 bit: 0 as std::ffi::c_int,
-                name: 0 as *mut std::ffi::c_char,
+                name: std::ptr::null_mut::<std::ffi::c_char>(),
                 len: 0 as std::ffi::c_int,
-            };
-            init
+            }
         },
     ];
 }}

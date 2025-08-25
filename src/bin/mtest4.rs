@@ -120,11 +120,11 @@ unsafe fn main_0(
     let mut i: std::ffi::c_int = 0 as std::ffi::c_int;
     let mut j: std::ffi::c_int = 0 as std::ffi::c_int;
     let mut rc: std::ffi::c_int = 0;
-    let mut env: *mut MDB_env = 0 as *mut MDB_env;
+    let mut env: *mut MDB_env = std::ptr::null_mut::<MDB_env>();
     let mut dbi: MDB_dbi = 0;
-    let mut key: MDB_val = MDB_val { mv_size: 0, mv_data: 0 as *mut std::ffi::c_void };
-    let mut data: MDB_val = MDB_val { mv_size: 0, mv_data: 0 as *mut std::ffi::c_void };
-    let mut txn: *mut MDB_txn = 0 as *mut MDB_txn;
+    let mut key: MDB_val = MDB_val { mv_size: 0, mv_data: std::ptr::null_mut::<std::ffi::c_void>() };
+    let mut data: MDB_val = MDB_val { mv_size: 0, mv_data: std::ptr::null_mut::<std::ffi::c_void>() };
+    let mut txn: *mut MDB_txn = std::ptr::null_mut::<MDB_txn>();
     let mut mst: MDB_stat = MDB_stat {
         ms_psize: 0,
         ms_depth: 0,
@@ -133,9 +133,9 @@ unsafe fn main_0(
         ms_overflow_pages: 0,
         ms_entries: 0,
     };
-    let mut cursor: *mut MDB_cursor = 0 as *mut MDB_cursor;
+    let mut cursor: *mut MDB_cursor = std::ptr::null_mut::<MDB_cursor>();
     let mut count: std::ffi::c_int = 0;
-    let mut values: *mut std::ffi::c_int = 0 as *mut std::ffi::c_int;
+    let mut values: *mut std::ffi::c_int = std::ptr::null_mut::<std::ffi::c_int>();
     let mut sval: [std::ffi::c_char; 8] = [0; 8];
     let mut kval: [std::ffi::c_char; 4] = [0; 4];
     memset(
@@ -211,7 +211,7 @@ unsafe fn main_0(
         );
         abort();
     };
-    rc = mdb_txn_begin(env, 0 as *mut MDB_txn, 0 as std::ffi::c_uint, &mut txn);
+    rc = mdb_txn_begin(env, std::ptr::null_mut::<MDB_txn>(), 0 as std::ffi::c_uint, &mut txn);
     if rc == 0 as std::ffi::c_int {
     } else {
         fprintf(
@@ -309,7 +309,7 @@ unsafe fn main_0(
         );
         abort();
     };
-    rc = mdb_txn_begin(env, 0 as *mut MDB_txn, 0x20000 as std::ffi::c_uint, &mut txn);
+    rc = mdb_txn_begin(env, std::ptr::null_mut::<MDB_txn>(), 0x20000 as std::ffi::c_uint, &mut txn);
     if rc == 0 as std::ffi::c_int {
     } else {
         fprintf(
@@ -337,7 +337,7 @@ unsafe fn main_0(
     };
     loop {
         rc = mdb_cursor_get(cursor, &mut key, &mut data, MDB_NEXT);
-        if !(rc == 0 as std::ffi::c_int) {
+        if rc != 0 as std::ffi::c_int {
             break;
         }
         printf(
@@ -373,7 +373,7 @@ unsafe fn main_0(
         b"%07x\0" as *const u8 as *const std::ffi::c_char,
         *values.offset(3 as std::ffi::c_int as isize) + 1 as std::ffi::c_int,
     );
-    rc = mdb_txn_begin(env, 0 as *mut MDB_txn, 0 as std::ffi::c_uint, &mut txn);
+    rc = mdb_txn_begin(env, std::ptr::null_mut::<MDB_txn>(), 0 as std::ffi::c_uint, &mut txn);
     if rc == 0 as std::ffi::c_int {
     } else {
         fprintf(
@@ -387,7 +387,7 @@ unsafe fn main_0(
         abort();
     };
     rc = mdb_put(txn, dbi, &mut key, &mut data, 0x20 as std::ffi::c_uint);
-    (rc == -(30799 as std::ffi::c_int) || {
+    if rc != -(30799 as std::ffi::c_int) { {
         if rc == 0 {
         } else {
             fprintf(
@@ -402,14 +402,14 @@ unsafe fn main_0(
             abort();
         };
         0 as std::ffi::c_int != 0
-    }) as std::ffi::c_int;
+    }; }
     mdb_txn_abort(txn);
     sprintf(
         sval.as_mut_ptr(),
         b"%07x\0" as *const u8 as *const std::ffi::c_char,
         *values.offset(255 as std::ffi::c_int as isize) + 1 as std::ffi::c_int,
     );
-    rc = mdb_txn_begin(env, 0 as *mut MDB_txn, 0 as std::ffi::c_uint, &mut txn);
+    rc = mdb_txn_begin(env, std::ptr::null_mut::<MDB_txn>(), 0 as std::ffi::c_uint, &mut txn);
     if rc == 0 as std::ffi::c_int {
     } else {
         fprintf(
@@ -423,7 +423,7 @@ unsafe fn main_0(
         abort();
     };
     rc = mdb_put(txn, dbi, &mut key, &mut data, 0x20 as std::ffi::c_uint);
-    (rc == -(30799 as std::ffi::c_int) || {
+    if rc != -(30799 as std::ffi::c_int) { {
         if rc == 0 {
         } else {
             fprintf(
@@ -438,14 +438,14 @@ unsafe fn main_0(
             abort();
         };
         0 as std::ffi::c_int != 0
-    }) as std::ffi::c_int;
+    }; }
     mdb_txn_abort(txn);
     sprintf(
         sval.as_mut_ptr(),
         b"%07x\0" as *const u8 as *const std::ffi::c_char,
         *values.offset(500 as std::ffi::c_int as isize) + 1 as std::ffi::c_int,
     );
-    rc = mdb_txn_begin(env, 0 as *mut MDB_txn, 0 as std::ffi::c_uint, &mut txn);
+    rc = mdb_txn_begin(env, std::ptr::null_mut::<MDB_txn>(), 0 as std::ffi::c_uint, &mut txn);
     if rc == 0 as std::ffi::c_int {
     } else {
         fprintf(
@@ -459,7 +459,7 @@ unsafe fn main_0(
         abort();
     };
     rc = mdb_put(txn, dbi, &mut key, &mut data, 0x20 as std::ffi::c_uint);
-    (rc == -(30799 as std::ffi::c_int) || {
+    if rc != -(30799 as std::ffi::c_int) { {
         if rc == 0 {
         } else {
             fprintf(
@@ -474,7 +474,7 @@ unsafe fn main_0(
             abort();
         };
         0 as std::ffi::c_int != 0
-    }) as std::ffi::c_int;
+    }; }
     rc = mdb_txn_commit(txn);
     if rc == 0 as std::ffi::c_int {
     } else {
@@ -488,7 +488,7 @@ unsafe fn main_0(
         );
         abort();
     };
-    rc = mdb_txn_begin(env, 0 as *mut MDB_txn, 0 as std::ffi::c_uint, &mut txn);
+    rc = mdb_txn_begin(env, std::ptr::null_mut::<MDB_txn>(), 0 as std::ffi::c_uint, &mut txn);
     if rc == 0 as std::ffi::c_int {
     } else {
         fprintf(
@@ -516,7 +516,7 @@ unsafe fn main_0(
     };
     loop {
         rc = mdb_cursor_get(cursor, &mut key, &mut data, MDB_NEXT_MULTIPLE);
-        if !(rc == 0 as std::ffi::c_int) {
+        if rc != 0 as std::ffi::c_int {
             break;
         }
         printf(
@@ -546,8 +546,8 @@ unsafe fn main_0(
     while i > -(1 as std::ffi::c_int) {
         j += 1;
         j;
-        txn = 0 as *mut MDB_txn;
-        rc = mdb_txn_begin(env, 0 as *mut MDB_txn, 0 as std::ffi::c_uint, &mut txn);
+        txn = std::ptr::null_mut::<MDB_txn>();
+        rc = mdb_txn_begin(env, std::ptr::null_mut::<MDB_txn>(), 0 as std::ffi::c_uint, &mut txn);
         if rc == 0 as std::ffi::c_int {
         } else {
             fprintf(
@@ -621,7 +621,7 @@ unsafe fn main_0(
         );
         abort();
     };
-    rc = mdb_txn_begin(env, 0 as *mut MDB_txn, 0x20000 as std::ffi::c_uint, &mut txn);
+    rc = mdb_txn_begin(env, std::ptr::null_mut::<MDB_txn>(), 0x20000 as std::ffi::c_uint, &mut txn);
     if rc == 0 as std::ffi::c_int {
     } else {
         fprintf(
@@ -650,7 +650,7 @@ unsafe fn main_0(
     printf(b"Cursor next\n\0" as *const u8 as *const std::ffi::c_char);
     loop {
         rc = mdb_cursor_get(cursor, &mut key, &mut data, MDB_NEXT);
-        if !(rc == 0 as std::ffi::c_int) {
+        if rc != 0 as std::ffi::c_int {
             break;
         }
         printf(
@@ -676,7 +676,7 @@ unsafe fn main_0(
     printf(b"Cursor prev\n\0" as *const u8 as *const std::ffi::c_char);
     loop {
         rc = mdb_cursor_get(cursor, &mut key, &mut data, MDB_PREV);
-        if !(rc == 0 as std::ffi::c_int) {
+        if rc != 0 as std::ffi::c_int {
             break;
         }
         printf(
@@ -703,7 +703,7 @@ unsafe fn main_0(
     mdb_txn_abort(txn);
     mdb_dbi_close(env, dbi);
     mdb_env_close(env);
-    return 0 as std::ffi::c_int;
+    0 as std::ffi::c_int
 }}
 pub fn main() {
     let mut args: Vec<*mut std::ffi::c_char> = Vec::new();

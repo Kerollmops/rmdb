@@ -169,8 +169,8 @@ unsafe fn main_0(
     let mut current_block: u64;
     let mut i: std::ffi::c_int = 0;
     let mut rc: std::ffi::c_int = 0;
-    let mut env: *mut MDB_env = 0 as *mut MDB_env;
-    let mut txn: *mut MDB_txn = 0 as *mut MDB_txn;
+    let mut env: *mut MDB_env = std::ptr::null_mut::<MDB_env>();
+    let mut txn: *mut MDB_txn = std::ptr::null_mut::<MDB_txn>();
     let mut dbi: MDB_dbi = 0;
     let mut mst: MDB_stat = MDB_stat {
         ms_psize: 0,
@@ -181,7 +181,7 @@ unsafe fn main_0(
         ms_entries: 0,
     };
     let mut mei: MDB_envinfo = MDB_envinfo {
-        me_mapaddr: 0 as *mut std::ffi::c_void,
+        me_mapaddr: std::ptr::null_mut::<std::ffi::c_void>(),
         me_mapsize: 0,
         me_last_pgno: 0,
         me_last_txnid: 0,
@@ -189,8 +189,8 @@ unsafe fn main_0(
         me_numreaders: 0,
     };
     let mut prog: *mut std::ffi::c_char = *argv.offset(0 as std::ffi::c_int as isize);
-    let mut envname: *mut std::ffi::c_char = 0 as *mut std::ffi::c_char;
-    let mut subname: *mut std::ffi::c_char = 0 as *mut std::ffi::c_char;
+    let mut envname: *mut std::ffi::c_char = std::ptr::null_mut::<std::ffi::c_char>();
+    let mut subname: *mut std::ffi::c_char = std::ptr::null_mut::<std::ffi::c_char>();
     let mut alldbs: std::ffi::c_int = 0 as std::ffi::c_int;
     let mut envinfo: std::ffi::c_int = 0 as std::ffi::c_int;
     let mut envflags: std::ffi::c_int = 0 as std::ffi::c_int;
@@ -205,7 +205,7 @@ unsafe fn main_0(
             argv as *const *mut std::ffi::c_char,
             b"Vaefnrs:v\0" as *const u8 as *const std::ffi::c_char,
         );
-        if !(i != -(1 as std::ffi::c_int)) {
+        if i == -(1 as std::ffi::c_int) {
             break;
         }
         match i {
@@ -370,7 +370,7 @@ unsafe fn main_0(
         match current_block {
             9536332248080802547 => {}
             _ => {
-                rc = mdb_txn_begin(env, 0 as *mut MDB_txn, 0x20000 as std::ffi::c_uint, &mut txn);
+                rc = mdb_txn_begin(env, std::ptr::null_mut::<MDB_txn>(), 0x20000 as std::ffi::c_uint, &mut txn);
                 if rc != 0 {
                     fprintf(
                         get_stderr(),
@@ -381,13 +381,13 @@ unsafe fn main_0(
                     );
                 } else {
                     if freinfo != 0 {
-                        let mut cursor: *mut MDB_cursor = 0 as *mut MDB_cursor;
+                        let mut cursor: *mut MDB_cursor = std::ptr::null_mut::<MDB_cursor>();
                         let mut key: MDB_val =
-                            MDB_val { mv_size: 0, mv_data: 0 as *mut std::ffi::c_void };
+                            MDB_val { mv_size: 0, mv_data: std::ptr::null_mut::<std::ffi::c_void>() };
                         let mut data: MDB_val =
-                            MDB_val { mv_size: 0, mv_data: 0 as *mut std::ffi::c_void };
+                            MDB_val { mv_size: 0, mv_data: std::ptr::null_mut::<std::ffi::c_void>() };
                         let mut pages: mdb_size_t = 0 as mdb_size_t;
-                        let mut iptr: *mut mdb_size_t = 0 as *mut mdb_size_t;
+                        let mut iptr: *mut mdb_size_t = std::ptr::null_mut::<mdb_size_t>();
                         printf(b"Freelist Status\n\0" as *const u8 as *const std::ffi::c_char);
                         dbi = 0 as MDB_dbi;
                         rc = mdb_cursor_open(txn, dbi, &mut cursor);
@@ -415,7 +415,7 @@ unsafe fn main_0(
                                 prstat(&mut mst);
                                 loop {
                                     rc = mdb_cursor_get(cursor, &mut key, &mut data, MDB_NEXT);
-                                    if !(rc == 0 as std::ffi::c_int) {
+                                    if rc != 0 as std::ffi::c_int {
                                         break;
                                     }
                                     iptr = data.mv_data as *mut mdb_size_t;
@@ -439,7 +439,7 @@ unsafe fn main_0(
                                         prev = 1 as mdb_size_t;
                                         loop {
                                             i_0 -= 1;
-                                            if !(i_0 >= 0 as std::ffi::c_long) {
+                                            if i_0 < 0 as std::ffi::c_long {
                                                 break;
                                             }
                                             pg = *iptr.offset(i_0 as isize);
@@ -515,147 +515,144 @@ unsafe fn main_0(
                     } else {
                         current_block = 14541395414537699361;
                     }
-                    match current_block {
-                        14541395414537699361 => {
-                            rc = mdb_dbi_open(txn, subname, 0 as std::ffi::c_uint, &mut dbi);
+                    if current_block == 14541395414537699361 {
+                        rc = mdb_dbi_open(txn, subname, 0 as std::ffi::c_uint, &mut dbi);
+                        if rc != 0 {
+                            fprintf(
+                                get_stderr(),
+                                b"mdb_open failed, error %d %s\n\0" as *const u8
+                                    as *const std::ffi::c_char,
+                                rc,
+                                mdb_strerror(rc),
+                            );
+                        } else {
+                            rc = mdb_stat(txn, dbi, &mut mst);
                             if rc != 0 {
                                 fprintf(
                                     get_stderr(),
-                                    b"mdb_open failed, error %d %s\n\0" as *const u8
+                                    b"mdb_stat failed, error %d %s\n\0" as *const u8
                                         as *const std::ffi::c_char,
                                     rc,
                                     mdb_strerror(rc),
                                 );
                             } else {
-                                rc = mdb_stat(txn, dbi, &mut mst);
-                                if rc != 0 {
-                                    fprintf(
-                                        get_stderr(),
-                                        b"mdb_stat failed, error %d %s\n\0" as *const u8
-                                            as *const std::ffi::c_char,
-                                        rc,
-                                        mdb_strerror(rc),
-                                    );
-                                } else {
-                                    printf(
-                                        b"Status of %s\n\0" as *const u8 as *const std::ffi::c_char,
-                                        if !subname.is_null() {
-                                            subname as *const std::ffi::c_char
-                                        } else {
-                                            b"Main DB\0" as *const u8 as *const std::ffi::c_char
-                                        },
-                                    );
-                                    prstat(&mut mst);
-                                    if alldbs != 0 {
-                                        let mut cursor_0: *mut MDB_cursor = 0 as *mut MDB_cursor;
-                                        let mut key_0: MDB_val = MDB_val {
-                                            mv_size: 0,
-                                            mv_data: 0 as *mut std::ffi::c_void,
-                                        };
-                                        rc = mdb_cursor_open(txn, dbi, &mut cursor_0);
-                                        if rc != 0 {
-                                            fprintf(
-                                                get_stderr(),
-                                                b"mdb_cursor_open failed, error %d %s\n\0"
-                                                    as *const u8
-                                                    as *const std::ffi::c_char,
-                                                rc,
-                                                mdb_strerror(rc),
-                                            );
-                                            current_block = 17913902266519338787;
-                                        } else {
-                                            loop {
-                                                rc = mdb_cursor_get(
-                                                    cursor_0,
-                                                    &mut key_0,
-                                                    0 as *mut MDB_val,
-                                                    MDB_NEXT_NODUP,
-                                                );
-                                                if !(rc == 0 as std::ffi::c_int) {
-                                                    current_block = 17702298541784679949;
-                                                    break;
-                                                }
-                                                let mut str: *mut std::ffi::c_char =
-                                                    0 as *mut std::ffi::c_char;
-                                                let mut db2: MDB_dbi = 0;
-                                                if !(memchr(
-                                                    key_0.mv_data,
-                                                    '\0' as i32,
-                                                    key_0.mv_size as _,
-                                                ))
-                                                .is_null()
-                                                {
-                                                    continue;
-                                                }
-                                                str = malloc(
-                                                    (key_0.mv_size as size_t).wrapping_add(1),
-                                                )
-                                                    as *mut std::ffi::c_char;
-                                                memcpy(
-                                                    str as *mut std::ffi::c_void,
-                                                    key_0.mv_data,
-                                                    key_0.mv_size as _,
-                                                );
-                                                *str.offset(key_0.mv_size as isize) =
-                                                    '\0' as i32 as std::ffi::c_char;
-                                                rc = mdb_dbi_open(
-                                                    txn,
-                                                    str,
-                                                    0 as std::ffi::c_uint,
-                                                    &mut db2,
-                                                );
-                                                if rc == MDB_SUCCESS {
-                                                    printf(
-                                                        b"Status of %s\n\0" as *const u8
-                                                            as *const std::ffi::c_char,
-                                                        str,
-                                                    );
-                                                }
-                                                free(str as *mut std::ffi::c_void);
-                                                if rc != 0 {
-                                                    continue;
-                                                }
-                                                rc = mdb_stat(txn, db2, &mut mst);
-                                                if rc != 0 {
-                                                    fprintf(
-                                                        get_stderr(),
-                                                        b"mdb_stat failed, error %d %s\n\0"
-                                                            as *const u8
-                                                            as *const std::ffi::c_char,
-                                                        rc,
-                                                        mdb_strerror(rc),
-                                                    );
-                                                    current_block = 17913902266519338787;
-                                                    break;
-                                                } else {
-                                                    prstat(&mut mst);
-                                                    mdb_dbi_close(env, db2);
-                                                }
-                                            }
-                                            match current_block {
-                                                17913902266519338787 => {}
-                                                _ => {
-                                                    mdb_cursor_close(cursor_0);
-                                                    current_block = 16778110326724371720;
-                                                }
-                                            }
-                                        }
+                                printf(
+                                    b"Status of %s\n\0" as *const u8 as *const std::ffi::c_char,
+                                    if !subname.is_null() {
+                                        subname as *const std::ffi::c_char
                                     } else {
-                                        current_block = 16778110326724371720;
-                                    }
-                                    match current_block {
-                                        17913902266519338787 => {}
-                                        _ => {
-                                            if rc == -(30798 as std::ffi::c_int) {
-                                                rc = MDB_SUCCESS;
+                                        b"Main DB\0" as *const u8 as *const std::ffi::c_char
+                                    },
+                                );
+                                prstat(&mut mst);
+                                if alldbs != 0 {
+                                    let mut cursor_0: *mut MDB_cursor = std::ptr::null_mut::<MDB_cursor>();
+                                    let mut key_0: MDB_val = MDB_val {
+                                        mv_size: 0,
+                                        mv_data: std::ptr::null_mut::<std::ffi::c_void>(),
+                                    };
+                                    rc = mdb_cursor_open(txn, dbi, &mut cursor_0);
+                                    if rc != 0 {
+                                        fprintf(
+                                            get_stderr(),
+                                            b"mdb_cursor_open failed, error %d %s\n\0"
+                                                as *const u8
+                                                as *const std::ffi::c_char,
+                                            rc,
+                                            mdb_strerror(rc),
+                                        );
+                                        current_block = 17913902266519338787;
+                                    } else {
+                                        loop {
+                                            rc = mdb_cursor_get(
+                                                cursor_0,
+                                                &mut key_0,
+                                                std::ptr::null_mut::<MDB_val>(),
+                                                MDB_NEXT_NODUP,
+                                            );
+                                            if rc != 0 as std::ffi::c_int {
+                                                current_block = 17702298541784679949;
+                                                break;
                                             }
-                                            mdb_dbi_close(env, dbi);
+                                            let mut str: *mut std::ffi::c_char =
+                                                std::ptr::null_mut::<std::ffi::c_char>();
+                                            let mut db2: MDB_dbi = 0;
+                                            if !(memchr(
+                                                key_0.mv_data,
+                                                '\0' as i32,
+                                                key_0.mv_size as _,
+                                            ))
+                                            .is_null()
+                                            {
+                                                continue;
+                                            }
+                                            str = malloc(
+                                                (key_0.mv_size as size_t).wrapping_add(1),
+                                            )
+                                                as *mut std::ffi::c_char;
+                                            memcpy(
+                                                str as *mut std::ffi::c_void,
+                                                key_0.mv_data,
+                                                key_0.mv_size as _,
+                                            );
+                                            *str.offset(key_0.mv_size as isize) =
+                                                '\0' as i32 as std::ffi::c_char;
+                                            rc = mdb_dbi_open(
+                                                txn,
+                                                str,
+                                                0 as std::ffi::c_uint,
+                                                &mut db2,
+                                            );
+                                            if rc == MDB_SUCCESS {
+                                                printf(
+                                                    b"Status of %s\n\0" as *const u8
+                                                        as *const std::ffi::c_char,
+                                                    str,
+                                                );
+                                            }
+                                            free(str as *mut std::ffi::c_void);
+                                            if rc != 0 {
+                                                continue;
+                                            }
+                                            rc = mdb_stat(txn, db2, &mut mst);
+                                            if rc != 0 {
+                                                fprintf(
+                                                    get_stderr(),
+                                                    b"mdb_stat failed, error %d %s\n\0"
+                                                        as *const u8
+                                                        as *const std::ffi::c_char,
+                                                    rc,
+                                                    mdb_strerror(rc),
+                                                );
+                                                current_block = 17913902266519338787;
+                                                break;
+                                            } else {
+                                                prstat(&mut mst);
+                                                mdb_dbi_close(env, db2);
+                                            }
                                         }
+                                        match current_block {
+                                            17913902266519338787 => {}
+                                            _ => {
+                                                mdb_cursor_close(cursor_0);
+                                                current_block = 16778110326724371720;
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    current_block = 16778110326724371720;
+                                }
+                                match current_block {
+                                    17913902266519338787 => {}
+                                    _ => {
+                                        if rc == -(30798 as std::ffi::c_int) {
+                                            rc = MDB_SUCCESS;
+                                        }
+                                        mdb_dbi_close(env, dbi);
                                     }
                                 }
                             }
                         }
-                        _ => {}
                     }
                     mdb_txn_abort(txn);
                 }
@@ -663,7 +660,7 @@ unsafe fn main_0(
         }
     }
     mdb_env_close(env);
-    return if rc != 0 { EXIT_FAILURE } else { EXIT_SUCCESS };
+    if rc != 0 { EXIT_FAILURE } else { EXIT_SUCCESS }
 }}
 pub fn main() {
     let mut args: Vec<*mut std::ffi::c_char> = Vec::new();

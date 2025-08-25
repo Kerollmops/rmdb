@@ -111,12 +111,12 @@ unsafe fn main_0(
 ) -> std::ffi::c_int { unsafe {
     let mut i: std::ffi::c_int = 0;
     let mut rc: std::ffi::c_int = 0;
-    let mut env: *mut MDB_env = 0 as *mut MDB_env;
-    let mut txn: *mut MDB_txn = 0 as *mut MDB_txn;
+    let mut env: *mut MDB_env = std::ptr::null_mut::<MDB_env>();
+    let mut txn: *mut MDB_txn = std::ptr::null_mut::<MDB_txn>();
     let mut dbi: MDB_dbi = 0;
     let mut prog: *mut std::ffi::c_char = *argv.offset(0 as std::ffi::c_int as isize);
-    let mut envname: *mut std::ffi::c_char = 0 as *mut std::ffi::c_char;
-    let mut subname: *mut std::ffi::c_char = 0 as *mut std::ffi::c_char;
+    let mut envname: *mut std::ffi::c_char = std::ptr::null_mut::<std::ffi::c_char>();
+    let mut subname: *mut std::ffi::c_char = std::ptr::null_mut::<std::ffi::c_char>();
     let mut envflags: std::ffi::c_int = 0 as std::ffi::c_int;
     let mut delete: std::ffi::c_int = 0 as std::ffi::c_int;
     if argc < 2 as std::ffi::c_int {
@@ -128,7 +128,7 @@ unsafe fn main_0(
             argv as *const *mut std::ffi::c_char,
             b"dns:V\0" as *const u8 as *const std::ffi::c_char,
         );
-        if !(i != -(1 as std::ffi::c_int)) {
+        if i == -(1 as std::ffi::c_int) {
             break;
         }
         match i {
@@ -181,7 +181,7 @@ unsafe fn main_0(
             mdb_strerror(rc),
         );
     } else {
-        rc = mdb_txn_begin(env, 0 as *mut MDB_txn, 0 as std::ffi::c_uint, &mut txn);
+        rc = mdb_txn_begin(env, std::ptr::null_mut::<MDB_txn>(), 0 as std::ffi::c_uint, &mut txn);
         if rc != 0 {
             fprintf(
                 get_stderr(),
@@ -218,7 +218,7 @@ unsafe fn main_0(
                             mdb_strerror(rc),
                         );
                     } else {
-                        txn = 0 as *mut MDB_txn;
+                        txn = std::ptr::null_mut::<MDB_txn>();
                     }
                 }
             }
@@ -228,7 +228,7 @@ unsafe fn main_0(
         }
     }
     mdb_env_close(env);
-    return if rc != 0 { EXIT_FAILURE } else { EXIT_SUCCESS };
+    if rc != 0 { EXIT_FAILURE } else { EXIT_SUCCESS }
 }}
 pub fn main() {
     let mut args: Vec<*mut std::ffi::c_char> = Vec::new();

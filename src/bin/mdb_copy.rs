@@ -91,9 +91,9 @@ unsafe fn main_0(
     mut argv: *mut *mut std::ffi::c_char,
 ) -> std::ffi::c_int { unsafe {
     let mut rc: std::ffi::c_int = 0;
-    let mut env: *mut MDB_env = 0 as *mut MDB_env;
+    let mut env: *mut MDB_env = std::ptr::null_mut::<MDB_env>();
     let mut progname: *const std::ffi::c_char = *argv.offset(0 as std::ffi::c_int as isize);
-    let mut act: *const std::ffi::c_char = 0 as *const std::ffi::c_char;
+    let mut act: *const std::ffi::c_char = std::ptr::null::<std::ffi::c_char>();
     let mut flags: std::ffi::c_uint = 0x20000 as std::ffi::c_uint;
     let mut cpflags: std::ffi::c_uint = 0 as std::ffi::c_uint;
     while argc > 1 as std::ffi::c_int
@@ -187,7 +187,7 @@ unsafe fn main_0(
         );
     }
     mdb_env_close(env);
-    return if rc != 0 { EXIT_FAILURE } else { EXIT_SUCCESS };
+    if rc != 0 { EXIT_FAILURE } else { EXIT_SUCCESS }
 }}
 pub fn main() {
     let mut args: Vec<*mut std::ffi::c_char> = Vec::new();
