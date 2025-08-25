@@ -72,8 +72,24 @@ jobs:
       steps:
         - uses: actions/checkout@v2
         - uses: dtolnay/rust-toolchain@1.85
+          with:
+            components: clippy
         - uses: actions-rs/cargo@v1
           with:
             toolchain: ${{ matrix.rust }}
             command: clippy
             args: --all-targets -- --deny warnings
+
+  fmt:
+      name: Ensure the project is formatted
+      runs-on: ubuntu-latest
+      steps:
+        - uses: actions/checkout@v2
+        - uses: dtolnay/rust-toolchain@nightly
+          with:
+            components: rustfmt
+        - uses: actions-rs/cargo@v1
+          with:
+            toolchain: ${{ matrix.rust }}
+            command: fmt
+            args: --check
