@@ -204,13 +204,15 @@ pub struct flagbit {
 pub const EXIT_FAILURE: std::ffi::c_int = 1 as std::ffi::c_int;
 pub const EXIT_SUCCESS: std::ffi::c_int = 0 as std::ffi::c_int;
 #[inline]
-unsafe extern "C" fn atoi(mut __nptr: *const std::ffi::c_char) -> std::ffi::c_int { unsafe {
-    strtol(
-        __nptr,
-        std::ptr::null_mut::<std::ffi::c_void>() as *mut *mut std::ffi::c_char,
-        10 as std::ffi::c_int,
-    ) as std::ffi::c_int
-}}
+unsafe extern "C" fn atoi(mut __nptr: *const std::ffi::c_char) -> std::ffi::c_int {
+    unsafe {
+        strtol(
+            __nptr,
+            std::ptr::null_mut::<std::ffi::c_void>() as *mut *mut std::ffi::c_char,
+            10 as std::ffi::c_int,
+        ) as std::ffi::c_int
+    }
+}
 pub const MDB_FIXEDMAP: std::ffi::c_int = 0x1 as std::ffi::c_int;
 pub const MDB_NOSUBDIR: std::ffi::c_int = 0x4000 as std::ffi::c_int;
 pub const MDB_NOSYNC: std::ffi::c_int = 0x10000 as std::ffi::c_int;
@@ -252,345 +254,366 @@ static mut k0buf: MDB_val =
 #[unsafe(no_mangle)]
 pub static mut dbflags: [flagbit; 7] =
     [flagbit { bit: 0, name: 0 as *mut std::ffi::c_char, len: 0 }; 7];
-unsafe extern "C" fn readhdr() { unsafe {
-    let mut ptr: *mut std::ffi::c_char = std::ptr::null_mut::<std::ffi::c_char>();
-    flags = 0 as std::ffi::c_int;
-    while !(fgets(
-        dbuf.mv_data as *mut std::ffi::c_char,
-        dbuf.mv_size as std::ffi::c_int,
-        get_stdin(),
-    ))
-    .is_null()
-    {
-        lineno = lineno.wrapping_add(1);
-        lineno;
-        if strncmp(
-            dbuf.mv_data as *const std::ffi::c_char,
-            b"VERSION=\0" as *const u8 as *const std::ffi::c_char,
-            (::core::mem::size_of::<[std::ffi::c_char; 9]>() as size_t).wrapping_sub(1 as size_t),
-        ) == 0
+unsafe extern "C" fn readhdr() {
+    unsafe {
+        let mut ptr: *mut std::ffi::c_char = std::ptr::null_mut::<std::ffi::c_char>();
+        flags = 0 as std::ffi::c_int;
+        while !(fgets(
+            dbuf.mv_data as *mut std::ffi::c_char,
+            dbuf.mv_size as std::ffi::c_int,
+            get_stdin(),
+        ))
+        .is_null()
         {
-            version = atoi(
-                (dbuf.mv_data as *mut std::ffi::c_char).offset(
-                    (::core::mem::size_of::<[std::ffi::c_char; 9]>() as std::ffi::c_ulong)
-                        .wrapping_sub(1 as std::ffi::c_ulong) as isize,
-                ),
-            );
-            if version > 3 as std::ffi::c_int {
-                fprintf(
-                    get_stderr(),
-                    b"%s: line %zu: unsupported VERSION %d\n\0" as *const u8
-                        as *const std::ffi::c_char,
-                    prog,
-                    lineno,
-                    version,
+            lineno = lineno.wrapping_add(1);
+            lineno;
+            if strncmp(
+                dbuf.mv_data as *const std::ffi::c_char,
+                b"VERSION=\0" as *const u8 as *const std::ffi::c_char,
+                (::core::mem::size_of::<[std::ffi::c_char; 9]>() as size_t)
+                    .wrapping_sub(1 as size_t),
+            ) == 0
+            {
+                version = atoi(
+                    (dbuf.mv_data as *mut std::ffi::c_char).offset(
+                        (::core::mem::size_of::<[std::ffi::c_char; 9]>() as std::ffi::c_ulong)
+                            .wrapping_sub(1 as std::ffi::c_ulong) as isize,
+                    ),
                 );
-                exit(EXIT_FAILURE);
-            }
-        } else {
-            if strncmp(
-                dbuf.mv_data as *const std::ffi::c_char,
-                b"HEADER=END\0" as *const u8 as *const std::ffi::c_char,
-                (::core::mem::size_of::<[std::ffi::c_char; 11]>() as size_t)
-                    .wrapping_sub(1 as size_t),
-            ) == 0
-            {
-                break;
-            }
-            if strncmp(
-                dbuf.mv_data as *const std::ffi::c_char,
-                b"format=\0" as *const u8 as *const std::ffi::c_char,
-                (::core::mem::size_of::<[std::ffi::c_char; 8]>() as size_t)
-                    .wrapping_sub(1 as size_t),
-            ) == 0
-            {
-                if strncmp(
-                    (dbuf.mv_data as *mut std::ffi::c_char).offset(
-                        (::core::mem::size_of::<[std::ffi::c_char; 8]>() as std::ffi::c_ulong)
-                            .wrapping_sub(1 as std::ffi::c_ulong) as isize,
-                    ),
-                    b"print\0" as *const u8 as *const std::ffi::c_char,
-                    (::core::mem::size_of::<[std::ffi::c_char; 6]>() as size_t)
-                        .wrapping_sub(1 as size_t),
-                ) == 0
-                {
-                    mode |= PRINT;
-                } else if strncmp(
-                    (dbuf.mv_data as *mut std::ffi::c_char).offset(
-                        (::core::mem::size_of::<[std::ffi::c_char; 8]>() as std::ffi::c_ulong)
-                            .wrapping_sub(1 as std::ffi::c_ulong) as isize,
-                    ),
-                    b"bytevalue\0" as *const u8 as *const std::ffi::c_char,
-                    (::core::mem::size_of::<[std::ffi::c_char; 10]>() as size_t)
-                        .wrapping_sub(1 as size_t),
-                ) != 0
-                {
+                if version > 3 as std::ffi::c_int {
                     fprintf(
                         get_stderr(),
-                        b"%s: line %zu: unsupported FORMAT %s\n\0" as *const u8
+                        b"%s: line %zu: unsupported VERSION %d\n\0" as *const u8
                             as *const std::ffi::c_char,
                         prog,
                         lineno,
+                        version,
+                    );
+                    exit(EXIT_FAILURE);
+                }
+            } else {
+                if strncmp(
+                    dbuf.mv_data as *const std::ffi::c_char,
+                    b"HEADER=END\0" as *const u8 as *const std::ffi::c_char,
+                    (::core::mem::size_of::<[std::ffi::c_char; 11]>() as size_t)
+                        .wrapping_sub(1 as size_t),
+                ) == 0
+                {
+                    break;
+                }
+                if strncmp(
+                    dbuf.mv_data as *const std::ffi::c_char,
+                    b"format=\0" as *const u8 as *const std::ffi::c_char,
+                    (::core::mem::size_of::<[std::ffi::c_char; 8]>() as size_t)
+                        .wrapping_sub(1 as size_t),
+                ) == 0
+                {
+                    if strncmp(
                         (dbuf.mv_data as *mut std::ffi::c_char).offset(
                             (::core::mem::size_of::<[std::ffi::c_char; 8]>() as std::ffi::c_ulong)
                                 .wrapping_sub(1 as std::ffi::c_ulong)
                                 as isize,
                         ),
+                        b"print\0" as *const u8 as *const std::ffi::c_char,
+                        (::core::mem::size_of::<[std::ffi::c_char; 6]>() as size_t)
+                            .wrapping_sub(1 as size_t),
+                    ) == 0
+                    {
+                        mode |= PRINT;
+                    } else if strncmp(
+                        (dbuf.mv_data as *mut std::ffi::c_char).offset(
+                            (::core::mem::size_of::<[std::ffi::c_char; 8]>() as std::ffi::c_ulong)
+                                .wrapping_sub(1 as std::ffi::c_ulong)
+                                as isize,
+                        ),
+                        b"bytevalue\0" as *const u8 as *const std::ffi::c_char,
+                        (::core::mem::size_of::<[std::ffi::c_char; 10]>() as size_t)
+                            .wrapping_sub(1 as size_t),
+                    ) != 0
+                    {
+                        fprintf(
+                            get_stderr(),
+                            b"%s: line %zu: unsupported FORMAT %s\n\0" as *const u8
+                                as *const std::ffi::c_char,
+                            prog,
+                            lineno,
+                            (dbuf.mv_data as *mut std::ffi::c_char).offset(
+                                (::core::mem::size_of::<[std::ffi::c_char; 8]>()
+                                    as std::ffi::c_ulong)
+                                    .wrapping_sub(1 as std::ffi::c_ulong)
+                                    as isize,
+                            ),
+                        );
+                        exit(EXIT_FAILURE);
+                    }
+                } else if strncmp(
+                    dbuf.mv_data as *const std::ffi::c_char,
+                    b"database=\0" as *const u8 as *const std::ffi::c_char,
+                    (::core::mem::size_of::<[std::ffi::c_char; 10]>() as size_t)
+                        .wrapping_sub(1 as size_t),
+                ) == 0
+                {
+                    ptr = memchr(dbuf.mv_data, '\n' as i32, dbuf.mv_size) as *mut std::ffi::c_char;
+                    if !ptr.is_null() {
+                        *ptr = '\0' as i32 as std::ffi::c_char;
+                    }
+                    if !subname.is_null() {
+                        free(subname as *mut std::ffi::c_void);
+                    }
+                    subname = strdup(
+                        (dbuf.mv_data as *mut std::ffi::c_char).offset(
+                            (::core::mem::size_of::<[std::ffi::c_char; 10]>() as std::ffi::c_ulong)
+                                .wrapping_sub(1 as std::ffi::c_ulong)
+                                as isize,
+                        ),
                     );
-                    exit(EXIT_FAILURE);
-                }
-            } else if strncmp(
-                dbuf.mv_data as *const std::ffi::c_char,
-                b"database=\0" as *const u8 as *const std::ffi::c_char,
-                (::core::mem::size_of::<[std::ffi::c_char; 10]>() as size_t)
-                    .wrapping_sub(1 as size_t),
-            ) == 0
-            {
-                ptr = memchr(dbuf.mv_data, '\n' as i32, dbuf.mv_size) as *mut std::ffi::c_char;
-                if !ptr.is_null() {
-                    *ptr = '\0' as i32 as std::ffi::c_char;
-                }
-                if !subname.is_null() {
-                    free(subname as *mut std::ffi::c_void);
-                }
-                subname = strdup(
-                    (dbuf.mv_data as *mut std::ffi::c_char).offset(
-                        (::core::mem::size_of::<[std::ffi::c_char; 10]>() as std::ffi::c_ulong)
-                            .wrapping_sub(1 as std::ffi::c_ulong) as isize,
-                    ),
-                );
-            } else if strncmp(
-                dbuf.mv_data as *const std::ffi::c_char,
-                b"type=\0" as *const u8 as *const std::ffi::c_char,
-                (::core::mem::size_of::<[std::ffi::c_char; 6]>() as size_t)
-                    .wrapping_sub(1 as size_t),
-            ) == 0
-            {
-                if strncmp(
-                    (dbuf.mv_data as *mut std::ffi::c_char).offset(
-                        (::core::mem::size_of::<[std::ffi::c_char; 6]>() as std::ffi::c_ulong)
-                            .wrapping_sub(1 as std::ffi::c_ulong) as isize,
-                    ),
-                    b"btree\0" as *const u8 as *const std::ffi::c_char,
+                } else if strncmp(
+                    dbuf.mv_data as *const std::ffi::c_char,
+                    b"type=\0" as *const u8 as *const std::ffi::c_char,
                     (::core::mem::size_of::<[std::ffi::c_char; 6]>() as size_t)
                         .wrapping_sub(1 as size_t),
-                ) != 0
+                ) == 0
                 {
-                    fprintf(
-                        get_stderr(),
-                        b"%s: line %zu: unsupported type %s\n\0" as *const u8
-                            as *const std::ffi::c_char,
-                        prog,
-                        lineno,
+                    if strncmp(
                         (dbuf.mv_data as *mut std::ffi::c_char).offset(
                             (::core::mem::size_of::<[std::ffi::c_char; 6]>() as std::ffi::c_ulong)
                                 .wrapping_sub(1 as std::ffi::c_ulong)
                                 as isize,
                         ),
-                    );
-                    exit(EXIT_FAILURE);
-                }
-            } else if strncmp(
-                dbuf.mv_data as *const std::ffi::c_char,
-                b"mapaddr=\0" as *const u8 as *const std::ffi::c_char,
-                (::core::mem::size_of::<[std::ffi::c_char; 9]>() as size_t)
-                    .wrapping_sub(1 as size_t),
-            ) == 0
-            {
-                let mut i: std::ffi::c_int = 0;
-                ptr = memchr(dbuf.mv_data, '\n' as i32, dbuf.mv_size) as *mut std::ffi::c_char;
-                if !ptr.is_null() {
-                    *ptr = '\0' as i32 as std::ffi::c_char;
-                }
-                i = sscanf(
-                    (dbuf.mv_data as *mut std::ffi::c_char).offset(
-                        (::core::mem::size_of::<[std::ffi::c_char; 9]>() as std::ffi::c_ulong)
-                            .wrapping_sub(1 as std::ffi::c_ulong) as isize,
-                    ),
-                    b"%p\0" as *const u8 as *const std::ffi::c_char,
-                    &raw mut info.me_mapaddr,
-                );
-                if i != 1 as std::ffi::c_int {
-                    fprintf(
-                        get_stderr(),
-                        b"%s: line %zu: invalid mapaddr %s\n\0" as *const u8
-                            as *const std::ffi::c_char,
-                        prog,
-                        lineno,
+                        b"btree\0" as *const u8 as *const std::ffi::c_char,
+                        (::core::mem::size_of::<[std::ffi::c_char; 6]>() as size_t)
+                            .wrapping_sub(1 as size_t),
+                    ) != 0
+                    {
+                        fprintf(
+                            get_stderr(),
+                            b"%s: line %zu: unsupported type %s\n\0" as *const u8
+                                as *const std::ffi::c_char,
+                            prog,
+                            lineno,
+                            (dbuf.mv_data as *mut std::ffi::c_char).offset(
+                                (::core::mem::size_of::<[std::ffi::c_char; 6]>()
+                                    as std::ffi::c_ulong)
+                                    .wrapping_sub(1 as std::ffi::c_ulong)
+                                    as isize,
+                            ),
+                        );
+                        exit(EXIT_FAILURE);
+                    }
+                } else if strncmp(
+                    dbuf.mv_data as *const std::ffi::c_char,
+                    b"mapaddr=\0" as *const u8 as *const std::ffi::c_char,
+                    (::core::mem::size_of::<[std::ffi::c_char; 9]>() as size_t)
+                        .wrapping_sub(1 as size_t),
+                ) == 0
+                {
+                    let mut i: std::ffi::c_int = 0;
+                    ptr = memchr(dbuf.mv_data, '\n' as i32, dbuf.mv_size) as *mut std::ffi::c_char;
+                    if !ptr.is_null() {
+                        *ptr = '\0' as i32 as std::ffi::c_char;
+                    }
+                    i = sscanf(
                         (dbuf.mv_data as *mut std::ffi::c_char).offset(
                             (::core::mem::size_of::<[std::ffi::c_char; 9]>() as std::ffi::c_ulong)
                                 .wrapping_sub(1 as std::ffi::c_ulong)
                                 as isize,
                         ),
+                        b"%p\0" as *const u8 as *const std::ffi::c_char,
+                        &raw mut info.me_mapaddr,
                     );
-                    exit(EXIT_FAILURE);
-                }
-            } else if strncmp(
-                dbuf.mv_data as *const std::ffi::c_char,
-                b"mapsize=\0" as *const u8 as *const std::ffi::c_char,
-                (::core::mem::size_of::<[std::ffi::c_char; 9]>() as size_t)
-                    .wrapping_sub(1 as size_t),
-            ) == 0
-            {
-                let mut i_0: std::ffi::c_int = 0;
-                ptr = memchr(dbuf.mv_data, '\n' as i32, dbuf.mv_size) as *mut std::ffi::c_char;
-                if !ptr.is_null() {
-                    *ptr = '\0' as i32 as std::ffi::c_char;
-                }
-                i_0 = sscanf(
-                    (dbuf.mv_data as *mut std::ffi::c_char).offset(
-                        (::core::mem::size_of::<[std::ffi::c_char; 9]>() as std::ffi::c_ulong)
-                            .wrapping_sub(1 as std::ffi::c_ulong) as isize,
-                    ),
-                    b"%zu\0" as *const u8 as *const std::ffi::c_char,
-                    &raw mut info.me_mapsize,
-                );
-                if i_0 != 1 as std::ffi::c_int {
-                    fprintf(
-                        get_stderr(),
-                        b"%s: line %zu: invalid mapsize %s\n\0" as *const u8
-                            as *const std::ffi::c_char,
-                        prog,
-                        lineno,
+                    if i != 1 as std::ffi::c_int {
+                        fprintf(
+                            get_stderr(),
+                            b"%s: line %zu: invalid mapaddr %s\n\0" as *const u8
+                                as *const std::ffi::c_char,
+                            prog,
+                            lineno,
+                            (dbuf.mv_data as *mut std::ffi::c_char).offset(
+                                (::core::mem::size_of::<[std::ffi::c_char; 9]>()
+                                    as std::ffi::c_ulong)
+                                    .wrapping_sub(1 as std::ffi::c_ulong)
+                                    as isize,
+                            ),
+                        );
+                        exit(EXIT_FAILURE);
+                    }
+                } else if strncmp(
+                    dbuf.mv_data as *const std::ffi::c_char,
+                    b"mapsize=\0" as *const u8 as *const std::ffi::c_char,
+                    (::core::mem::size_of::<[std::ffi::c_char; 9]>() as size_t)
+                        .wrapping_sub(1 as size_t),
+                ) == 0
+                {
+                    let mut i_0: std::ffi::c_int = 0;
+                    ptr = memchr(dbuf.mv_data, '\n' as i32, dbuf.mv_size) as *mut std::ffi::c_char;
+                    if !ptr.is_null() {
+                        *ptr = '\0' as i32 as std::ffi::c_char;
+                    }
+                    i_0 = sscanf(
                         (dbuf.mv_data as *mut std::ffi::c_char).offset(
                             (::core::mem::size_of::<[std::ffi::c_char; 9]>() as std::ffi::c_ulong)
                                 .wrapping_sub(1 as std::ffi::c_ulong)
                                 as isize,
                         ),
+                        b"%zu\0" as *const u8 as *const std::ffi::c_char,
+                        &raw mut info.me_mapsize,
                     );
-                    exit(EXIT_FAILURE);
-                }
-            } else if strncmp(
-                dbuf.mv_data as *const std::ffi::c_char,
-                b"maxreaders=\0" as *const u8 as *const std::ffi::c_char,
-                (::core::mem::size_of::<[std::ffi::c_char; 12]>() as size_t)
-                    .wrapping_sub(1 as size_t),
-            ) == 0
-            {
-                let mut i_1: std::ffi::c_int = 0;
-                ptr = memchr(dbuf.mv_data, '\n' as i32, dbuf.mv_size) as *mut std::ffi::c_char;
-                if !ptr.is_null() {
-                    *ptr = '\0' as i32 as std::ffi::c_char;
-                }
-                i_1 = sscanf(
-                    (dbuf.mv_data as *mut std::ffi::c_char).offset(
-                        (::core::mem::size_of::<[std::ffi::c_char; 12]>() as std::ffi::c_ulong)
-                            .wrapping_sub(1 as std::ffi::c_ulong) as isize,
-                    ),
-                    b"%u\0" as *const u8 as *const std::ffi::c_char,
-                    &raw mut info.me_maxreaders,
-                );
-                if i_1 != 1 as std::ffi::c_int {
-                    fprintf(
-                        get_stderr(),
-                        b"%s: line %zu: invalid maxreaders %s\n\0" as *const u8
-                            as *const std::ffi::c_char,
-                        prog,
-                        lineno,
+                    if i_0 != 1 as std::ffi::c_int {
+                        fprintf(
+                            get_stderr(),
+                            b"%s: line %zu: invalid mapsize %s\n\0" as *const u8
+                                as *const std::ffi::c_char,
+                            prog,
+                            lineno,
+                            (dbuf.mv_data as *mut std::ffi::c_char).offset(
+                                (::core::mem::size_of::<[std::ffi::c_char; 9]>()
+                                    as std::ffi::c_ulong)
+                                    .wrapping_sub(1 as std::ffi::c_ulong)
+                                    as isize,
+                            ),
+                        );
+                        exit(EXIT_FAILURE);
+                    }
+                } else if strncmp(
+                    dbuf.mv_data as *const std::ffi::c_char,
+                    b"maxreaders=\0" as *const u8 as *const std::ffi::c_char,
+                    (::core::mem::size_of::<[std::ffi::c_char; 12]>() as size_t)
+                        .wrapping_sub(1 as size_t),
+                ) == 0
+                {
+                    let mut i_1: std::ffi::c_int = 0;
+                    ptr = memchr(dbuf.mv_data, '\n' as i32, dbuf.mv_size) as *mut std::ffi::c_char;
+                    if !ptr.is_null() {
+                        *ptr = '\0' as i32 as std::ffi::c_char;
+                    }
+                    i_1 = sscanf(
                         (dbuf.mv_data as *mut std::ffi::c_char).offset(
                             (::core::mem::size_of::<[std::ffi::c_char; 12]>() as std::ffi::c_ulong)
                                 .wrapping_sub(1 as std::ffi::c_ulong)
                                 as isize,
                         ),
+                        b"%u\0" as *const u8 as *const std::ffi::c_char,
+                        &raw mut info.me_maxreaders,
                     );
-                    exit(EXIT_FAILURE);
-                }
-            } else {
-                let mut i_2: std::ffi::c_int = 0;
-                i_2 = 0 as std::ffi::c_int;
-                while dbflags[i_2 as usize].bit != 0 {
-                    if strncmp(
-                        dbuf.mv_data as *const std::ffi::c_char,
-                        dbflags[i_2 as usize].name,
-                        dbflags[i_2 as usize].len as size_t,
-                    ) == 0
-                        && *(dbuf.mv_data as *mut std::ffi::c_char)
-                            .offset(dbflags[i_2 as usize].len as isize)
-                            as std::ffi::c_int
-                            == '=' as i32
-                    {
-                        flags |= dbflags[i_2 as usize].bit;
-                        break;
-                    } else {
-                        i_2 += 1;
-                        i_2;
-                    }
-                }
-                if dbflags[i_2 as usize].bit == 0 {
-                    ptr = memchr(dbuf.mv_data, '=' as i32, dbuf.mv_size) as *mut std::ffi::c_char;
-                    if ptr.is_null() {
+                    if i_1 != 1 as std::ffi::c_int {
                         fprintf(
                             get_stderr(),
-                            b"%s: line %zu: unexpected format\n\0" as *const u8
+                            b"%s: line %zu: invalid maxreaders %s\n\0" as *const u8
                                 as *const std::ffi::c_char,
                             prog,
                             lineno,
+                            (dbuf.mv_data as *mut std::ffi::c_char).offset(
+                                (::core::mem::size_of::<[std::ffi::c_char; 12]>()
+                                    as std::ffi::c_ulong)
+                                    .wrapping_sub(1 as std::ffi::c_ulong)
+                                    as isize,
+                            ),
                         );
                         exit(EXIT_FAILURE);
-                    } else {
-                        *ptr = '\0' as i32 as std::ffi::c_char;
-                        fprintf(
-                            get_stderr(),
-                            b"%s: line %zu: unrecognized keyword ignored: %s\n\0" as *const u8
-                                as *const std::ffi::c_char,
-                            prog,
-                            lineno,
-                            dbuf.mv_data as *mut std::ffi::c_char,
-                        );
+                    }
+                } else {
+                    let mut i_2: std::ffi::c_int = 0;
+                    i_2 = 0 as std::ffi::c_int;
+                    while dbflags[i_2 as usize].bit != 0 {
+                        if strncmp(
+                            dbuf.mv_data as *const std::ffi::c_char,
+                            dbflags[i_2 as usize].name,
+                            dbflags[i_2 as usize].len as size_t,
+                        ) == 0
+                            && *(dbuf.mv_data as *mut std::ffi::c_char)
+                                .offset(dbflags[i_2 as usize].len as isize)
+                                as std::ffi::c_int
+                                == '=' as i32
+                        {
+                            flags |= dbflags[i_2 as usize].bit;
+                            break;
+                        } else {
+                            i_2 += 1;
+                            i_2;
+                        }
+                    }
+                    if dbflags[i_2 as usize].bit == 0 {
+                        ptr =
+                            memchr(dbuf.mv_data, '=' as i32, dbuf.mv_size) as *mut std::ffi::c_char;
+                        if ptr.is_null() {
+                            fprintf(
+                                get_stderr(),
+                                b"%s: line %zu: unexpected format\n\0" as *const u8
+                                    as *const std::ffi::c_char,
+                                prog,
+                                lineno,
+                            );
+                            exit(EXIT_FAILURE);
+                        } else {
+                            *ptr = '\0' as i32 as std::ffi::c_char;
+                            fprintf(
+                                get_stderr(),
+                                b"%s: line %zu: unrecognized keyword ignored: %s\n\0" as *const u8
+                                    as *const std::ffi::c_char,
+                                prog,
+                                lineno,
+                                dbuf.mv_data as *mut std::ffi::c_char,
+                            );
+                        }
                     }
                 }
             }
         }
     }
-}}
-unsafe extern "C" fn badend() { unsafe {
-    fprintf(
-        get_stderr(),
-        b"%s: line %zu: unexpected end of input\n\0" as *const u8 as *const std::ffi::c_char,
-        prog,
-        lineno,
-    );
-}}
-unsafe extern "C" fn unhex(mut c2: *mut std::ffi::c_uchar) -> std::ffi::c_int { unsafe {
-    let mut x: std::ffi::c_int = 0;
-    let mut c: std::ffi::c_int = 0;
-    let fresh0 = c2;
-    c2 = c2.offset(1);
-    x = *fresh0 as std::ffi::c_int & 0x4f as std::ffi::c_int;
-    if x & 0x40 as std::ffi::c_int != 0 {
-        x -= 55 as std::ffi::c_int;
+}
+unsafe extern "C" fn badend() {
+    unsafe {
+        fprintf(
+            get_stderr(),
+            b"%s: line %zu: unexpected end of input\n\0" as *const u8 as *const std::ffi::c_char,
+            prog,
+            lineno,
+        );
     }
-    c = x << 4 as std::ffi::c_int;
-    x = *c2 as std::ffi::c_int & 0x4f as std::ffi::c_int;
-    if x & 0x40 as std::ffi::c_int != 0 {
-        x -= 55 as std::ffi::c_int;
-    }
-    c |= x;
-    c
-}}
-unsafe extern "C" fn readline(mut out: *mut MDB_val, mut buf: *mut MDB_val) -> std::ffi::c_int { unsafe {
-    let mut c1: *mut std::ffi::c_uchar = std::ptr::null_mut::<std::ffi::c_uchar>();
-    let mut c2: *mut std::ffi::c_uchar = std::ptr::null_mut::<std::ffi::c_uchar>();
-    let mut end: *mut std::ffi::c_uchar = std::ptr::null_mut::<std::ffi::c_uchar>();
-    let mut len: size_t = 0;
-    let mut l2: size_t = 0;
-    let mut c: std::ffi::c_int = 0;
-    if mode & NOHDR == 0 {
-        c = fgetc(get_stdin());
-        if c == -(1 as std::ffi::c_int) {
-            Eof = 1 as std::ffi::c_int;
-            return -(1 as std::ffi::c_int);
+}
+unsafe extern "C" fn unhex(mut c2: *mut std::ffi::c_uchar) -> std::ffi::c_int {
+    unsafe {
+        let mut x: std::ffi::c_int = 0;
+        let mut c: std::ffi::c_int = 0;
+        let fresh0 = c2;
+        c2 = c2.offset(1);
+        x = *fresh0 as std::ffi::c_int & 0x4f as std::ffi::c_int;
+        if x & 0x40 as std::ffi::c_int != 0 {
+            x -= 55 as std::ffi::c_int;
         }
-        if c != ' ' as i32 {
-            lineno = lineno.wrapping_add(1);
-            lineno;
-            if !(fgets(
-                (*buf).mv_data as *mut std::ffi::c_char,
-                (*buf).mv_size as std::ffi::c_int,
-                get_stdin(),
-            ))
-            .is_null()
-                && c == 'D' as i32
+        c = x << 4 as std::ffi::c_int;
+        x = *c2 as std::ffi::c_int & 0x4f as std::ffi::c_int;
+        if x & 0x40 as std::ffi::c_int != 0 {
+            x -= 55 as std::ffi::c_int;
+        }
+        c |= x;
+        c
+    }
+}
+unsafe extern "C" fn readline(mut out: *mut MDB_val, mut buf: *mut MDB_val) -> std::ffi::c_int {
+    unsafe {
+        let mut c1: *mut std::ffi::c_uchar = std::ptr::null_mut::<std::ffi::c_uchar>();
+        let mut c2: *mut std::ffi::c_uchar = std::ptr::null_mut::<std::ffi::c_uchar>();
+        let mut end: *mut std::ffi::c_uchar = std::ptr::null_mut::<std::ffi::c_uchar>();
+        let mut len: size_t = 0;
+        let mut l2: size_t = 0;
+        let mut c: std::ffi::c_int = 0;
+        if mode & NOHDR == 0 {
+            c = fgetc(get_stdin());
+            if c == -(1 as std::ffi::c_int) {
+                Eof = 1 as std::ffi::c_int;
+                return -(1 as std::ffi::c_int);
+            }
+            if c != ' ' as i32 {
+                lineno = lineno.wrapping_add(1);
+                lineno;
+                if !(fgets(
+                    (*buf).mv_data as *mut std::ffi::c_char,
+                    (*buf).mv_size as std::ffi::c_int,
+                    get_stdin(),
+                ))
+                .is_null()
+                    && c == 'D' as i32
                     && strncmp(
                         (*buf).mv_data as *const std::ffi::c_char,
                         b"ATA=END\0" as *const u8 as *const std::ffi::c_char,
@@ -600,311 +623,321 @@ unsafe extern "C" fn readline(mut out: *mut MDB_val, mut buf: *mut MDB_val) -> s
                 {
                     return -(1 as std::ffi::c_int);
                 }
-            Eof = 1 as std::ffi::c_int;
-            badend();
-            return -(1 as std::ffi::c_int);
+                Eof = 1 as std::ffi::c_int;
+                badend();
+                return -(1 as std::ffi::c_int);
+            }
         }
-    }
-    if (fgets(
-        (*buf).mv_data as *mut std::ffi::c_char,
-        (*buf).mv_size as std::ffi::c_int,
-        get_stdin(),
-    ))
-    .is_null()
-    {
-        Eof = 1 as std::ffi::c_int;
-        return -(1 as std::ffi::c_int);
-    }
-    lineno = lineno.wrapping_add(1);
-    lineno;
-    c1 = (*buf).mv_data as *mut std::ffi::c_uchar;
-    len = strlen(c1 as *mut std::ffi::c_char);
-    l2 = len;
-    while *c1.offset(len.wrapping_sub(1 as size_t) as isize) as std::ffi::c_int != '\n' as i32 {
-        (*buf).mv_data = realloc((*buf).mv_data, ((*buf).mv_size).wrapping_mul(2 as size_t));
-        if ((*buf).mv_data).is_null() {
-            Eof = 1 as std::ffi::c_int;
-            fprintf(
-                get_stderr(),
-                b"%s: line %zu: out of memory, line too long\n\0" as *const u8
-                    as *const std::ffi::c_char,
-                prog,
-                lineno,
-            );
-            return -(1 as std::ffi::c_int);
-        }
-        c1 = (*buf).mv_data as *mut std::ffi::c_uchar;
-        c1 = c1.offset(l2 as isize);
         if (fgets(
-            c1 as *mut std::ffi::c_char,
-            ((*buf).mv_size).wrapping_add(1 as size_t) as std::ffi::c_int,
+            (*buf).mv_data as *mut std::ffi::c_char,
+            (*buf).mv_size as std::ffi::c_int,
             get_stdin(),
         ))
         .is_null()
         {
             Eof = 1 as std::ffi::c_int;
-            badend();
             return -(1 as std::ffi::c_int);
         }
-        (*buf).mv_size = ((*buf).mv_size as std::ffi::c_ulong).wrapping_mul(2 as std::ffi::c_ulong)
-            as size_t as size_t;
+        lineno = lineno.wrapping_add(1);
+        lineno;
+        c1 = (*buf).mv_data as *mut std::ffi::c_uchar;
         len = strlen(c1 as *mut std::ffi::c_char);
-        l2 = (l2 as std::ffi::c_ulong).wrapping_add(len as std::ffi::c_ulong) as size_t as size_t;
-    }
-    c2 = (*buf).mv_data as *mut std::ffi::c_uchar;
-    c1 = c2;
-    len = l2;
-    len = len.wrapping_sub(1);
-    *c1.offset(len as isize) = '\0' as i32 as std::ffi::c_uchar;
-    end = c1.offset(len as isize);
-    if mode & PRINT != 0 {
-        while c2 < end {
-            if *c2 as std::ffi::c_int == '\\' as i32 {
-                if *c2.offset(1 as std::ffi::c_int as isize) as std::ffi::c_int == '\\' as i32 {
-                    let fresh1 = c1;
-                    c1 = c1.offset(1);
-                    *fresh1 = *c2;
-                } else {
-                    if c2.offset(3 as std::ffi::c_int as isize) > end
-                        || !(*c2.offset(1 as std::ffi::c_int as isize)).is_ascii_hexdigit()
-                        || !(*c2.offset(2 as std::ffi::c_int as isize)).is_ascii_hexdigit()
-                    {
-                        Eof = 1 as std::ffi::c_int;
-                        badend();
-                        return -(1 as std::ffi::c_int);
-                    }
-                    c2 = c2.offset(1);
-                    let fresh2 = c1;
-                    c1 = c1.offset(1);
-                    *fresh2 = unhex(c2) as std::ffi::c_uchar;
-                }
-                c2 = c2.offset(2 as std::ffi::c_int as isize);
-            } else {
-                let fresh3 = c2;
-                c2 = c2.offset(1);
-                let fresh4 = c1;
-                c1 = c1.offset(1);
-                *fresh4 = *fresh3;
+        l2 = len;
+        while *c1.offset(len.wrapping_sub(1 as size_t) as isize) as std::ffi::c_int != '\n' as i32 {
+            (*buf).mv_data = realloc((*buf).mv_data, ((*buf).mv_size).wrapping_mul(2 as size_t));
+            if ((*buf).mv_data).is_null() {
+                Eof = 1 as std::ffi::c_int;
+                fprintf(
+                    get_stderr(),
+                    b"%s: line %zu: out of memory, line too long\n\0" as *const u8
+                        as *const std::ffi::c_char,
+                    prog,
+                    lineno,
+                );
+                return -(1 as std::ffi::c_int);
             }
-        }
-    } else {
-        if len & 1 as size_t != 0 {
-            Eof = 1 as std::ffi::c_int;
-            badend();
-            return -(1 as std::ffi::c_int);
-        }
-        while c2 < end {
-            if !((*c2 as std::ffi::c_int as isize) as u8).is_ascii_hexdigit()
-                || !(*c2.offset(1 as std::ffi::c_int as isize)).is_ascii_hexdigit()
+            c1 = (*buf).mv_data as *mut std::ffi::c_uchar;
+            c1 = c1.offset(l2 as isize);
+            if (fgets(
+                c1 as *mut std::ffi::c_char,
+                ((*buf).mv_size).wrapping_add(1 as size_t) as std::ffi::c_int,
+                get_stdin(),
+            ))
+            .is_null()
             {
                 Eof = 1 as std::ffi::c_int;
                 badend();
                 return -(1 as std::ffi::c_int);
             }
-            let fresh5 = c1;
-            c1 = c1.offset(1);
-            *fresh5 = unhex(c2) as std::ffi::c_uchar;
-            c2 = c2.offset(2 as std::ffi::c_int as isize);
+            (*buf).mv_size = ((*buf).mv_size as std::ffi::c_ulong)
+                .wrapping_mul(2 as std::ffi::c_ulong) as size_t
+                as size_t;
+            len = strlen(c1 as *mut std::ffi::c_char);
+            l2 = (l2 as std::ffi::c_ulong).wrapping_add(len as std::ffi::c_ulong) as size_t
+                as size_t;
         }
+        c2 = (*buf).mv_data as *mut std::ffi::c_uchar;
+        c1 = c2;
+        len = l2;
+        len = len.wrapping_sub(1);
+        *c1.offset(len as isize) = '\0' as i32 as std::ffi::c_uchar;
+        end = c1.offset(len as isize);
+        if mode & PRINT != 0 {
+            while c2 < end {
+                if *c2 as std::ffi::c_int == '\\' as i32 {
+                    if *c2.offset(1 as std::ffi::c_int as isize) as std::ffi::c_int == '\\' as i32 {
+                        let fresh1 = c1;
+                        c1 = c1.offset(1);
+                        *fresh1 = *c2;
+                    } else {
+                        if c2.offset(3 as std::ffi::c_int as isize) > end
+                            || !(*c2.offset(1 as std::ffi::c_int as isize)).is_ascii_hexdigit()
+                            || !(*c2.offset(2 as std::ffi::c_int as isize)).is_ascii_hexdigit()
+                        {
+                            Eof = 1 as std::ffi::c_int;
+                            badend();
+                            return -(1 as std::ffi::c_int);
+                        }
+                        c2 = c2.offset(1);
+                        let fresh2 = c1;
+                        c1 = c1.offset(1);
+                        *fresh2 = unhex(c2) as std::ffi::c_uchar;
+                    }
+                    c2 = c2.offset(2 as std::ffi::c_int as isize);
+                } else {
+                    let fresh3 = c2;
+                    c2 = c2.offset(1);
+                    let fresh4 = c1;
+                    c1 = c1.offset(1);
+                    *fresh4 = *fresh3;
+                }
+            }
+        } else {
+            if len & 1 as size_t != 0 {
+                Eof = 1 as std::ffi::c_int;
+                badend();
+                return -(1 as std::ffi::c_int);
+            }
+            while c2 < end {
+                if !((*c2 as std::ffi::c_int as isize) as u8).is_ascii_hexdigit()
+                    || !(*c2.offset(1 as std::ffi::c_int as isize)).is_ascii_hexdigit()
+                {
+                    Eof = 1 as std::ffi::c_int;
+                    badend();
+                    return -(1 as std::ffi::c_int);
+                }
+                let fresh5 = c1;
+                c1 = c1.offset(1);
+                *fresh5 = unhex(c2) as std::ffi::c_uchar;
+                c2 = c2.offset(2 as std::ffi::c_int as isize);
+            }
+        }
+        (*out).mv_data = (*buf).mv_data;
+        c2 = (*out).mv_data as *mut std::ffi::c_uchar;
+        (*out).mv_size = c1.offset_from(c2) as std::ffi::c_long as size_t;
+        0 as std::ffi::c_int
     }
-    (*out).mv_data = (*buf).mv_data;
-    c2 = (*out).mv_data as *mut std::ffi::c_uchar;
-    (*out).mv_size = c1.offset_from(c2) as std::ffi::c_long as size_t;
-    0 as std::ffi::c_int
-}}
-unsafe extern "C" fn usage() { unsafe {
-    fprintf(
-        get_stderr(),
-        b"usage: %s [-V] [-a] [-f input] [-n] [-s name] [-N] [-T] dbpath\n\0" as *const u8
-            as *const std::ffi::c_char,
-        prog,
-    );
-    exit(EXIT_FAILURE);
-}}
+}
+unsafe extern "C" fn usage() {
+    unsafe {
+        fprintf(
+            get_stderr(),
+            b"usage: %s [-V] [-a] [-f input] [-n] [-s name] [-N] [-T] dbpath\n\0" as *const u8
+                as *const std::ffi::c_char,
+            prog,
+        );
+        exit(EXIT_FAILURE);
+    }
+}
 unsafe extern "C" fn greater(mut a: *const MDB_val, mut b: *const MDB_val) -> std::ffi::c_int {
     1 as std::ffi::c_int
 }
 unsafe fn main_0(
     mut argc: std::ffi::c_int,
     mut argv: *mut *mut std::ffi::c_char,
-) -> std::ffi::c_int { unsafe {
-    let mut current_block: u64;
-    let mut i: std::ffi::c_int = 0;
-    let mut rc: std::ffi::c_int = 0;
-    let mut env: *mut MDB_env = std::ptr::null_mut::<MDB_env>();
-    let mut txn: *mut MDB_txn = std::ptr::null_mut::<MDB_txn>();
-    let mut mc: *mut MDB_cursor = std::ptr::null_mut::<MDB_cursor>();
-    let mut dbi: MDB_dbi = 0;
-    let mut envname: *mut std::ffi::c_char = std::ptr::null_mut::<std::ffi::c_char>();
-    let mut envflags: std::ffi::c_int = MDB_NOSYNC;
-    let mut putflags: std::ffi::c_int = 0 as std::ffi::c_int;
-    let mut dohdr: std::ffi::c_int = 0 as std::ffi::c_int;
-    let mut append: std::ffi::c_int = 0 as std::ffi::c_int;
-    let mut prevk: MDB_val =
-        MDB_val { mv_size: 0, mv_data: std::ptr::null::<std::ffi::c_void>() as *mut std::ffi::c_void };
-    prog = *argv.offset(0 as std::ffi::c_int as isize);
-    if argc < 2 as std::ffi::c_int {
-        usage();
-    }
-    loop {
-        i = getopt(
-            argc,
-            argv as *const *mut std::ffi::c_char,
-            b"af:ns:NQTV\0" as *const u8 as *const std::ffi::c_char,
-        );
-        if i == -(1 as std::ffi::c_int) {
-            break;
+) -> std::ffi::c_int {
+    unsafe {
+        let mut current_block: u64;
+        let mut i: std::ffi::c_int = 0;
+        let mut rc: std::ffi::c_int = 0;
+        let mut env: *mut MDB_env = std::ptr::null_mut::<MDB_env>();
+        let mut txn: *mut MDB_txn = std::ptr::null_mut::<MDB_txn>();
+        let mut mc: *mut MDB_cursor = std::ptr::null_mut::<MDB_cursor>();
+        let mut dbi: MDB_dbi = 0;
+        let mut envname: *mut std::ffi::c_char = std::ptr::null_mut::<std::ffi::c_char>();
+        let mut envflags: std::ffi::c_int = MDB_NOSYNC;
+        let mut putflags: std::ffi::c_int = 0 as std::ffi::c_int;
+        let mut dohdr: std::ffi::c_int = 0 as std::ffi::c_int;
+        let mut append: std::ffi::c_int = 0 as std::ffi::c_int;
+        let mut prevk: MDB_val = MDB_val {
+            mv_size: 0,
+            mv_data: std::ptr::null::<std::ffi::c_void>() as *mut std::ffi::c_void,
+        };
+        prog = *argv.offset(0 as std::ffi::c_int as isize);
+        if argc < 2 as std::ffi::c_int {
+            usage();
         }
-        match i {
-            86 => {
-                printf(
-                    b"%s\n\0" as *const u8 as *const std::ffi::c_char,
-                    b"LMDB 0.9.70: (December 19, 2015)\0" as *const u8 as *const std::ffi::c_char,
-                );
-                exit(0 as std::ffi::c_int);
+        loop {
+            i = getopt(
+                argc,
+                argv as *const *mut std::ffi::c_char,
+                b"af:ns:NQTV\0" as *const u8 as *const std::ffi::c_char,
+            );
+            if i == -(1 as std::ffi::c_int) {
+                break;
             }
-            97 => {
-                append = 1 as std::ffi::c_int;
-            }
-            102 => {
-                if (freopen(optarg, b"r\0" as *const u8 as *const std::ffi::c_char, get_stdin()))
-                    .is_null()
-                {
-                    fprintf(
-                        get_stderr(),
-                        b"%s: %s: reopen: %s\n\0" as *const u8 as *const std::ffi::c_char,
-                        prog,
-                        optarg,
-                        strerror(*get_errno_location()),
+            match i {
+                86 => {
+                    printf(
+                        b"%s\n\0" as *const u8 as *const std::ffi::c_char,
+                        b"LMDB 0.9.70: (December 19, 2015)\0" as *const u8
+                            as *const std::ffi::c_char,
                     );
-                    exit(EXIT_FAILURE);
+                    exit(0 as std::ffi::c_int);
+                }
+                97 => {
+                    append = 1 as std::ffi::c_int;
+                }
+                102 => {
+                    if (freopen(
+                        optarg,
+                        b"r\0" as *const u8 as *const std::ffi::c_char,
+                        get_stdin(),
+                    ))
+                    .is_null()
+                    {
+                        fprintf(
+                            get_stderr(),
+                            b"%s: %s: reopen: %s\n\0" as *const u8 as *const std::ffi::c_char,
+                            prog,
+                            optarg,
+                            strerror(*get_errno_location()),
+                        );
+                        exit(EXIT_FAILURE);
+                    }
+                }
+                110 => {
+                    envflags |= MDB_NOSUBDIR;
+                }
+                115 => {
+                    subname = strdup(optarg);
+                }
+                78 => {
+                    putflags = MDB_NOOVERWRITE | MDB_NODUPDATA;
+                }
+                81 => {
+                    envflags |= MDB_NOSYNC;
+                }
+                84 => {
+                    mode |= NOHDR | PRINT;
+                }
+                _ => {
+                    usage();
                 }
             }
-            110 => {
-                envflags |= MDB_NOSUBDIR;
-            }
-            115 => {
-                subname = strdup(optarg);
-            }
-            78 => {
-                putflags = MDB_NOOVERWRITE | MDB_NODUPDATA;
-            }
-            81 => {
-                envflags |= MDB_NOSYNC;
-            }
-            84 => {
-                mode |= NOHDR | PRINT;
-            }
-            _ => {
-                usage();
-            }
         }
-    }
-    if optind != argc - 1 as std::ffi::c_int {
-        usage();
-    }
-    dbuf.mv_size = 4096 as size_t;
-    dbuf.mv_data = malloc(dbuf.mv_size);
-    if mode & NOHDR == 0 {
-        readhdr();
-    }
-    envname = *argv.offset(optind as isize);
-    rc = mdb_env_create(&mut env);
-    if rc != 0 {
-        fprintf(
-            get_stderr(),
-            b"mdb_env_create failed, error %d %s\n\0" as *const u8 as *const std::ffi::c_char,
-            rc,
-            mdb_strerror(rc),
-        );
-        return EXIT_FAILURE;
-    }
-    mdb_env_set_maxdbs(env, 2 as MDB_dbi);
-    if info.me_maxreaders != 0 {
-        mdb_env_set_maxreaders(env, info.me_maxreaders);
-    }
-    if info.me_mapsize != 0 {
-        mdb_env_set_mapsize(env, info.me_mapsize);
-    }
-    if !(info.me_mapaddr).is_null() {
-        envflags |= MDB_FIXEDMAP;
-    }
-    rc = mdb_env_open(env, envname, envflags as std::ffi::c_uint, 0o664 as mdb_mode_t);
-    if rc != 0 {
-        fprintf(
-            get_stderr(),
-            b"mdb_env_open failed, error %d %s\n\0" as *const u8 as *const std::ffi::c_char,
-            rc,
-            mdb_strerror(rc),
-        );
-    } else {
-        kbuf.mv_size =
-            (mdb_env_get_maxkeysize(env) * 2 as std::ffi::c_int + 2 as std::ffi::c_int) as size_t;
-        kbuf.mv_data = malloc((kbuf.mv_size).wrapping_mul(2 as size_t));
-        k0buf.mv_size = kbuf.mv_size;
-        k0buf.mv_data = (kbuf.mv_data as *mut std::ffi::c_char).offset(kbuf.mv_size as isize)
-            as *mut std::ffi::c_void;
-        prevk.mv_data = k0buf.mv_data;
-        's_222: loop {
-            if Eof != 0 {
-                current_block = 13973796120831625861;
-                break;
-            }
-            let mut key: MDB_val = MDB_val {
-                mv_size: 0,
-                mv_data: std::ptr::null::<std::ffi::c_void>() as *mut std::ffi::c_void,
-            };
-            let mut data: MDB_val = MDB_val {
-                mv_size: 0,
-                mv_data: std::ptr::null::<std::ffi::c_void>() as *mut std::ffi::c_void,
-            };
-            let mut batch: std::ffi::c_int = 0 as std::ffi::c_int;
-            let mut appflag: std::ffi::c_int = 0;
-            if dohdr == 0 {
-                dohdr = 1 as std::ffi::c_int;
-            } else if mode & NOHDR == 0 {
-                readhdr();
-            }
-            rc = mdb_txn_begin(env, std::ptr::null_mut::<MDB_txn>(), 0 as std::ffi::c_uint, &mut txn);
-            if rc != 0 {
-                fprintf(
-                    get_stderr(),
-                    b"mdb_txn_begin failed, error %d %s\n\0" as *const u8
-                        as *const std::ffi::c_char,
-                    rc,
-                    mdb_strerror(rc),
+        if optind != argc - 1 as std::ffi::c_int {
+            usage();
+        }
+        dbuf.mv_size = 4096 as size_t;
+        dbuf.mv_data = malloc(dbuf.mv_size);
+        if mode & NOHDR == 0 {
+            readhdr();
+        }
+        envname = *argv.offset(optind as isize);
+        rc = mdb_env_create(&mut env);
+        if rc != 0 {
+            fprintf(
+                get_stderr(),
+                b"mdb_env_create failed, error %d %s\n\0" as *const u8 as *const std::ffi::c_char,
+                rc,
+                mdb_strerror(rc),
+            );
+            return EXIT_FAILURE;
+        }
+        mdb_env_set_maxdbs(env, 2 as MDB_dbi);
+        if info.me_maxreaders != 0 {
+            mdb_env_set_maxreaders(env, info.me_maxreaders);
+        }
+        if info.me_mapsize != 0 {
+            mdb_env_set_mapsize(env, info.me_mapsize);
+        }
+        if !(info.me_mapaddr).is_null() {
+            envflags |= MDB_FIXEDMAP;
+        }
+        rc = mdb_env_open(env, envname, envflags as std::ffi::c_uint, 0o664 as mdb_mode_t);
+        if rc != 0 {
+            fprintf(
+                get_stderr(),
+                b"mdb_env_open failed, error %d %s\n\0" as *const u8 as *const std::ffi::c_char,
+                rc,
+                mdb_strerror(rc),
+            );
+        } else {
+            kbuf.mv_size = (mdb_env_get_maxkeysize(env) * 2 as std::ffi::c_int
+                + 2 as std::ffi::c_int) as size_t;
+            kbuf.mv_data = malloc((kbuf.mv_size).wrapping_mul(2 as size_t));
+            k0buf.mv_size = kbuf.mv_size;
+            k0buf.mv_data = (kbuf.mv_data as *mut std::ffi::c_char).offset(kbuf.mv_size as isize)
+                as *mut std::ffi::c_void;
+            prevk.mv_data = k0buf.mv_data;
+            's_222: loop {
+                if Eof != 0 {
+                    current_block = 13973796120831625861;
+                    break;
+                }
+                let mut key: MDB_val = MDB_val {
+                    mv_size: 0,
+                    mv_data: std::ptr::null::<std::ffi::c_void>() as *mut std::ffi::c_void,
+                };
+                let mut data: MDB_val = MDB_val {
+                    mv_size: 0,
+                    mv_data: std::ptr::null::<std::ffi::c_void>() as *mut std::ffi::c_void,
+                };
+                let mut batch: std::ffi::c_int = 0 as std::ffi::c_int;
+                let mut appflag: std::ffi::c_int = 0;
+                if dohdr == 0 {
+                    dohdr = 1 as std::ffi::c_int;
+                } else if mode & NOHDR == 0 {
+                    readhdr();
+                }
+                rc = mdb_txn_begin(
+                    env,
+                    std::ptr::null_mut::<MDB_txn>(),
+                    0 as std::ffi::c_uint,
+                    &mut txn,
                 );
-                current_block = 5797318274898257760;
-                break;
-            } else {
-                rc = mdb_dbi_open(txn, subname, (flags | MDB_CREATE) as std::ffi::c_uint, &mut dbi);
                 if rc != 0 {
                     fprintf(
                         get_stderr(),
-                        b"mdb_dbi_open failed, error %d %s\n\0" as *const u8
+                        b"mdb_txn_begin failed, error %d %s\n\0" as *const u8
                             as *const std::ffi::c_char,
                         rc,
                         mdb_strerror(rc),
                     );
-                    current_block = 13973796120831625861;
+                    current_block = 5797318274898257760;
                     break;
                 } else {
-                    prevk.mv_size = 0 as size_t;
-                    if append != 0 {
-                        mdb_set_compare(
-                            txn,
-                            dbi,
-                            Some(
-                                greater
-                                    as unsafe extern "C" fn(
-                                        *const MDB_val,
-                                        *const MDB_val,
-                                    )
-                                        -> std::ffi::c_int,
-                            ),
+                    rc = mdb_dbi_open(
+                        txn,
+                        subname,
+                        (flags | MDB_CREATE) as std::ffi::c_uint,
+                        &mut dbi,
+                    );
+                    if rc != 0 {
+                        fprintf(
+                            get_stderr(),
+                            b"mdb_dbi_open failed, error %d %s\n\0" as *const u8
+                                as *const std::ffi::c_char,
+                            rc,
+                            mdb_strerror(rc),
                         );
-                        if flags & MDB_DUPSORT != 0 {
-                            mdb_set_dupsort(
+                        current_block = 13973796120831625861;
+                        break;
+                    } else {
+                        prevk.mv_size = 0 as size_t;
+                        if append != 0 {
+                            mdb_set_compare(
                                 txn,
                                 dbi,
                                 Some(
@@ -916,190 +949,213 @@ unsafe fn main_0(
                                             -> std::ffi::c_int,
                                 ),
                             );
-                        }
-                    }
-                    rc = mdb_cursor_open(txn, dbi, &mut mc);
-                    if rc != 0 {
-                        fprintf(
-                            get_stderr(),
-                            b"mdb_cursor_open failed, error %d %s\n\0" as *const u8
-                                as *const std::ffi::c_char,
-                            rc,
-                            mdb_strerror(rc),
-                        );
-                        current_block = 13973796120831625861;
-                        break;
-                    } else {
-                        loop {
-                            rc = readline(&mut key, &raw mut kbuf);
-                            if rc != 0 {
-                                break;
+                            if flags & MDB_DUPSORT != 0 {
+                                mdb_set_dupsort(
+                                    txn,
+                                    dbi,
+                                    Some(
+                                        greater
+                                            as unsafe extern "C" fn(
+                                                *const MDB_val,
+                                                *const MDB_val,
+                                            )
+                                                -> std::ffi::c_int,
+                                    ),
+                                );
                             }
-                            rc = readline(&mut data, &raw mut dbuf);
-                            if rc != 0 {
-                                fprintf(
-                                    get_stderr(),
-                                    b"%s: line %zu: failed to read key value\n\0" as *const u8
-                                        as *const std::ffi::c_char,
-                                    prog,
-                                    lineno,
-                                );
-                                current_block = 13973796120831625861;
-                                break 's_222;
-                            } else {
-                                if append != 0 {
-                                    appflag = MDB_APPEND;
-                                    if flags & MDB_DUPSORT != 0 {
-                                        if prevk.mv_size == key.mv_size
-                                            && memcmp(prevk.mv_data, key.mv_data, key.mv_size) == 0
-                                        {
-                                            appflag = MDB_CURRENT | MDB_APPENDDUP;
-                                        } else {
-                                            memcpy(prevk.mv_data, key.mv_data, key.mv_size);
-                                            prevk.mv_size = key.mv_size;
-                                        }
-                                    }
-                                } else {
-                                    appflag = 0 as std::ffi::c_int;
+                        }
+                        rc = mdb_cursor_open(txn, dbi, &mut mc);
+                        if rc != 0 {
+                            fprintf(
+                                get_stderr(),
+                                b"mdb_cursor_open failed, error %d %s\n\0" as *const u8
+                                    as *const std::ffi::c_char,
+                                rc,
+                                mdb_strerror(rc),
+                            );
+                            current_block = 13973796120831625861;
+                            break;
+                        } else {
+                            loop {
+                                rc = readline(&mut key, &raw mut kbuf);
+                                if rc != 0 {
+                                    break;
                                 }
-                                rc = mdb_cursor_put(
-                                    mc,
-                                    &mut key,
-                                    &mut data,
-                                    (putflags | appflag) as std::ffi::c_uint,
-                                );
-                                if rc == -(30799 as std::ffi::c_int) && putflags != 0 {
-                                    continue;
-                                }
+                                rc = readline(&mut data, &raw mut dbuf);
                                 if rc != 0 {
                                     fprintf(
                                         get_stderr(),
-                                        b"%s: line %zu: mdb_cursor_put failed, error %d %s\n\0"
-                                            as *const u8
+                                        b"%s: line %zu: failed to read key value\n\0" as *const u8
                                             as *const std::ffi::c_char,
                                         prog,
                                         lineno,
-                                        rc,
-                                        mdb_strerror(rc),
                                     );
                                     current_block = 13973796120831625861;
                                     break 's_222;
                                 } else {
-                                    batch += 1;
-                                    batch;
-                                    if batch != 100 as std::ffi::c_int {
+                                    if append != 0 {
+                                        appflag = MDB_APPEND;
+                                        if flags & MDB_DUPSORT != 0 {
+                                            if prevk.mv_size == key.mv_size
+                                                && memcmp(prevk.mv_data, key.mv_data, key.mv_size)
+                                                    == 0
+                                            {
+                                                appflag = MDB_CURRENT | MDB_APPENDDUP;
+                                            } else {
+                                                memcpy(prevk.mv_data, key.mv_data, key.mv_size);
+                                                prevk.mv_size = key.mv_size;
+                                            }
+                                        }
+                                    } else {
+                                        appflag = 0 as std::ffi::c_int;
+                                    }
+                                    rc = mdb_cursor_put(
+                                        mc,
+                                        &mut key,
+                                        &mut data,
+                                        (putflags | appflag) as std::ffi::c_uint,
+                                    );
+                                    if rc == -(30799 as std::ffi::c_int) && putflags != 0 {
                                         continue;
                                     }
-                                    rc = mdb_txn_commit(txn);
                                     if rc != 0 {
                                         fprintf(
                                             get_stderr(),
-                                            b"%s: line %zu: txn_commit: %s\n\0" as *const u8
+                                            b"%s: line %zu: mdb_cursor_put failed, error %d %s\n\0"
+                                                as *const u8
                                                 as *const std::ffi::c_char,
                                             prog,
                                             lineno,
+                                            rc,
                                             mdb_strerror(rc),
                                         );
-                                        current_block = 5797318274898257760;
+                                        current_block = 13973796120831625861;
                                         break 's_222;
                                     } else {
-                                        rc = mdb_txn_begin(
-                                            env,
-                                            std::ptr::null_mut::<MDB_txn>(),
-                                            0 as std::ffi::c_uint,
-                                            &mut txn,
-                                        );
+                                        batch += 1;
+                                        batch;
+                                        if batch != 100 as std::ffi::c_int {
+                                            continue;
+                                        }
+                                        rc = mdb_txn_commit(txn);
                                         if rc != 0 {
                                             fprintf(
                                                 get_stderr(),
-                                                b"mdb_txn_begin failed, error %d %s\n\0"
-                                                    as *const u8
+                                                b"%s: line %zu: txn_commit: %s\n\0" as *const u8
                                                     as *const std::ffi::c_char,
-                                                rc,
+                                                prog,
+                                                lineno,
                                                 mdb_strerror(rc),
                                             );
                                             current_block = 5797318274898257760;
                                             break 's_222;
                                         } else {
-                                            rc = mdb_cursor_open(txn, dbi, &mut mc);
+                                            rc = mdb_txn_begin(
+                                                env,
+                                                std::ptr::null_mut::<MDB_txn>(),
+                                                0 as std::ffi::c_uint,
+                                                &mut txn,
+                                            );
                                             if rc != 0 {
                                                 fprintf(
                                                     get_stderr(),
-                                                    b"mdb_cursor_open failed, error %d %s\n\0"
+                                                    b"mdb_txn_begin failed, error %d %s\n\0"
                                                         as *const u8
                                                         as *const std::ffi::c_char,
                                                     rc,
                                                     mdb_strerror(rc),
                                                 );
-                                                current_block = 13973796120831625861;
+                                                current_block = 5797318274898257760;
                                                 break 's_222;
                                             } else {
-                                                if append != 0 {
-                                                    let mut k: MDB_val = MDB_val {
-                                                        mv_size: 0,
-                                                        mv_data: std::ptr::null::<std::ffi::c_void>()
-                                                            as *mut std::ffi::c_void,
-                                                    };
-                                                    let mut d: MDB_val = MDB_val {
-                                                        mv_size: 0,
-                                                        mv_data: std::ptr::null::<std::ffi::c_void>()
-                                                            as *mut std::ffi::c_void,
-                                                    };
-                                                    mdb_cursor_get(mc, &mut k, &mut d, MDB_LAST);
-                                                    memcpy(prevk.mv_data, k.mv_data, k.mv_size);
-                                                    prevk.mv_size = k.mv_size;
+                                                rc = mdb_cursor_open(txn, dbi, &mut mc);
+                                                if rc != 0 {
+                                                    fprintf(
+                                                        get_stderr(),
+                                                        b"mdb_cursor_open failed, error %d %s\n\0"
+                                                            as *const u8
+                                                            as *const std::ffi::c_char,
+                                                        rc,
+                                                        mdb_strerror(rc),
+                                                    );
+                                                    current_block = 13973796120831625861;
+                                                    break 's_222;
+                                                } else {
+                                                    if append != 0 {
+                                                        let mut k: MDB_val = MDB_val {
+                                                            mv_size: 0,
+                                                            mv_data: std::ptr::null::<
+                                                                std::ffi::c_void,
+                                                            >(
+                                                            )
+                                                                as *mut std::ffi::c_void,
+                                                        };
+                                                        let mut d: MDB_val = MDB_val {
+                                                            mv_size: 0,
+                                                            mv_data: std::ptr::null::<
+                                                                std::ffi::c_void,
+                                                            >(
+                                                            )
+                                                                as *mut std::ffi::c_void,
+                                                        };
+                                                        mdb_cursor_get(
+                                                            mc, &mut k, &mut d, MDB_LAST,
+                                                        );
+                                                        memcpy(prevk.mv_data, k.mv_data, k.mv_size);
+                                                        prevk.mv_size = k.mv_size;
+                                                    }
+                                                    batch = 0 as std::ffi::c_int;
                                                 }
-                                                batch = 0 as std::ffi::c_int;
                                             }
                                         }
                                     }
                                 }
                             }
-                        }
-                        rc = mdb_txn_commit(txn);
-                        txn = std::ptr::null_mut::<MDB_txn>();
-                        if rc != 0 {
-                            fprintf(
-                                get_stderr(),
-                                b"%s: line %zu: txn_commit: %s\n\0" as *const u8
-                                    as *const std::ffi::c_char,
-                                prog,
-                                lineno,
-                                mdb_strerror(rc),
-                            );
-                            current_block = 5797318274898257760;
-                            break;
-                        } else {
-                            if envflags & MDB_NOSYNC != 0 {
-                                rc = mdb_env_sync(env, 1 as std::ffi::c_int);
-                                if rc != 0 {
-                                    fprintf(
-                                        get_stderr(),
-                                        b"mdb_env_sync failed, error %d %s\n\0" as *const u8
-                                            as *const std::ffi::c_char,
-                                        rc,
-                                        mdb_strerror(rc),
-                                    );
-                                    current_block = 5797318274898257760;
-                                    break;
+                            rc = mdb_txn_commit(txn);
+                            txn = std::ptr::null_mut::<MDB_txn>();
+                            if rc != 0 {
+                                fprintf(
+                                    get_stderr(),
+                                    b"%s: line %zu: txn_commit: %s\n\0" as *const u8
+                                        as *const std::ffi::c_char,
+                                    prog,
+                                    lineno,
+                                    mdb_strerror(rc),
+                                );
+                                current_block = 5797318274898257760;
+                                break;
+                            } else {
+                                if envflags & MDB_NOSYNC != 0 {
+                                    rc = mdb_env_sync(env, 1 as std::ffi::c_int);
+                                    if rc != 0 {
+                                        fprintf(
+                                            get_stderr(),
+                                            b"mdb_env_sync failed, error %d %s\n\0" as *const u8
+                                                as *const std::ffi::c_char,
+                                            rc,
+                                            mdb_strerror(rc),
+                                        );
+                                        current_block = 5797318274898257760;
+                                        break;
+                                    }
                                 }
+                                mdb_dbi_close(env, dbi);
                             }
-                            mdb_dbi_close(env, dbi);
                         }
                     }
                 }
             }
-        }
-        match current_block {
-            5797318274898257760 => {}
-            _ => {
-                mdb_txn_abort(txn);
+            match current_block {
+                5797318274898257760 => {}
+                _ => {
+                    mdb_txn_abort(txn);
+                }
             }
         }
+        mdb_env_close(env);
+        if rc != 0 { EXIT_FAILURE } else { EXIT_SUCCESS }
     }
-    mdb_env_close(env);
-    if rc != 0 { EXIT_FAILURE } else { EXIT_SUCCESS }
-}}
+}
 pub fn main() {
     let mut args: Vec<*mut std::ffi::c_char> = Vec::new();
     for arg in ::std::env::args() {
@@ -1117,77 +1173,79 @@ pub fn main() {
         ) as i32)
     }
 }
-unsafe extern "C" fn run_static_initializers() { unsafe {
-    dbflags = [
-        {
-            
-            flagbit {
-                bit: MDB_REVERSEKEY,
-                name: b"reversekey\0" as *const u8 as *const std::ffi::c_char
-                    as *mut std::ffi::c_char,
-                len: (::core::mem::size_of::<[std::ffi::c_char; 11]>() as std::ffi::c_ulong)
-                    .wrapping_sub(1 as std::ffi::c_ulong) as std::ffi::c_int,
-            }
-        },
-        {
-            
-            flagbit {
-                bit: MDB_DUPSORT,
-                name: b"dupsort\0" as *const u8 as *const std::ffi::c_char as *mut std::ffi::c_char,
-                len: (::core::mem::size_of::<[std::ffi::c_char; 8]>() as std::ffi::c_ulong)
-                    .wrapping_sub(1 as std::ffi::c_ulong) as std::ffi::c_int,
-            }
-        },
-        {
-            
-            flagbit {
-                bit: MDB_INTEGERKEY,
-                name: b"integerkey\0" as *const u8 as *const std::ffi::c_char
-                    as *mut std::ffi::c_char,
-                len: (::core::mem::size_of::<[std::ffi::c_char; 11]>() as std::ffi::c_ulong)
-                    .wrapping_sub(1 as std::ffi::c_ulong) as std::ffi::c_int,
-            }
-        },
-        {
-            
-            flagbit {
-                bit: MDB_DUPFIXED,
-                name: b"dupfixed\0" as *const u8 as *const std::ffi::c_char
-                    as *mut std::ffi::c_char,
-                len: (::core::mem::size_of::<[std::ffi::c_char; 9]>() as std::ffi::c_ulong)
-                    .wrapping_sub(1 as std::ffi::c_ulong) as std::ffi::c_int,
-            }
-        },
-        {
-            
-            flagbit {
-                bit: MDB_INTEGERDUP,
-                name: b"integerdup\0" as *const u8 as *const std::ffi::c_char
-                    as *mut std::ffi::c_char,
-                len: (::core::mem::size_of::<[std::ffi::c_char; 11]>() as std::ffi::c_ulong)
-                    .wrapping_sub(1 as std::ffi::c_ulong) as std::ffi::c_int,
-            }
-        },
-        {
-            
-            flagbit {
-                bit: MDB_REVERSEDUP,
-                name: b"reversedup\0" as *const u8 as *const std::ffi::c_char
-                    as *mut std::ffi::c_char,
-                len: (::core::mem::size_of::<[std::ffi::c_char; 11]>() as std::ffi::c_ulong)
-                    .wrapping_sub(1 as std::ffi::c_ulong) as std::ffi::c_int,
-            }
-        },
-        {
-            
-            flagbit {
-                bit: 0 as std::ffi::c_int,
-                name: std::ptr::null_mut::<std::ffi::c_char>(),
-                len: 0 as std::ffi::c_int,
-            }
-        },
-    ];
-}}
+unsafe extern "C" fn run_static_initializers() {
+    unsafe {
+        dbflags = [
+            {
+                flagbit {
+                    bit: MDB_REVERSEKEY,
+                    name: b"reversekey\0" as *const u8 as *const std::ffi::c_char
+                        as *mut std::ffi::c_char,
+                    len: (::core::mem::size_of::<[std::ffi::c_char; 11]>() as std::ffi::c_ulong)
+                        .wrapping_sub(1 as std::ffi::c_ulong)
+                        as std::ffi::c_int,
+                }
+            },
+            {
+                flagbit {
+                    bit: MDB_DUPSORT,
+                    name: b"dupsort\0" as *const u8 as *const std::ffi::c_char
+                        as *mut std::ffi::c_char,
+                    len: (::core::mem::size_of::<[std::ffi::c_char; 8]>() as std::ffi::c_ulong)
+                        .wrapping_sub(1 as std::ffi::c_ulong)
+                        as std::ffi::c_int,
+                }
+            },
+            {
+                flagbit {
+                    bit: MDB_INTEGERKEY,
+                    name: b"integerkey\0" as *const u8 as *const std::ffi::c_char
+                        as *mut std::ffi::c_char,
+                    len: (::core::mem::size_of::<[std::ffi::c_char; 11]>() as std::ffi::c_ulong)
+                        .wrapping_sub(1 as std::ffi::c_ulong)
+                        as std::ffi::c_int,
+                }
+            },
+            {
+                flagbit {
+                    bit: MDB_DUPFIXED,
+                    name: b"dupfixed\0" as *const u8 as *const std::ffi::c_char
+                        as *mut std::ffi::c_char,
+                    len: (::core::mem::size_of::<[std::ffi::c_char; 9]>() as std::ffi::c_ulong)
+                        .wrapping_sub(1 as std::ffi::c_ulong)
+                        as std::ffi::c_int,
+                }
+            },
+            {
+                flagbit {
+                    bit: MDB_INTEGERDUP,
+                    name: b"integerdup\0" as *const u8 as *const std::ffi::c_char
+                        as *mut std::ffi::c_char,
+                    len: (::core::mem::size_of::<[std::ffi::c_char; 11]>() as std::ffi::c_ulong)
+                        .wrapping_sub(1 as std::ffi::c_ulong)
+                        as std::ffi::c_int,
+                }
+            },
+            {
+                flagbit {
+                    bit: MDB_REVERSEDUP,
+                    name: b"reversedup\0" as *const u8 as *const std::ffi::c_char
+                        as *mut std::ffi::c_char,
+                    len: (::core::mem::size_of::<[std::ffi::c_char; 11]>() as std::ffi::c_ulong)
+                        .wrapping_sub(1 as std::ffi::c_ulong)
+                        as std::ffi::c_int,
+                }
+            },
+            {
+                flagbit {
+                    bit: 0 as std::ffi::c_int,
+                    name: std::ptr::null_mut::<std::ffi::c_char>(),
+                    len: 0 as std::ffi::c_int,
+                }
+            },
+        ];
+    }
+}
 #[used]
 #[cfg_attr(target_os = "linux", unsafe(link_section = ".init_array"))]
 #[cfg_attr(target_os = "windows", unsafe(link_section = ".CRT$XIB"))]
