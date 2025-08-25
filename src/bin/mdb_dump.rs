@@ -178,9 +178,9 @@ pub struct flagbit {
     pub name: *mut std::ffi::c_char,
 }
 #[inline]
-unsafe extern "C" fn putchar(mut __c: std::ffi::c_int) -> std::ffi::c_int {
+unsafe extern "C" fn putchar(mut __c: std::ffi::c_int) -> std::ffi::c_int { unsafe {
     return putc(__c, get_stdout());
-}
+}}
 pub const EXIT_FAILURE: std::ffi::c_int = 1 as std::ffi::c_int;
 pub const EXIT_SUCCESS: std::ffi::c_int = 0 as std::ffi::c_int;
 pub const MDB_NOSUBDIR: std::ffi::c_int = 0x4000 as std::ffi::c_int;
@@ -251,23 +251,23 @@ pub static mut dbflags: [flagbit; 7] = [
     },
 ];
 static mut gotsig: sig_atomic_t = 0;
-unsafe extern "C" fn dumpsig(mut sig: std::ffi::c_int) {
+unsafe extern "C" fn dumpsig(mut sig: std::ffi::c_int) { unsafe {
     ::core::ptr::write_volatile(&raw mut gotsig, 1 as std::ffi::c_int as sig_atomic_t);
-}
+}}
 static mut hexc: [std::ffi::c_char; 17] =
     unsafe { *::core::mem::transmute::<&[u8; 17], &[std::ffi::c_char; 17]>(b"0123456789abcdef\0") };
-unsafe extern "C" fn hex(mut c: std::ffi::c_uchar) {
+unsafe extern "C" fn hex(mut c: std::ffi::c_uchar) { unsafe {
     putchar(hexc[(c as std::ffi::c_int >> 4 as std::ffi::c_int) as usize] as std::ffi::c_int);
     putchar(hexc[(c as std::ffi::c_int & 0xf as std::ffi::c_int) as usize] as std::ffi::c_int);
-}
-unsafe extern "C" fn text(mut v: *mut MDB_val) {
+}}
+unsafe extern "C" fn text(mut v: *mut MDB_val) { unsafe {
     let mut c: *mut std::ffi::c_uchar = 0 as *mut std::ffi::c_uchar;
     let mut end: *mut std::ffi::c_uchar = 0 as *mut std::ffi::c_uchar;
     putchar(' ' as i32);
     c = (*v).mv_data as *mut std::ffi::c_uchar;
     end = c.offset((*v).mv_size as isize);
     while c < end {
-        let myc = ((*c as std::ffi::c_int as isize) as u8);
+        let myc = (*c as std::ffi::c_int as isize) as u8;
         if myc.is_ascii_graphic() || myc == b' ' {
             if *c as std::ffi::c_int == '\\' as i32 {
                 putchar('\\' as i32);
@@ -281,8 +281,8 @@ unsafe extern "C" fn text(mut v: *mut MDB_val) {
         c;
     }
     putchar('\n' as i32);
-}
-unsafe extern "C" fn byte(mut v: *mut MDB_val) {
+}}
+unsafe extern "C" fn byte(mut v: *mut MDB_val) { unsafe {
     let mut c: *mut std::ffi::c_uchar = 0 as *mut std::ffi::c_uchar;
     let mut end: *mut std::ffi::c_uchar = 0 as *mut std::ffi::c_uchar;
     putchar(' ' as i32);
@@ -294,12 +294,12 @@ unsafe extern "C" fn byte(mut v: *mut MDB_val) {
         hex(*fresh0);
     }
     putchar('\n' as i32);
-}
+}}
 unsafe extern "C" fn dumpit(
     mut txn: *mut MDB_txn,
     mut dbi: MDB_dbi,
     mut name: *mut std::ffi::c_char,
-) -> std::ffi::c_int {
+) -> std::ffi::c_int { unsafe {
     let mut mc: *mut MDB_cursor = 0 as *mut MDB_cursor;
     let mut ms: MDB_stat = MDB_stat {
         ms_psize: 0,
@@ -390,8 +390,8 @@ unsafe extern "C" fn dumpit(
         rc = MDB_SUCCESS;
     }
     return rc;
-}
-unsafe extern "C" fn usage(mut prog: *mut std::ffi::c_char) {
+}}
+unsafe extern "C" fn usage(mut prog: *mut std::ffi::c_char) { unsafe {
     fprintf(
         get_stderr(),
         b"usage: %s [-V] [-f output] [-l] [-n] [-p] [-v] [-a|-s subdb] dbpath\n\0" as *const u8
@@ -399,11 +399,11 @@ unsafe extern "C" fn usage(mut prog: *mut std::ffi::c_char) {
         prog,
     );
     exit(EXIT_FAILURE);
-}
+}}
 unsafe fn main_0(
     mut argc: std::ffi::c_int,
     mut argv: *mut *mut std::ffi::c_char,
-) -> std::ffi::c_int {
+) -> std::ffi::c_int { unsafe {
     let mut current_block: u64;
     let mut i: std::ffi::c_int = 0;
     let mut rc: std::ffi::c_int = 0;
@@ -637,7 +637,7 @@ unsafe fn main_0(
     }
     mdb_env_close(env);
     return if rc != 0 { EXIT_FAILURE } else { EXIT_SUCCESS };
-}
+}}
 pub fn main() {
     let mut args: Vec<*mut std::ffi::c_char> = Vec::new();
     for arg in ::std::env::args() {

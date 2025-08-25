@@ -89,7 +89,7 @@ unsafe extern "C" fn sighandle(mut sig: std::ffi::c_int) {}
 unsafe fn main_0(
     mut argc: std::ffi::c_int,
     mut argv: *mut *mut std::ffi::c_char,
-) -> std::ffi::c_int {
+) -> std::ffi::c_int { unsafe {
     let mut rc: std::ffi::c_int = 0;
     let mut env: *mut MDB_env = 0 as *mut MDB_env;
     let mut progname: *const std::ffi::c_char = *argv.offset(0 as std::ffi::c_int as isize);
@@ -188,7 +188,7 @@ unsafe fn main_0(
     }
     mdb_env_close(env);
     return if rc != 0 { EXIT_FAILURE } else { EXIT_SUCCESS };
-}
+}}
 pub fn main() {
     let mut args: Vec<*mut std::ffi::c_char> = Vec::new();
     for arg in ::std::env::args() {

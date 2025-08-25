@@ -94,21 +94,21 @@ pub const SIGTERM: std::ffi::c_int = 15 as std::ffi::c_int;
 pub const SIGHUP: std::ffi::c_int = 1 as std::ffi::c_int;
 pub const SIGPIPE: std::ffi::c_int = 13 as std::ffi::c_int;
 static mut gotsig: sig_atomic_t = 0;
-unsafe extern "C" fn dumpsig(mut sig: std::ffi::c_int) {
+unsafe extern "C" fn dumpsig(mut sig: std::ffi::c_int) { unsafe {
     ::core::ptr::write_volatile(&raw mut gotsig, 1 as std::ffi::c_int as sig_atomic_t);
-}
-unsafe extern "C" fn usage(mut prog: *mut std::ffi::c_char) {
+}}
+unsafe extern "C" fn usage(mut prog: *mut std::ffi::c_char) { unsafe {
     fprintf(
         get_stderr(),
         b"usage: %s [-V] [-n] [-d] [-s subdb] dbpath\n\0" as *const u8 as *const std::ffi::c_char,
         prog,
     );
     exit(EXIT_FAILURE);
-}
+}}
 unsafe fn main_0(
     mut argc: std::ffi::c_int,
     mut argv: *mut *mut std::ffi::c_char,
-) -> std::ffi::c_int {
+) -> std::ffi::c_int { unsafe {
     let mut i: std::ffi::c_int = 0;
     let mut rc: std::ffi::c_int = 0;
     let mut env: *mut MDB_env = 0 as *mut MDB_env;
@@ -229,7 +229,7 @@ unsafe fn main_0(
     }
     mdb_env_close(env);
     return if rc != 0 { EXIT_FAILURE } else { EXIT_SUCCESS };
-}
+}}
 pub fn main() {
     let mut args: Vec<*mut std::ffi::c_char> = Vec::new();
     for arg in ::std::env::args() {

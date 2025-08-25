@@ -204,13 +204,13 @@ pub struct flagbit {
 pub const EXIT_FAILURE: std::ffi::c_int = 1 as std::ffi::c_int;
 pub const EXIT_SUCCESS: std::ffi::c_int = 0 as std::ffi::c_int;
 #[inline]
-unsafe extern "C" fn atoi(mut __nptr: *const std::ffi::c_char) -> std::ffi::c_int {
+unsafe extern "C" fn atoi(mut __nptr: *const std::ffi::c_char) -> std::ffi::c_int { unsafe {
     return strtol(
         __nptr,
         0 as *mut std::ffi::c_void as *mut *mut std::ffi::c_char,
         10 as std::ffi::c_int,
     ) as std::ffi::c_int;
-}
+}}
 pub const MDB_FIXEDMAP: std::ffi::c_int = 0x1 as std::ffi::c_int;
 pub const MDB_NOSUBDIR: std::ffi::c_int = 0x4000 as std::ffi::c_int;
 pub const MDB_NOSYNC: std::ffi::c_int = 0x10000 as std::ffi::c_int;
@@ -252,7 +252,7 @@ static mut k0buf: MDB_val =
 #[unsafe(no_mangle)]
 pub static mut dbflags: [flagbit; 7] =
     [flagbit { bit: 0, name: 0 as *mut std::ffi::c_char, len: 0 }; 7];
-unsafe extern "C" fn readhdr() {
+unsafe extern "C" fn readhdr() { unsafe {
     let mut ptr: *mut std::ffi::c_char = 0 as *mut std::ffi::c_char;
     flags = 0 as std::ffi::c_int;
     while !(fgets(
@@ -542,16 +542,16 @@ unsafe extern "C" fn readhdr() {
             }
         }
     }
-}
-unsafe extern "C" fn badend() {
+}}
+unsafe extern "C" fn badend() { unsafe {
     fprintf(
         get_stderr(),
         b"%s: line %zu: unexpected end of input\n\0" as *const u8 as *const std::ffi::c_char,
         prog,
         lineno,
     );
-}
-unsafe extern "C" fn unhex(mut c2: *mut std::ffi::c_uchar) -> std::ffi::c_int {
+}}
+unsafe extern "C" fn unhex(mut c2: *mut std::ffi::c_uchar) -> std::ffi::c_int { unsafe {
     let mut x: std::ffi::c_int = 0;
     let mut c: std::ffi::c_int = 0;
     let fresh0 = c2;
@@ -567,8 +567,8 @@ unsafe extern "C" fn unhex(mut c2: *mut std::ffi::c_uchar) -> std::ffi::c_int {
     }
     c |= x;
     return c;
-}
-unsafe extern "C" fn readline(mut out: *mut MDB_val, mut buf: *mut MDB_val) -> std::ffi::c_int {
+}}
+unsafe extern "C" fn readline(mut out: *mut MDB_val, mut buf: *mut MDB_val) -> std::ffi::c_int { unsafe {
     let mut c1: *mut std::ffi::c_uchar = 0 as *mut std::ffi::c_uchar;
     let mut c2: *mut std::ffi::c_uchar = 0 as *mut std::ffi::c_uchar;
     let mut end: *mut std::ffi::c_uchar = 0 as *mut std::ffi::c_uchar;
@@ -713,8 +713,8 @@ unsafe extern "C" fn readline(mut out: *mut MDB_val, mut buf: *mut MDB_val) -> s
     c2 = (*out).mv_data as *mut std::ffi::c_uchar;
     (*out).mv_size = c1.offset_from(c2) as std::ffi::c_long as size_t;
     return 0 as std::ffi::c_int;
-}
-unsafe extern "C" fn usage() {
+}}
+unsafe extern "C" fn usage() { unsafe {
     fprintf(
         get_stderr(),
         b"usage: %s [-V] [-a] [-f input] [-n] [-s name] [-N] [-T] dbpath\n\0" as *const u8
@@ -722,14 +722,14 @@ unsafe extern "C" fn usage() {
         prog,
     );
     exit(EXIT_FAILURE);
-}
+}}
 unsafe extern "C" fn greater(mut a: *const MDB_val, mut b: *const MDB_val) -> std::ffi::c_int {
     return 1 as std::ffi::c_int;
 }
 unsafe fn main_0(
     mut argc: std::ffi::c_int,
     mut argv: *mut *mut std::ffi::c_char,
-) -> std::ffi::c_int {
+) -> std::ffi::c_int { unsafe {
     let mut current_block: u64;
     let mut i: std::ffi::c_int = 0;
     let mut rc: std::ffi::c_int = 0;
@@ -1101,7 +1101,7 @@ unsafe fn main_0(
     }
     mdb_env_close(env);
     return if rc != 0 { EXIT_FAILURE } else { EXIT_SUCCESS };
-}
+}}
 pub fn main() {
     let mut args: Vec<*mut std::ffi::c_char> = Vec::new();
     for arg in ::std::env::args() {
@@ -1119,7 +1119,7 @@ pub fn main() {
         ) as i32)
     }
 }
-unsafe extern "C" fn run_static_initializers() {
+unsafe extern "C" fn run_static_initializers() { unsafe {
     dbflags = [
         {
             let mut init = flagbit {
@@ -1189,7 +1189,7 @@ unsafe extern "C" fn run_static_initializers() {
             init
         },
     ];
-}
+}}
 #[used]
 #[cfg_attr(target_os = "linux", unsafe(link_section = ".init_array"))]
 #[cfg_attr(target_os = "windows", unsafe(link_section = ".CRT$XIB"))]

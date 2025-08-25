@@ -140,7 +140,7 @@ pub const EXIT_SUCCESS: std::ffi::c_int = 0 as std::ffi::c_int;
 pub const MDB_NOSUBDIR: std::ffi::c_int = 0x4000 as std::ffi::c_int;
 pub const MDB_PREVSNAPSHOT: std::ffi::c_int = 0x2000000 as std::ffi::c_int;
 pub const MDB_SUCCESS: std::ffi::c_int = 0 as std::ffi::c_int;
-unsafe extern "C" fn prstat(mut ms: *mut MDB_stat) {
+unsafe extern "C" fn prstat(mut ms: *mut MDB_stat) { unsafe {
     printf(b"  Tree depth: %u\n\0" as *const u8 as *const std::ffi::c_char, (*ms).ms_depth);
     printf(
         b"  Branch pages: %zu\n\0" as *const u8 as *const std::ffi::c_char,
@@ -152,8 +152,8 @@ unsafe extern "C" fn prstat(mut ms: *mut MDB_stat) {
         (*ms).ms_overflow_pages,
     );
     printf(b"  Entries: %zu\n\0" as *const u8 as *const std::ffi::c_char, (*ms).ms_entries);
-}
-unsafe extern "C" fn usage(mut prog: *mut std::ffi::c_char) {
+}}
+unsafe extern "C" fn usage(mut prog: *mut std::ffi::c_char) { unsafe {
     fprintf(
         get_stderr(),
         b"usage: %s [-V] [-n] [-e] [-r[r]] [-f[f[f]]] [-v] [-a|-s subdb] dbpath\n\0" as *const u8
@@ -161,11 +161,11 @@ unsafe extern "C" fn usage(mut prog: *mut std::ffi::c_char) {
         prog,
     );
     exit(EXIT_FAILURE);
-}
+}}
 unsafe fn main_0(
     mut argc: std::ffi::c_int,
     mut argv: *mut *mut std::ffi::c_char,
-) -> std::ffi::c_int {
+) -> std::ffi::c_int { unsafe {
     let mut current_block: u64;
     let mut i: std::ffi::c_int = 0;
     let mut rc: std::ffi::c_int = 0;
@@ -664,7 +664,7 @@ unsafe fn main_0(
     }
     mdb_env_close(env);
     return if rc != 0 { EXIT_FAILURE } else { EXIT_SUCCESS };
-}
+}}
 pub fn main() {
     let mut args: Vec<*mut std::ffi::c_char> = Vec::new();
     for arg in ::std::env::args() {

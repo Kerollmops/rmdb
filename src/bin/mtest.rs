@@ -111,7 +111,7 @@ pub const MDB_FIRST: MDB_cursor_op = 0;
 unsafe fn main_0(
     mut argc: std::ffi::c_int,
     mut argv: *mut *mut std::ffi::c_char,
-) -> std::ffi::c_int {
+) -> std::ffi::c_int { unsafe {
     let mut i: std::ffi::c_int = 0 as std::ffi::c_int;
     let mut j: std::ffi::c_int = 0 as std::ffi::c_int;
     let mut rc: std::ffi::c_int = 0;
@@ -767,7 +767,7 @@ unsafe fn main_0(
     mdb_dbi_close(env, dbi);
     mdb_env_close(env);
     return 0 as std::ffi::c_int;
-}
+}}
 pub fn main() {
     let mut args: Vec<*mut std::ffi::c_char> = Vec::new();
     for arg in ::std::env::args() {
