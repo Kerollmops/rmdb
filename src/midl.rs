@@ -9,7 +9,6 @@
 )]
 unsafe extern "C" {
     fn realloc(__ptr: *mut std::ffi::c_void, __size: size_t) -> *mut std::ffi::c_void;
-    fn free(__ptr: *mut std::ffi::c_void);
 }
 pub type size_t = usize;
 pub type mdb_size_t = size_t;
@@ -71,7 +70,7 @@ pub unsafe extern "C" fn mdb_midl_alloc(mut num: std::ffi::c_int) -> MDB_IDL {
 pub unsafe extern "C" fn mdb_midl_free(mut ids: MDB_IDL) {
     unsafe {
         if !ids.is_null() {
-            free(ids.offset(-(1 as std::ffi::c_int as isize)) as *mut std::ffi::c_void);
+            libc::free(ids.offset(-(1 as isize)) as *mut std::ffi::c_void);
         }
     }
 }
