@@ -67,7 +67,7 @@ jobs:
 
   clippy:
       name: Ensure clippy is happy
-      runs-on: ubuntu-latest
+      runs-on: macos-latest # We will need to use matrix.rust, here.
       steps:
         - uses: actions/checkout@v2
         - uses: dtolnay/rust-toolchain@nightly
