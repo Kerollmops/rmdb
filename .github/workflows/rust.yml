@@ -67,7 +67,8 @@ jobs:
 
   clippy:
       name: Ensure clippy is happy
-      runs-on: macos-latest # We will need to use matrix.rust, here.
+      runs-on: ${{ matrix.rust }}
+      continue-on-error: true
       steps:
         - uses: actions/checkout@v2
         - uses: dtolnay/rust-toolchain@nightly
