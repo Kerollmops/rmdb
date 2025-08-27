@@ -111,7 +111,7 @@ unsafe extern "C" {
     fn pthread_self() -> pthread_t;
     fn pthread_setspecific(_: pthread_key_t, _: *const std::ffi::c_void) -> std::ffi::c_int;
     fn pthread_sigmask(_: std::ffi::c_int, _: *const sigset_t, _: *mut sigset_t)
-        -> std::ffi::c_int;
+    -> std::ffi::c_int;
     fn sigwait(_: *const sigset_t, _: *mut std::ffi::c_int) -> std::ffi::c_int;
     fn ftok(_: *const std::ffi::c_char, _: std::ffi::c_int) -> key_t;
     fn semctl(
@@ -14140,11 +14140,7 @@ unsafe extern "C" fn mdb_env_copyfd1(
             pthread_cond_destroy(&mut my.mc_cond);
         }
         pthread_mutex_destroy(&mut my.mc_mutex);
-        if rc != 0 {
-            rc
-        } else {
-            my.mc_error
-        }
+        if rc != 0 { rc } else { my.mc_error }
     }
 }
 #[cold]
@@ -14415,11 +14411,7 @@ pub unsafe extern "C" fn mdb_env_set_userctx(
 #[cold]
 pub unsafe extern "C" fn mdb_env_get_userctx(mut env: *mut MDB_env) -> *mut std::ffi::c_void {
     unsafe {
-        if !env.is_null() {
-            (*env).me_userctx
-        } else {
-            std::ptr::null_mut::<std::ffi::c_void>()
-        }
+        if !env.is_null() { (*env).me_userctx } else { std::ptr::null_mut::<std::ffi::c_void>() }
     }
 }
 #[unsafe(no_mangle)]
