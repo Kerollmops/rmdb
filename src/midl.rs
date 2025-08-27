@@ -8,11 +8,6 @@
     unused_mut
 )]
 unsafe extern "C" {
-    fn memcpy(
-        __dest: *mut std::ffi::c_void,
-        __src: *const std::ffi::c_void,
-        __n: std::ffi::c_ulong,
-    ) -> *mut std::ffi::c_void;
     fn malloc(__size: std::ffi::c_ulong) -> *mut std::ffi::c_void;
     fn realloc(__ptr: *mut std::ffi::c_void, __size: size_t) -> *mut std::ffi::c_void;
     fn free(__ptr: *mut std::ffi::c_void);
@@ -24,6 +19,7 @@ use crate::{MDB_ID, MDB_ID2, MDB_ID2L, MDB_IDL};
 
 pub const MDB_IDL_LOGN: std::ffi::c_int = 16 as std::ffi::c_int;
 pub const ENOMEM: std::ffi::c_int = 12 as std::ffi::c_int;
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mdb_midl_search(mut ids: MDB_IDL, mut id: MDB_ID) -> std::ffi::c_uint {
     unsafe {
@@ -201,15 +197,15 @@ pub unsafe extern "C" fn mdb_midl_append_list(
             }
             ids = *idp;
         }
-        memcpy(
-            &mut *ids.offset(
-                (*ids.offset(0 as std::ffi::c_int as isize)).wrapping_add(1 as MDB_ID) as isize
-            ) as *mut MDB_ID as *mut std::ffi::c_void,
-            &mut *app.offset(1 as std::ffi::c_int as isize) as *mut MDB_ID
-                as *const std::ffi::c_void,
-            (*app.offset(0_isize)).wrapping_mul(::core::mem::size_of::<MDB_ID>() as _)
-                as std::ffi::c_ulong,
+        std::ptr::copy_nonoverlapping(
+            // &app[1]
+            &mut *app.offset(1),
+            // &ids[ids[0]+1]
+            &mut *ids.offset((ids.read() + 1) as isize),
+            // app[0] * sizeof(MDB_ID)
+            app.read() as usize,
         );
+
         let fresh5 = &mut (*ids.offset(0 as std::ffi::c_int as isize));
         *fresh5 = (*fresh5 as std::ffi::c_ulong)
             .wrapping_add(*app.offset(0 as std::ffi::c_int as isize) as std::ffi::c_ulong)
