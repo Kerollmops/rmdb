@@ -94,141 +94,156 @@ pub const SIGTERM: std::ffi::c_int = 15 as std::ffi::c_int;
 pub const SIGHUP: std::ffi::c_int = 1 as std::ffi::c_int;
 pub const SIGPIPE: std::ffi::c_int = 13 as std::ffi::c_int;
 static mut gotsig: sig_atomic_t = 0;
-unsafe extern "C" fn dumpsig(mut sig: std::ffi::c_int) {
-    ::core::ptr::write_volatile(&raw mut gotsig, 1 as std::ffi::c_int as sig_atomic_t);
+unsafe extern "C" fn dumpsig(mut _sig: std::ffi::c_int) {
+    unsafe {
+        ::core::ptr::write_volatile(&raw mut gotsig, 1 as std::ffi::c_int as sig_atomic_t);
+    }
 }
 unsafe extern "C" fn usage(mut prog: *mut std::ffi::c_char) {
-    fprintf(
-        get_stderr(),
-        b"usage: %s [-V] [-n] [-d] [-s subdb] dbpath\n\0" as *const u8 as *const std::ffi::c_char,
-        prog,
-    );
-    exit(EXIT_FAILURE);
+    unsafe {
+        fprintf(
+            get_stderr(),
+            b"usage: %s [-V] [-n] [-d] [-s subdb] dbpath\n\0" as *const u8
+                as *const std::ffi::c_char,
+            prog,
+        );
+        exit(EXIT_FAILURE);
+    }
 }
 unsafe fn main_0(
     mut argc: std::ffi::c_int,
     mut argv: *mut *mut std::ffi::c_char,
 ) -> std::ffi::c_int {
-    let mut i: std::ffi::c_int = 0;
-    let mut rc: std::ffi::c_int = 0;
-    let mut env: *mut MDB_env = 0 as *mut MDB_env;
-    let mut txn: *mut MDB_txn = 0 as *mut MDB_txn;
-    let mut dbi: MDB_dbi = 0;
-    let mut prog: *mut std::ffi::c_char = *argv.offset(0 as std::ffi::c_int as isize);
-    let mut envname: *mut std::ffi::c_char = 0 as *mut std::ffi::c_char;
-    let mut subname: *mut std::ffi::c_char = 0 as *mut std::ffi::c_char;
-    let mut envflags: std::ffi::c_int = 0 as std::ffi::c_int;
-    let mut delete: std::ffi::c_int = 0 as std::ffi::c_int;
-    if argc < 2 as std::ffi::c_int {
-        usage(prog);
-    }
-    loop {
-        i = getopt(
-            argc,
-            argv as *const *mut std::ffi::c_char,
-            b"dns:V\0" as *const u8 as *const std::ffi::c_char,
-        );
-        if !(i != -(1 as std::ffi::c_int)) {
-            break;
+    unsafe {
+        let mut i: std::ffi::c_int = 0;
+        let mut rc: std::ffi::c_int = 0;
+        let mut env: *mut MDB_env = std::ptr::null_mut::<MDB_env>();
+        let mut txn: *mut MDB_txn = std::ptr::null_mut::<MDB_txn>();
+        let mut dbi: MDB_dbi = 0;
+        let mut prog: *mut std::ffi::c_char = *argv.offset(0 as std::ffi::c_int as isize);
+        let mut envname: *mut std::ffi::c_char = std::ptr::null_mut::<std::ffi::c_char>();
+        let mut subname: *mut std::ffi::c_char = std::ptr::null_mut::<std::ffi::c_char>();
+        let mut envflags: std::ffi::c_int = 0 as std::ffi::c_int;
+        let mut delete: std::ffi::c_int = 0 as std::ffi::c_int;
+        if argc < 2 as std::ffi::c_int {
+            usage(prog);
         }
-        match i {
-            86 => {
-                printf(
-                    b"%s\n\0" as *const u8 as *const std::ffi::c_char,
-                    b"LMDB 0.9.70: (December 19, 2015)\0" as *const u8 as *const std::ffi::c_char,
-                );
-                exit(0 as std::ffi::c_int);
+        loop {
+            i = getopt(
+                argc,
+                argv as *const *mut std::ffi::c_char,
+                b"dns:V\0" as *const u8 as *const std::ffi::c_char,
+            );
+            if i == -(1 as std::ffi::c_int) {
+                break;
             }
-            100 => {
-                delete = 1 as std::ffi::c_int;
-            }
-            110 => {
-                envflags |= MDB_NOSUBDIR;
-            }
-            115 => {
-                subname = optarg;
-            }
-            _ => {
-                usage(prog);
+            match i {
+                86 => {
+                    printf(
+                        b"%s\n\0" as *const u8 as *const std::ffi::c_char,
+                        b"LMDB 0.9.70: (December 19, 2015)\0" as *const u8
+                            as *const std::ffi::c_char,
+                    );
+                    exit(0 as std::ffi::c_int);
+                }
+                100 => {
+                    delete = 1 as std::ffi::c_int;
+                }
+                110 => {
+                    envflags |= MDB_NOSUBDIR;
+                }
+                115 => {
+                    subname = optarg;
+                }
+                _ => {
+                    usage(prog);
+                }
             }
         }
-    }
-    if optind != argc - 1 as std::ffi::c_int {
-        usage(prog);
-    }
-    signal(SIGPIPE, Some(dumpsig as unsafe extern "C" fn(std::ffi::c_int) -> ()));
-    signal(SIGHUP, Some(dumpsig as unsafe extern "C" fn(std::ffi::c_int) -> ()));
-    signal(SIGINT, Some(dumpsig as unsafe extern "C" fn(std::ffi::c_int) -> ()));
-    signal(SIGTERM, Some(dumpsig as unsafe extern "C" fn(std::ffi::c_int) -> ()));
-    envname = *argv.offset(optind as isize);
-    rc = mdb_env_create(&mut env);
-    if rc != 0 {
-        fprintf(
-            get_stderr(),
-            b"mdb_env_create failed, error %d %s\n\0" as *const u8 as *const std::ffi::c_char,
-            rc,
-            mdb_strerror(rc),
-        );
-        return EXIT_FAILURE;
-    }
-    mdb_env_set_maxdbs(env, 2 as MDB_dbi);
-    rc = mdb_env_open(env, envname, envflags as std::ffi::c_uint, 0o664 as mdb_mode_t);
-    if rc != 0 {
-        fprintf(
-            get_stderr(),
-            b"mdb_env_open failed, error %d %s\n\0" as *const u8 as *const std::ffi::c_char,
-            rc,
-            mdb_strerror(rc),
-        );
-    } else {
-        rc = mdb_txn_begin(env, 0 as *mut MDB_txn, 0 as std::ffi::c_uint, &mut txn);
+        if optind != argc - 1 as std::ffi::c_int {
+            usage(prog);
+        }
+        signal(SIGPIPE, Some(dumpsig as unsafe extern "C" fn(std::ffi::c_int) -> ()));
+        signal(SIGHUP, Some(dumpsig as unsafe extern "C" fn(std::ffi::c_int) -> ()));
+        signal(SIGINT, Some(dumpsig as unsafe extern "C" fn(std::ffi::c_int) -> ()));
+        signal(SIGTERM, Some(dumpsig as unsafe extern "C" fn(std::ffi::c_int) -> ()));
+        envname = *argv.offset(optind as isize);
+        rc = mdb_env_create(&mut env);
         if rc != 0 {
             fprintf(
                 get_stderr(),
-                b"mdb_txn_begin failed, error %d %s\n\0" as *const u8 as *const std::ffi::c_char,
+                b"mdb_env_create failed, error %d %s\n\0" as *const u8 as *const std::ffi::c_char,
+                rc,
+                mdb_strerror(rc),
+            );
+            return EXIT_FAILURE;
+        }
+        mdb_env_set_maxdbs(env, 2 as MDB_dbi);
+        rc = mdb_env_open(env, envname, envflags as std::ffi::c_uint, 0o664 as mdb_mode_t);
+        if rc != 0 {
+            fprintf(
+                get_stderr(),
+                b"mdb_env_open failed, error %d %s\n\0" as *const u8 as *const std::ffi::c_char,
                 rc,
                 mdb_strerror(rc),
             );
         } else {
-            rc = mdb_dbi_open(txn, subname, 0 as std::ffi::c_uint, &mut dbi);
+            rc = mdb_txn_begin(
+                env,
+                std::ptr::null_mut::<MDB_txn>(),
+                0 as std::ffi::c_uint,
+                &mut txn,
+            );
             if rc != 0 {
                 fprintf(
                     get_stderr(),
-                    b"mdb_open failed, error %d %s\n\0" as *const u8 as *const std::ffi::c_char,
+                    b"mdb_txn_begin failed, error %d %s\n\0" as *const u8
+                        as *const std::ffi::c_char,
                     rc,
                     mdb_strerror(rc),
                 );
             } else {
-                rc = mdb_drop(txn, dbi, delete);
+                rc = mdb_dbi_open(txn, subname, 0 as std::ffi::c_uint, &mut dbi);
                 if rc != 0 {
                     fprintf(
                         get_stderr(),
-                        b"mdb_drop failed, error %d %s\n\0" as *const u8 as *const std::ffi::c_char,
+                        b"mdb_open failed, error %d %s\n\0" as *const u8 as *const std::ffi::c_char,
                         rc,
                         mdb_strerror(rc),
                     );
                 } else {
-                    rc = mdb_txn_commit(txn);
+                    rc = mdb_drop(txn, dbi, delete);
                     if rc != 0 {
                         fprintf(
                             get_stderr(),
-                            b"mdb_txn_commit failed, error %d %s\n\0" as *const u8
+                            b"mdb_drop failed, error %d %s\n\0" as *const u8
                                 as *const std::ffi::c_char,
                             rc,
                             mdb_strerror(rc),
                         );
                     } else {
-                        txn = 0 as *mut MDB_txn;
+                        rc = mdb_txn_commit(txn);
+                        if rc != 0 {
+                            fprintf(
+                                get_stderr(),
+                                b"mdb_txn_commit failed, error %d %s\n\0" as *const u8
+                                    as *const std::ffi::c_char,
+                                rc,
+                                mdb_strerror(rc),
+                            );
+                        } else {
+                            txn = std::ptr::null_mut::<MDB_txn>();
+                        }
                     }
                 }
-            }
-            if !txn.is_null() {
-                mdb_txn_abort(txn);
+                if !txn.is_null() {
+                    mdb_txn_abort(txn);
+                }
             }
         }
+        mdb_env_close(env);
+        if rc != 0 { EXIT_FAILURE } else { EXIT_SUCCESS }
     }
-    mdb_env_close(env);
-    return if rc != 0 { EXIT_FAILURE } else { EXIT_SUCCESS };
 }
 pub fn main() {
     let mut args: Vec<*mut std::ffi::c_char> = Vec::new();

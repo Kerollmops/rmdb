@@ -1,7 +1,6 @@
 name: Rust CI
 
 on:
-  push:
   pull_request:
     types: [opened, synchronize, reopened, labeled, unlabeled]
     branches:
@@ -23,8 +22,8 @@ jobs:
           - nightly
 
     steps:
-      - uses: actions/checkout@v1
-      - uses: dtolnay/rust-toolchain@1.85
+      - uses: actions/checkout@v2
+      - uses: dtolnay/rust-toolchain@nightly
       - uses: actions-rs/cargo@v1
         with:
           toolchain: ${{ matrix.rust }}
@@ -50,8 +49,8 @@ jobs:
           - nightly
 
     steps:
-      - uses: actions/checkout@v1
-      - uses: dtolnay/rust-toolchain@1.85
+      - uses: actions/checkout@v2
+      - uses: dtolnay/rust-toolchain@nightly
       - uses: actions-rs/cargo@v1
         with:
           toolchain: ${{ matrix.rust }}
@@ -65,3 +64,32 @@ jobs:
           toolchain: ${{ matrix.rust }}
           command: run
           args: --bin ${{ matrix.bins }}
+
+  clippy:
+      name: Ensure clippy is happy
+      runs-on: ${{ matrix.rust }}
+      continue-on-error: true
+      steps:
+        - uses: actions/checkout@v2
+        - uses: dtolnay/rust-toolchain@nightly
+          with:
+            components: clippy
+        - uses: actions-rs/cargo@v1
+          with:
+            toolchain: ${{ matrix.rust }}
+            command: clippy
+            args: --all-targets -- --deny warnings
+
+  fmt:
+      name: Ensure the project is formatted
+      runs-on: macos-latest # We will need to use matrix.rust, here.
+      steps:
+        - uses: actions/checkout@v2
+        - uses: dtolnay/rust-toolchain@nightly
+          with:
+            components: rustfmt
+        - uses: actions-rs/cargo@v1
+          with:
+            toolchain: ${{ matrix.rust }}
+            command: fmt
+            args: --check

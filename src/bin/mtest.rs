@@ -109,664 +109,682 @@ pub const MDB_GET_BOTH: MDB_cursor_op = 2;
 pub const MDB_FIRST_DUP: MDB_cursor_op = 1;
 pub const MDB_FIRST: MDB_cursor_op = 0;
 unsafe fn main_0(
-    mut argc: std::ffi::c_int,
-    mut argv: *mut *mut std::ffi::c_char,
+    mut _argc: std::ffi::c_int,
+    mut _argv: *mut *mut std::ffi::c_char,
 ) -> std::ffi::c_int {
-    let mut i: std::ffi::c_int = 0 as std::ffi::c_int;
-    let mut j: std::ffi::c_int = 0 as std::ffi::c_int;
-    let mut rc: std::ffi::c_int = 0;
-    let mut env: *mut MDB_env = 0 as *mut MDB_env;
-    let mut dbi: MDB_dbi = 0;
-    let mut key: MDB_val = MDB_val { mv_size: 0, mv_data: 0 as *mut std::ffi::c_void };
-    let mut data: MDB_val = MDB_val { mv_size: 0, mv_data: 0 as *mut std::ffi::c_void };
-    let mut txn: *mut MDB_txn = 0 as *mut MDB_txn;
-    let mut mst: MDB_stat = MDB_stat {
-        ms_psize: 0,
-        ms_depth: 0,
-        ms_branch_pages: 0,
-        ms_leaf_pages: 0,
-        ms_overflow_pages: 0,
-        ms_entries: 0,
-    };
-    let mut cursor: *mut MDB_cursor = 0 as *mut MDB_cursor;
-    let mut cur2: *mut MDB_cursor = 0 as *mut MDB_cursor;
-    let mut op: MDB_cursor_op = MDB_FIRST;
-    let mut count: std::ffi::c_int = 0;
-    let mut values: *mut std::ffi::c_int = 0 as *mut std::ffi::c_int;
-    let mut sval: [std::ffi::c_char; 32] =
-        *::core::mem::transmute::<&[u8; 32], &mut [std::ffi::c_char; 32]>(
-            b"\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
-        );
-    srand(time(0 as *mut time_t) as std::ffi::c_uint);
-    count = rand() % 384 as std::ffi::c_int + 64 as std::ffi::c_int;
-    values =
-        malloc((count as size_t).wrapping_mul(::core::mem::size_of::<std::ffi::c_int>() as size_t))
-            as *mut std::ffi::c_int;
-    i = 0 as std::ffi::c_int;
-    while i < count {
-        *values.offset(i as isize) = rand() % 1024 as std::ffi::c_int;
-        i += 1;
-        i;
-    }
-    rc = mdb_env_create(&mut env);
-    if rc == 0 as std::ffi::c_int {
-    } else {
-        fprintf(
-            get_stderr(),
-            b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
-            b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
-            47 as std::ffi::c_int,
-            b"mdb_env_create(&env)\0" as *const u8 as *const std::ffi::c_char,
-            mdb_strerror(rc),
-        );
-        abort();
-    };
-    rc = mdb_env_set_maxreaders(env, 1 as std::ffi::c_uint);
-    if rc == 0 as std::ffi::c_int {
-    } else {
-        fprintf(
-            get_stderr(),
-            b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
-            b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
-            48 as std::ffi::c_int,
-            b"mdb_env_set_maxreaders(env, 1)\0" as *const u8 as *const std::ffi::c_char,
-            mdb_strerror(rc),
-        );
-        abort();
-    };
-    rc = mdb_env_set_mapsize(env, 10485760 as mdb_size_t);
-    if rc == 0 as std::ffi::c_int {
-    } else {
-        fprintf(
-            get_stderr(),
-            b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
-            b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
-            49 as std::ffi::c_int,
-            b"mdb_env_set_mapsize(env, 10485760)\0" as *const u8 as *const std::ffi::c_char,
-            mdb_strerror(rc),
-        );
-        abort();
-    };
-    rc = mdb_env_open(
-        env,
-        b"./testdb\0" as *const u8 as *const std::ffi::c_char,
-        0x1 as std::ffi::c_uint,
-        0o664 as mdb_mode_t,
-    );
-    if rc == 0 as std::ffi::c_int {
-    } else {
-        fprintf(
-            get_stderr(),
-            b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
-            b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
-            50 as std::ffi::c_int,
-            b"mdb_env_open(env, \"./testdb\", MDB_FIXEDMAP , 0664)\0" as *const u8
-                as *const std::ffi::c_char,
-            mdb_strerror(rc),
-        );
-        abort();
-    };
-    rc = mdb_txn_begin(env, 0 as *mut MDB_txn, 0 as std::ffi::c_uint, &mut txn);
-    if rc == 0 as std::ffi::c_int {
-    } else {
-        fprintf(
-            get_stderr(),
-            b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
-            b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
-            52 as std::ffi::c_int,
-            b"mdb_txn_begin(env, NULL, 0, &txn)\0" as *const u8 as *const std::ffi::c_char,
-            mdb_strerror(rc),
-        );
-        abort();
-    };
-    rc = mdb_dbi_open(txn, 0 as *const std::ffi::c_char, 0 as std::ffi::c_uint, &mut dbi);
-    if rc == 0 as std::ffi::c_int {
-    } else {
-        fprintf(
-            get_stderr(),
-            b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
-            b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
-            53 as std::ffi::c_int,
-            b"mdb_dbi_open(txn, NULL, 0, &dbi)\0" as *const u8 as *const std::ffi::c_char,
-            mdb_strerror(rc),
-        );
-        abort();
-    };
-    key.mv_size = ::core::mem::size_of::<std::ffi::c_int>() as std::ffi::c_ulong as size_t;
-    key.mv_data = sval.as_mut_ptr() as *mut std::ffi::c_void;
-    printf(b"Adding %d values\n\0" as *const u8 as *const std::ffi::c_char, count);
-    i = 0 as std::ffi::c_int;
-    while i < count {
-        sprintf(
-            sval.as_mut_ptr(),
-            b"%03x %d foo bar\0" as *const u8 as *const std::ffi::c_char,
-            *values.offset(i as isize),
-            *values.offset(i as isize),
-        );
-        data.mv_size =
-            ::core::mem::size_of::<[std::ffi::c_char; 32]>() as std::ffi::c_ulong as size_t;
-        data.mv_data = sval.as_mut_ptr() as *mut std::ffi::c_void;
-        rc = mdb_put(txn, dbi, &mut key, &mut data, 0x10 as std::ffi::c_uint);
-        if rc == -(30799 as std::ffi::c_int) || {
-            if rc == 0 {
-            } else {
-                fprintf(
-                    get_stderr(),
-                    b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
-                    b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
-                    64 as std::ffi::c_int,
-                    b"mdb_put(txn, dbi, &key, &data, MDB_NOOVERWRITE)\0" as *const u8
-                        as *const std::ffi::c_char,
-                    mdb_strerror(rc),
-                );
-                abort();
-            };
-            0 as std::ffi::c_int != 0
-        } {
-            j += 1;
-            j;
-            data.mv_size =
-                ::core::mem::size_of::<[std::ffi::c_char; 32]>() as std::ffi::c_ulong as size_t;
-            data.mv_data = sval.as_mut_ptr() as *mut std::ffi::c_void;
+    unsafe {
+        let mut i: std::ffi::c_int = 0 as std::ffi::c_int;
+        let mut j: std::ffi::c_int = 0 as std::ffi::c_int;
+        let mut rc: std::ffi::c_int = 0;
+        let mut env: *mut MDB_env = std::ptr::null_mut::<MDB_env>();
+        let mut dbi: MDB_dbi = 0;
+        let mut key: MDB_val =
+            MDB_val { mv_size: 0, mv_data: std::ptr::null_mut::<std::ffi::c_void>() };
+        let mut data: MDB_val =
+            MDB_val { mv_size: 0, mv_data: std::ptr::null_mut::<std::ffi::c_void>() };
+        let mut txn: *mut MDB_txn = std::ptr::null_mut::<MDB_txn>();
+        let mut mst: MDB_stat = MDB_stat {
+            ms_psize: 0,
+            ms_depth: 0,
+            ms_branch_pages: 0,
+            ms_leaf_pages: 0,
+            ms_overflow_pages: 0,
+            ms_entries: 0,
+        };
+        let mut cursor: *mut MDB_cursor = std::ptr::null_mut::<MDB_cursor>();
+        let mut cur2: *mut MDB_cursor = std::ptr::null_mut::<MDB_cursor>();
+        let mut op: MDB_cursor_op = MDB_FIRST;
+        let mut count: std::ffi::c_int = 0;
+        let mut values: *mut std::ffi::c_int = std::ptr::null_mut::<std::ffi::c_int>();
+        let mut sval: [std::ffi::c_char; 32] =
+            *::core::mem::transmute::<&[u8; 32], &mut [std::ffi::c_char; 32]>(
+                b"\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
+            );
+        srand(time(std::ptr::null_mut::<time_t>()) as std::ffi::c_uint);
+        count = rand() % 384 as std::ffi::c_int + 64 as std::ffi::c_int;
+        values = malloc(
+            (count as size_t).wrapping_mul(::core::mem::size_of::<std::ffi::c_int>() as size_t),
+        ) as *mut std::ffi::c_int;
+        i = 0 as std::ffi::c_int;
+        while i < count {
+            *values.offset(i as isize) = rand() % 1024 as std::ffi::c_int;
+            i += 1;
         }
-        i += 1;
-        i;
-    }
-    if j != 0 {
-        printf(b"%d duplicates skipped\n\0" as *const u8 as *const std::ffi::c_char, j);
-    }
-    rc = mdb_txn_commit(txn);
-    if rc == 0 as std::ffi::c_int {
-    } else {
-        fprintf(
-            get_stderr(),
-            b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
-            b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
-            71 as std::ffi::c_int,
-            b"mdb_txn_commit(txn)\0" as *const u8 as *const std::ffi::c_char,
-            mdb_strerror(rc),
-        );
-        abort();
-    };
-    rc = mdb_env_stat(env, &mut mst);
-    if rc == 0 as std::ffi::c_int {
-    } else {
-        fprintf(
-            get_stderr(),
-            b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
-            b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
-            72 as std::ffi::c_int,
-            b"mdb_env_stat(env, &mst)\0" as *const u8 as *const std::ffi::c_char,
-            mdb_strerror(rc),
-        );
-        abort();
-    };
-    rc = mdb_txn_begin(env, 0 as *mut MDB_txn, 0x20000 as std::ffi::c_uint, &mut txn);
-    if rc == 0 as std::ffi::c_int {
-    } else {
-        fprintf(
-            get_stderr(),
-            b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
-            b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
-            74 as std::ffi::c_int,
-            b"mdb_txn_begin(env, NULL, MDB_RDONLY, &txn)\0" as *const u8 as *const std::ffi::c_char,
-            mdb_strerror(rc),
-        );
-        abort();
-    };
-    rc = mdb_cursor_open(txn, dbi, &mut cursor);
-    if rc == 0 as std::ffi::c_int {
-    } else {
-        fprintf(
-            get_stderr(),
-            b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
-            b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
-            75 as std::ffi::c_int,
-            b"mdb_cursor_open(txn, dbi, &cursor)\0" as *const u8 as *const std::ffi::c_char,
-            mdb_strerror(rc),
-        );
-        abort();
-    };
-    loop {
-        rc = mdb_cursor_get(cursor, &mut key, &mut data, MDB_NEXT);
-        if !(rc == 0 as std::ffi::c_int) {
-            break;
-        }
-        printf(
-            b"key: %p %.*s, data: %p %.*s\n\0" as *const u8 as *const std::ffi::c_char,
-            key.mv_data,
-            key.mv_size as std::ffi::c_int,
-            key.mv_data as *mut std::ffi::c_char,
-            data.mv_data,
-            data.mv_size as std::ffi::c_int,
-            data.mv_data as *mut std::ffi::c_char,
-        );
-    }
-    if rc == -(30798 as std::ffi::c_int) {
-    } else {
-        fprintf(
-            get_stderr(),
-            b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
-            b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
-            81 as std::ffi::c_int,
-            b"mdb_cursor_get\0" as *const u8 as *const std::ffi::c_char,
-            mdb_strerror(rc),
-        );
-        abort();
-    };
-    mdb_cursor_close(cursor);
-    mdb_txn_abort(txn);
-    j = 0 as std::ffi::c_int;
-    key.mv_data = sval.as_mut_ptr() as *mut std::ffi::c_void;
-    i = count - 1 as std::ffi::c_int;
-    while i > -(1 as std::ffi::c_int) {
-        j += 1;
-        j;
-        txn = 0 as *mut MDB_txn;
-        rc = mdb_txn_begin(env, 0 as *mut MDB_txn, 0 as std::ffi::c_uint, &mut txn);
+        rc = mdb_env_create(&mut env);
         if rc == 0 as std::ffi::c_int {
         } else {
             fprintf(
                 get_stderr(),
                 b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
                 b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
-                90 as std::ffi::c_int,
+                47 as std::ffi::c_int,
+                b"mdb_env_create(&env)\0" as *const u8 as *const std::ffi::c_char,
+                mdb_strerror(rc),
+            );
+            abort();
+        };
+        rc = mdb_env_set_maxreaders(env, 1 as std::ffi::c_uint);
+        if rc == 0 as std::ffi::c_int {
+        } else {
+            fprintf(
+                get_stderr(),
+                b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
+                b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
+                48 as std::ffi::c_int,
+                b"mdb_env_set_maxreaders(env, 1)\0" as *const u8 as *const std::ffi::c_char,
+                mdb_strerror(rc),
+            );
+            abort();
+        };
+        rc = mdb_env_set_mapsize(env, 10485760 as mdb_size_t);
+        if rc == 0 as std::ffi::c_int {
+        } else {
+            fprintf(
+                get_stderr(),
+                b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
+                b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
+                49 as std::ffi::c_int,
+                b"mdb_env_set_mapsize(env, 10485760)\0" as *const u8 as *const std::ffi::c_char,
+                mdb_strerror(rc),
+            );
+            abort();
+        };
+        rc = mdb_env_open(
+            env,
+            b"./testdb\0" as *const u8 as *const std::ffi::c_char,
+            0x1 as std::ffi::c_uint,
+            0o664 as mdb_mode_t,
+        );
+        if rc == 0 as std::ffi::c_int {
+        } else {
+            fprintf(
+                get_stderr(),
+                b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
+                b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
+                50 as std::ffi::c_int,
+                b"mdb_env_open(env, \"./testdb\", MDB_FIXEDMAP , 0664)\0" as *const u8
+                    as *const std::ffi::c_char,
+                mdb_strerror(rc),
+            );
+            abort();
+        };
+        rc = mdb_txn_begin(env, std::ptr::null_mut::<MDB_txn>(), 0 as std::ffi::c_uint, &mut txn);
+        if rc == 0 as std::ffi::c_int {
+        } else {
+            fprintf(
+                get_stderr(),
+                b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
+                b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
+                52 as std::ffi::c_int,
                 b"mdb_txn_begin(env, NULL, 0, &txn)\0" as *const u8 as *const std::ffi::c_char,
                 mdb_strerror(rc),
             );
             abort();
         };
-        sprintf(
-            sval.as_mut_ptr(),
-            b"%03x \0" as *const u8 as *const std::ffi::c_char,
-            *values.offset(i as isize),
+        rc = mdb_dbi_open(
+            txn,
+            std::ptr::null::<std::ffi::c_char>(),
+            0 as std::ffi::c_uint,
+            &mut dbi,
         );
-        rc = mdb_del(txn, dbi, &mut key, 0 as *mut MDB_val);
-        if rc == -(30798 as std::ffi::c_int) || {
-            if rc == 0 {
-            } else {
-                fprintf(
-                    get_stderr(),
-                    b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
-                    b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
-                    92 as std::ffi::c_int,
-                    b"mdb_del(txn, dbi, &key, NULL)\0" as *const u8 as *const std::ffi::c_char,
-                    mdb_strerror(rc),
-                );
-                abort();
-            };
-            0 as std::ffi::c_int != 0
-        } {
-            j -= 1;
-            j;
-            mdb_txn_abort(txn);
+        if rc == 0 as std::ffi::c_int {
         } else {
-            rc = mdb_txn_commit(txn);
+            fprintf(
+                get_stderr(),
+                b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
+                b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
+                53 as std::ffi::c_int,
+                b"mdb_dbi_open(txn, NULL, 0, &dbi)\0" as *const u8 as *const std::ffi::c_char,
+                mdb_strerror(rc),
+            );
+            abort();
+        };
+        key.mv_size = ::core::mem::size_of::<std::ffi::c_int>() as std::ffi::c_ulong as size_t;
+        key.mv_data = sval.as_mut_ptr() as *mut std::ffi::c_void;
+        printf(b"Adding %d values\n\0" as *const u8 as *const std::ffi::c_char, count);
+        i = 0 as std::ffi::c_int;
+        while i < count {
+            sprintf(
+                sval.as_mut_ptr(),
+                b"%03x %d foo bar\0" as *const u8 as *const std::ffi::c_char,
+                *values.offset(i as isize),
+                *values.offset(i as isize),
+            );
+            data.mv_size =
+                ::core::mem::size_of::<[std::ffi::c_char; 32]>() as std::ffi::c_ulong as size_t;
+            data.mv_data = sval.as_mut_ptr() as *mut std::ffi::c_void;
+            rc = mdb_put(txn, dbi, &mut key, &mut data, 0x10 as std::ffi::c_uint);
+            if rc == -(30799 as std::ffi::c_int) || {
+                if rc == 0 {
+                } else {
+                    fprintf(
+                        get_stderr(),
+                        b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
+                        b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
+                        64 as std::ffi::c_int,
+                        b"mdb_put(txn, dbi, &key, &data, MDB_NOOVERWRITE)\0" as *const u8
+                            as *const std::ffi::c_char,
+                        mdb_strerror(rc),
+                    );
+                    abort();
+                };
+                0 as std::ffi::c_int != 0
+            } {
+                j += 1;
+                data.mv_size =
+                    ::core::mem::size_of::<[std::ffi::c_char; 32]>() as std::ffi::c_ulong as size_t;
+                data.mv_data = sval.as_mut_ptr() as *mut std::ffi::c_void;
+            }
+            i += 1;
+        }
+        if j != 0 {
+            printf(b"%d duplicates skipped\n\0" as *const u8 as *const std::ffi::c_char, j);
+        }
+        rc = mdb_txn_commit(txn);
+        if rc == 0 as std::ffi::c_int {
+        } else {
+            fprintf(
+                get_stderr(),
+                b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
+                b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
+                71 as std::ffi::c_int,
+                b"mdb_txn_commit(txn)\0" as *const u8 as *const std::ffi::c_char,
+                mdb_strerror(rc),
+            );
+            abort();
+        };
+        rc = mdb_env_stat(env, &mut mst);
+        if rc == 0 as std::ffi::c_int {
+        } else {
+            fprintf(
+                get_stderr(),
+                b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
+                b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
+                72 as std::ffi::c_int,
+                b"mdb_env_stat(env, &mst)\0" as *const u8 as *const std::ffi::c_char,
+                mdb_strerror(rc),
+            );
+            abort();
+        };
+        rc = mdb_txn_begin(
+            env,
+            std::ptr::null_mut::<MDB_txn>(),
+            0x20000 as std::ffi::c_uint,
+            &mut txn,
+        );
+        if rc == 0 as std::ffi::c_int {
+        } else {
+            fprintf(
+                get_stderr(),
+                b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
+                b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
+                74 as std::ffi::c_int,
+                b"mdb_txn_begin(env, NULL, MDB_RDONLY, &txn)\0" as *const u8
+                    as *const std::ffi::c_char,
+                mdb_strerror(rc),
+            );
+            abort();
+        };
+        rc = mdb_cursor_open(txn, dbi, &mut cursor);
+        if rc == 0 as std::ffi::c_int {
+        } else {
+            fprintf(
+                get_stderr(),
+                b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
+                b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
+                75 as std::ffi::c_int,
+                b"mdb_cursor_open(txn, dbi, &cursor)\0" as *const u8 as *const std::ffi::c_char,
+                mdb_strerror(rc),
+            );
+            abort();
+        };
+        loop {
+            rc = mdb_cursor_get(cursor, &mut key, &mut data, MDB_NEXT);
+            if rc != 0 as std::ffi::c_int {
+                break;
+            }
+            printf(
+                b"key: %p %.*s, data: %p %.*s\n\0" as *const u8 as *const std::ffi::c_char,
+                key.mv_data,
+                key.mv_size as std::ffi::c_int,
+                key.mv_data as *mut std::ffi::c_char,
+                data.mv_data,
+                data.mv_size as std::ffi::c_int,
+                data.mv_data as *mut std::ffi::c_char,
+            );
+        }
+        if rc == -(30798 as std::ffi::c_int) {
+        } else {
+            fprintf(
+                get_stderr(),
+                b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
+                b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
+                81 as std::ffi::c_int,
+                b"mdb_cursor_get\0" as *const u8 as *const std::ffi::c_char,
+                mdb_strerror(rc),
+            );
+            abort();
+        };
+        mdb_cursor_close(cursor);
+        mdb_txn_abort(txn);
+        j = 0 as std::ffi::c_int;
+        key.mv_data = sval.as_mut_ptr() as *mut std::ffi::c_void;
+        i = count - 1 as std::ffi::c_int;
+        while i > -(1 as std::ffi::c_int) {
+            j += 1;
+            txn = std::ptr::null_mut::<MDB_txn>();
+            rc = mdb_txn_begin(
+                env,
+                std::ptr::null_mut::<MDB_txn>(),
+                0 as std::ffi::c_uint,
+                &mut txn,
+            );
             if rc == 0 as std::ffi::c_int {
             } else {
                 fprintf(
                     get_stderr(),
                     b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
                     b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
-                    96 as std::ffi::c_int,
-                    b"mdb_txn_commit(txn)\0" as *const u8 as *const std::ffi::c_char,
+                    90 as std::ffi::c_int,
+                    b"mdb_txn_begin(env, NULL, 0, &txn)\0" as *const u8 as *const std::ffi::c_char,
                     mdb_strerror(rc),
                 );
                 abort();
             };
-        }
-        i -= rand() % 5 as std::ffi::c_int;
-    }
-    free(values as *mut std::ffi::c_void);
-    printf(b"Deleted %d values\n\0" as *const u8 as *const std::ffi::c_char, j);
-    rc = mdb_env_stat(env, &mut mst);
-    if rc == 0 as std::ffi::c_int {
-    } else {
-        fprintf(
-            get_stderr(),
-            b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
-            b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
-            102 as std::ffi::c_int,
-            b"mdb_env_stat(env, &mst)\0" as *const u8 as *const std::ffi::c_char,
-            mdb_strerror(rc),
-        );
-        abort();
-    };
-    rc = mdb_txn_begin(env, 0 as *mut MDB_txn, 0x20000 as std::ffi::c_uint, &mut txn);
-    if rc == 0 as std::ffi::c_int {
-    } else {
-        fprintf(
-            get_stderr(),
-            b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
-            b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
-            103 as std::ffi::c_int,
-            b"mdb_txn_begin(env, NULL, MDB_RDONLY, &txn)\0" as *const u8 as *const std::ffi::c_char,
-            mdb_strerror(rc),
-        );
-        abort();
-    };
-    rc = mdb_cursor_open(txn, dbi, &mut cursor);
-    if rc == 0 as std::ffi::c_int {
-    } else {
-        fprintf(
-            get_stderr(),
-            b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
-            b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
-            104 as std::ffi::c_int,
-            b"mdb_cursor_open(txn, dbi, &cursor)\0" as *const u8 as *const std::ffi::c_char,
-            mdb_strerror(rc),
-        );
-        abort();
-    };
-    printf(b"Cursor next\n\0" as *const u8 as *const std::ffi::c_char);
-    loop {
-        rc = mdb_cursor_get(cursor, &mut key, &mut data, MDB_NEXT);
-        if !(rc == 0 as std::ffi::c_int) {
-            break;
-        }
-        printf(
-            b"key: %.*s, data: %.*s\n\0" as *const u8 as *const std::ffi::c_char,
-            key.mv_size as std::ffi::c_int,
-            key.mv_data as *mut std::ffi::c_char,
-            data.mv_size as std::ffi::c_int,
-            data.mv_data as *mut std::ffi::c_char,
-        );
-    }
-    if rc == -(30798 as std::ffi::c_int) {
-    } else {
-        fprintf(
-            get_stderr(),
-            b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
-            b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
-            111 as std::ffi::c_int,
-            b"mdb_cursor_get\0" as *const u8 as *const std::ffi::c_char,
-            mdb_strerror(rc),
-        );
-        abort();
-    };
-    printf(b"Cursor last\n\0" as *const u8 as *const std::ffi::c_char);
-    rc = mdb_cursor_get(cursor, &mut key, &mut data, MDB_LAST);
-    if rc == 0 as std::ffi::c_int {
-    } else {
-        fprintf(
-            get_stderr(),
-            b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
-            b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
-            113 as std::ffi::c_int,
-            b"mdb_cursor_get(cursor, &key, &data, MDB_LAST)\0" as *const u8
-                as *const std::ffi::c_char,
-            mdb_strerror(rc),
-        );
-        abort();
-    };
-    printf(
-        b"key: %.*s, data: %.*s\n\0" as *const u8 as *const std::ffi::c_char,
-        key.mv_size as std::ffi::c_int,
-        key.mv_data as *mut std::ffi::c_char,
-        data.mv_size as std::ffi::c_int,
-        data.mv_data as *mut std::ffi::c_char,
-    );
-    printf(b"Cursor prev\n\0" as *const u8 as *const std::ffi::c_char);
-    loop {
-        rc = mdb_cursor_get(cursor, &mut key, &mut data, MDB_PREV);
-        if !(rc == 0 as std::ffi::c_int) {
-            break;
-        }
-        printf(
-            b"key: %.*s, data: %.*s\n\0" as *const u8 as *const std::ffi::c_char,
-            key.mv_size as std::ffi::c_int,
-            key.mv_data as *mut std::ffi::c_char,
-            data.mv_size as std::ffi::c_int,
-            data.mv_data as *mut std::ffi::c_char,
-        );
-    }
-    if rc == -(30798 as std::ffi::c_int) {
-    } else {
-        fprintf(
-            get_stderr(),
-            b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
-            b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
-            123 as std::ffi::c_int,
-            b"mdb_cursor_get\0" as *const u8 as *const std::ffi::c_char,
-            mdb_strerror(rc),
-        );
-        abort();
-    };
-    printf(b"Cursor last/prev\n\0" as *const u8 as *const std::ffi::c_char);
-    rc = mdb_cursor_get(cursor, &mut key, &mut data, MDB_LAST);
-    if rc == 0 as std::ffi::c_int {
-    } else {
-        fprintf(
-            get_stderr(),
-            b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
-            b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
-            125 as std::ffi::c_int,
-            b"mdb_cursor_get(cursor, &key, &data, MDB_LAST)\0" as *const u8
-                as *const std::ffi::c_char,
-            mdb_strerror(rc),
-        );
-        abort();
-    };
-    printf(
-        b"key: %.*s, data: %.*s\n\0" as *const u8 as *const std::ffi::c_char,
-        key.mv_size as std::ffi::c_int,
-        key.mv_data as *mut std::ffi::c_char,
-        data.mv_size as std::ffi::c_int,
-        data.mv_data as *mut std::ffi::c_char,
-    );
-    rc = mdb_cursor_get(cursor, &mut key, &mut data, MDB_PREV);
-    if rc == 0 as std::ffi::c_int {
-    } else {
-        fprintf(
-            get_stderr(),
-            b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
-            b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
-            129 as std::ffi::c_int,
-            b"mdb_cursor_get(cursor, &key, &data, MDB_PREV)\0" as *const u8
-                as *const std::ffi::c_char,
-            mdb_strerror(rc),
-        );
-        abort();
-    };
-    printf(
-        b"key: %.*s, data: %.*s\n\0" as *const u8 as *const std::ffi::c_char,
-        key.mv_size as std::ffi::c_int,
-        key.mv_data as *mut std::ffi::c_char,
-        data.mv_size as std::ffi::c_int,
-        data.mv_data as *mut std::ffi::c_char,
-    );
-    mdb_cursor_close(cursor);
-    mdb_txn_abort(txn);
-    printf(b"Deleting with cursor\n\0" as *const u8 as *const std::ffi::c_char);
-    rc = mdb_txn_begin(env, 0 as *mut MDB_txn, 0 as std::ffi::c_uint, &mut txn);
-    if rc == 0 as std::ffi::c_int {
-    } else {
-        fprintf(
-            get_stderr(),
-            b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
-            b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
-            138 as std::ffi::c_int,
-            b"mdb_txn_begin(env, NULL, 0, &txn)\0" as *const u8 as *const std::ffi::c_char,
-            mdb_strerror(rc),
-        );
-        abort();
-    };
-    rc = mdb_cursor_open(txn, dbi, &mut cur2);
-    if rc == 0 as std::ffi::c_int {
-    } else {
-        fprintf(
-            get_stderr(),
-            b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
-            b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
-            139 as std::ffi::c_int,
-            b"mdb_cursor_open(txn, dbi, &cur2)\0" as *const u8 as *const std::ffi::c_char,
-            mdb_strerror(rc),
-        );
-        abort();
-    };
-    i = 0 as std::ffi::c_int;
-    while i < 50 as std::ffi::c_int {
-        rc = mdb_cursor_get(cur2, &mut key, &mut data, MDB_NEXT);
-        if rc == -(30798 as std::ffi::c_int) || {
-            if rc == 0 {
+            sprintf(
+                sval.as_mut_ptr(),
+                b"%03x \0" as *const u8 as *const std::ffi::c_char,
+                *values.offset(i as isize),
+            );
+            rc = mdb_del(txn, dbi, &mut key, std::ptr::null_mut::<MDB_val>());
+            if rc == -(30798 as std::ffi::c_int) || {
+                if rc == 0 {
+                } else {
+                    fprintf(
+                        get_stderr(),
+                        b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
+                        b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
+                        92 as std::ffi::c_int,
+                        b"mdb_del(txn, dbi, &key, NULL)\0" as *const u8 as *const std::ffi::c_char,
+                        mdb_strerror(rc),
+                    );
+                    abort();
+                };
+                0 as std::ffi::c_int != 0
+            } {
+                j -= 1;
+                mdb_txn_abort(txn);
             } else {
-                fprintf(
-                    get_stderr(),
-                    b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
-                    b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
-                    141 as std::ffi::c_int,
-                    b"mdb_cursor_get(cur2, &key, &data, MDB_NEXT)\0" as *const u8
-                        as *const std::ffi::c_char,
-                    mdb_strerror(rc),
-                );
-                abort();
-            };
-            0 as std::ffi::c_int != 0
-        } {
-            break;
+                rc = mdb_txn_commit(txn);
+                if rc == 0 as std::ffi::c_int {
+                } else {
+                    fprintf(
+                        get_stderr(),
+                        b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
+                        b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
+                        96 as std::ffi::c_int,
+                        b"mdb_txn_commit(txn)\0" as *const u8 as *const std::ffi::c_char,
+                        mdb_strerror(rc),
+                    );
+                    abort();
+                };
+            }
+            i -= rand() % 5 as std::ffi::c_int;
         }
-        printf(
-            b"key: %p %.*s, data: %p %.*s\n\0" as *const u8 as *const std::ffi::c_char,
-            key.mv_data,
-            key.mv_size as std::ffi::c_int,
-            key.mv_data as *mut std::ffi::c_char,
-            data.mv_data,
-            data.mv_size as std::ffi::c_int,
-            data.mv_data as *mut std::ffi::c_char,
-        );
-        rc = mdb_del(txn, dbi, &mut key, 0 as *mut MDB_val);
+        free(values as *mut std::ffi::c_void);
+        printf(b"Deleted %d values\n\0" as *const u8 as *const std::ffi::c_char, j);
+        rc = mdb_env_stat(env, &mut mst);
         if rc == 0 as std::ffi::c_int {
         } else {
             fprintf(
                 get_stderr(),
                 b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
                 b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
-                146 as std::ffi::c_int,
-                b"mdb_del(txn, dbi, &key, NULL)\0" as *const u8 as *const std::ffi::c_char,
+                102 as std::ffi::c_int,
+                b"mdb_env_stat(env, &mst)\0" as *const u8 as *const std::ffi::c_char,
                 mdb_strerror(rc),
             );
             abort();
         };
-        i += 1;
-        i;
-    }
-    printf(b"Restarting cursor in txn\n\0" as *const u8 as *const std::ffi::c_char);
-    op = MDB_FIRST;
-    i = 0 as std::ffi::c_int;
-    while i <= 32 as std::ffi::c_int {
-        rc = mdb_cursor_get(cur2, &mut key, &mut data, op);
-        if rc == -(30798 as std::ffi::c_int) || {
-            if rc == 0 {
+        rc = mdb_txn_begin(
+            env,
+            std::ptr::null_mut::<MDB_txn>(),
+            0x20000 as std::ffi::c_uint,
+            &mut txn,
+        );
+        if rc == 0 as std::ffi::c_int {
+        } else {
+            fprintf(
+                get_stderr(),
+                b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
+                b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
+                103 as std::ffi::c_int,
+                b"mdb_txn_begin(env, NULL, MDB_RDONLY, &txn)\0" as *const u8
+                    as *const std::ffi::c_char,
+                mdb_strerror(rc),
+            );
+            abort();
+        };
+        rc = mdb_cursor_open(txn, dbi, &mut cursor);
+        if rc == 0 as std::ffi::c_int {
+        } else {
+            fprintf(
+                get_stderr(),
+                b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
+                b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
+                104 as std::ffi::c_int,
+                b"mdb_cursor_open(txn, dbi, &cursor)\0" as *const u8 as *const std::ffi::c_char,
+                mdb_strerror(rc),
+            );
+            abort();
+        };
+        printf(b"Cursor next\n\0" as *const u8 as *const std::ffi::c_char);
+        loop {
+            rc = mdb_cursor_get(cursor, &mut key, &mut data, MDB_NEXT);
+            if rc != 0 as std::ffi::c_int {
+                break;
+            }
+            printf(
+                b"key: %.*s, data: %.*s\n\0" as *const u8 as *const std::ffi::c_char,
+                key.mv_size as std::ffi::c_int,
+                key.mv_data as *mut std::ffi::c_char,
+                data.mv_size as std::ffi::c_int,
+                data.mv_data as *mut std::ffi::c_char,
+            );
+        }
+        if rc == -(30798 as std::ffi::c_int) {
+        } else {
+            fprintf(
+                get_stderr(),
+                b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
+                b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
+                111 as std::ffi::c_int,
+                b"mdb_cursor_get\0" as *const u8 as *const std::ffi::c_char,
+                mdb_strerror(rc),
+            );
+            abort();
+        };
+        printf(b"Cursor last\n\0" as *const u8 as *const std::ffi::c_char);
+        rc = mdb_cursor_get(cursor, &mut key, &mut data, MDB_LAST);
+        if rc == 0 as std::ffi::c_int {
+        } else {
+            fprintf(
+                get_stderr(),
+                b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
+                b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
+                113 as std::ffi::c_int,
+                b"mdb_cursor_get(cursor, &key, &data, MDB_LAST)\0" as *const u8
+                    as *const std::ffi::c_char,
+                mdb_strerror(rc),
+            );
+            abort();
+        };
+        printf(
+            b"key: %.*s, data: %.*s\n\0" as *const u8 as *const std::ffi::c_char,
+            key.mv_size as std::ffi::c_int,
+            key.mv_data as *mut std::ffi::c_char,
+            data.mv_size as std::ffi::c_int,
+            data.mv_data as *mut std::ffi::c_char,
+        );
+        printf(b"Cursor prev\n\0" as *const u8 as *const std::ffi::c_char);
+        loop {
+            rc = mdb_cursor_get(cursor, &mut key, &mut data, MDB_PREV);
+            if rc != 0 as std::ffi::c_int {
+                break;
+            }
+            printf(
+                b"key: %.*s, data: %.*s\n\0" as *const u8 as *const std::ffi::c_char,
+                key.mv_size as std::ffi::c_int,
+                key.mv_data as *mut std::ffi::c_char,
+                data.mv_size as std::ffi::c_int,
+                data.mv_data as *mut std::ffi::c_char,
+            );
+        }
+        if rc == -(30798 as std::ffi::c_int) {
+        } else {
+            fprintf(
+                get_stderr(),
+                b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
+                b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
+                123 as std::ffi::c_int,
+                b"mdb_cursor_get\0" as *const u8 as *const std::ffi::c_char,
+                mdb_strerror(rc),
+            );
+            abort();
+        };
+        printf(b"Cursor last/prev\n\0" as *const u8 as *const std::ffi::c_char);
+        rc = mdb_cursor_get(cursor, &mut key, &mut data, MDB_LAST);
+        if rc == 0 as std::ffi::c_int {
+        } else {
+            fprintf(
+                get_stderr(),
+                b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
+                b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
+                125 as std::ffi::c_int,
+                b"mdb_cursor_get(cursor, &key, &data, MDB_LAST)\0" as *const u8
+                    as *const std::ffi::c_char,
+                mdb_strerror(rc),
+            );
+            abort();
+        };
+        printf(
+            b"key: %.*s, data: %.*s\n\0" as *const u8 as *const std::ffi::c_char,
+            key.mv_size as std::ffi::c_int,
+            key.mv_data as *mut std::ffi::c_char,
+            data.mv_size as std::ffi::c_int,
+            data.mv_data as *mut std::ffi::c_char,
+        );
+        rc = mdb_cursor_get(cursor, &mut key, &mut data, MDB_PREV);
+        if rc == 0 as std::ffi::c_int {
+        } else {
+            fprintf(
+                get_stderr(),
+                b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
+                b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
+                129 as std::ffi::c_int,
+                b"mdb_cursor_get(cursor, &key, &data, MDB_PREV)\0" as *const u8
+                    as *const std::ffi::c_char,
+                mdb_strerror(rc),
+            );
+            abort();
+        };
+        printf(
+            b"key: %.*s, data: %.*s\n\0" as *const u8 as *const std::ffi::c_char,
+            key.mv_size as std::ffi::c_int,
+            key.mv_data as *mut std::ffi::c_char,
+            data.mv_size as std::ffi::c_int,
+            data.mv_data as *mut std::ffi::c_char,
+        );
+        mdb_cursor_close(cursor);
+        mdb_txn_abort(txn);
+        printf(b"Deleting with cursor\n\0" as *const u8 as *const std::ffi::c_char);
+        rc = mdb_txn_begin(env, std::ptr::null_mut::<MDB_txn>(), 0 as std::ffi::c_uint, &mut txn);
+        if rc == 0 as std::ffi::c_int {
+        } else {
+            fprintf(
+                get_stderr(),
+                b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
+                b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
+                138 as std::ffi::c_int,
+                b"mdb_txn_begin(env, NULL, 0, &txn)\0" as *const u8 as *const std::ffi::c_char,
+                mdb_strerror(rc),
+            );
+            abort();
+        };
+        rc = mdb_cursor_open(txn, dbi, &mut cur2);
+        if rc == 0 as std::ffi::c_int {
+        } else {
+            fprintf(
+                get_stderr(),
+                b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
+                b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
+                139 as std::ffi::c_int,
+                b"mdb_cursor_open(txn, dbi, &cur2)\0" as *const u8 as *const std::ffi::c_char,
+                mdb_strerror(rc),
+            );
+            abort();
+        };
+        i = 0 as std::ffi::c_int;
+        while i < 50 as std::ffi::c_int {
+            rc = mdb_cursor_get(cur2, &mut key, &mut data, MDB_NEXT);
+            if rc == -(30798 as std::ffi::c_int) || {
+                if rc == 0 {
+                } else {
+                    fprintf(
+                        get_stderr(),
+                        b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
+                        b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
+                        141 as std::ffi::c_int,
+                        b"mdb_cursor_get(cur2, &key, &data, MDB_NEXT)\0" as *const u8
+                            as *const std::ffi::c_char,
+                        mdb_strerror(rc),
+                    );
+                    abort();
+                };
+                0 as std::ffi::c_int != 0
+            } {
+                break;
+            }
+            printf(
+                b"key: %p %.*s, data: %p %.*s\n\0" as *const u8 as *const std::ffi::c_char,
+                key.mv_data,
+                key.mv_size as std::ffi::c_int,
+                key.mv_data as *mut std::ffi::c_char,
+                data.mv_data,
+                data.mv_size as std::ffi::c_int,
+                data.mv_data as *mut std::ffi::c_char,
+            );
+            rc = mdb_del(txn, dbi, &mut key, std::ptr::null_mut::<MDB_val>());
+            if rc == 0 as std::ffi::c_int {
             } else {
                 fprintf(
                     get_stderr(),
                     b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
                     b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
-                    151 as std::ffi::c_int,
-                    b"mdb_cursor_get(cur2, &key, &data, op)\0" as *const u8
-                        as *const std::ffi::c_char,
+                    146 as std::ffi::c_int,
+                    b"mdb_del(txn, dbi, &key, NULL)\0" as *const u8 as *const std::ffi::c_char,
                     mdb_strerror(rc),
                 );
                 abort();
             };
-            0 as std::ffi::c_int != 0
-        } {
-            break;
+            i += 1;
         }
-        printf(
-            b"key: %p %.*s, data: %p %.*s\n\0" as *const u8 as *const std::ffi::c_char,
-            key.mv_data,
-            key.mv_size as std::ffi::c_int,
-            key.mv_data as *mut std::ffi::c_char,
-            data.mv_data,
-            data.mv_size as std::ffi::c_int,
-            data.mv_data as *mut std::ffi::c_char,
-        );
-        op = MDB_NEXT;
-        i += 1;
-        i;
-    }
-    mdb_cursor_close(cur2);
-    rc = mdb_txn_commit(txn);
-    if rc == 0 as std::ffi::c_int {
-    } else {
-        fprintf(
-            get_stderr(),
-            b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
-            b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
-            158 as std::ffi::c_int,
-            b"mdb_txn_commit(txn)\0" as *const u8 as *const std::ffi::c_char,
-            mdb_strerror(rc),
-        );
-        abort();
-    };
-    printf(b"Restarting cursor outside txn\n\0" as *const u8 as *const std::ffi::c_char);
-    rc = mdb_txn_begin(env, 0 as *mut MDB_txn, 0 as std::ffi::c_uint, &mut txn);
-    if rc == 0 as std::ffi::c_int {
-    } else {
-        fprintf(
-            get_stderr(),
-            b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
-            b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
-            161 as std::ffi::c_int,
-            b"mdb_txn_begin(env, NULL, 0, &txn)\0" as *const u8 as *const std::ffi::c_char,
-            mdb_strerror(rc),
-        );
-        abort();
-    };
-    rc = mdb_cursor_open(txn, dbi, &mut cursor);
-    if rc == 0 as std::ffi::c_int {
-    } else {
-        fprintf(
-            get_stderr(),
-            b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
-            b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
-            162 as std::ffi::c_int,
-            b"mdb_cursor_open(txn, dbi, &cursor)\0" as *const u8 as *const std::ffi::c_char,
-            mdb_strerror(rc),
-        );
-        abort();
-    };
-    op = MDB_FIRST;
-    i = 0 as std::ffi::c_int;
-    while i <= 32 as std::ffi::c_int {
-        rc = mdb_cursor_get(cursor, &mut key, &mut data, op);
-        if rc == -(30798 as std::ffi::c_int) || {
-            if rc == 0 {
-            } else {
-                fprintf(
-                    get_stderr(),
-                    b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
-                    b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
-                    164 as std::ffi::c_int,
-                    b"mdb_cursor_get(cursor, &key, &data, op)\0" as *const u8
-                        as *const std::ffi::c_char,
-                    mdb_strerror(rc),
-                );
-                abort();
-            };
-            0 as std::ffi::c_int != 0
-        } {
-            break;
+        printf(b"Restarting cursor in txn\n\0" as *const u8 as *const std::ffi::c_char);
+        op = MDB_FIRST;
+        i = 0 as std::ffi::c_int;
+        while i <= 32 as std::ffi::c_int {
+            rc = mdb_cursor_get(cur2, &mut key, &mut data, op);
+            if rc == -(30798 as std::ffi::c_int) || {
+                if rc == 0 {
+                } else {
+                    fprintf(
+                        get_stderr(),
+                        b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
+                        b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
+                        151 as std::ffi::c_int,
+                        b"mdb_cursor_get(cur2, &key, &data, op)\0" as *const u8
+                            as *const std::ffi::c_char,
+                        mdb_strerror(rc),
+                    );
+                    abort();
+                };
+                0 as std::ffi::c_int != 0
+            } {
+                break;
+            }
+            printf(
+                b"key: %p %.*s, data: %p %.*s\n\0" as *const u8 as *const std::ffi::c_char,
+                key.mv_data,
+                key.mv_size as std::ffi::c_int,
+                key.mv_data as *mut std::ffi::c_char,
+                data.mv_data,
+                data.mv_size as std::ffi::c_int,
+                data.mv_data as *mut std::ffi::c_char,
+            );
+            op = MDB_NEXT;
+            i += 1;
         }
-        printf(
-            b"key: %p %.*s, data: %p %.*s\n\0" as *const u8 as *const std::ffi::c_char,
-            key.mv_data,
-            key.mv_size as std::ffi::c_int,
-            key.mv_data as *mut std::ffi::c_char,
-            data.mv_data,
-            data.mv_size as std::ffi::c_int,
-            data.mv_data as *mut std::ffi::c_char,
-        );
-        op = MDB_NEXT;
-        i += 1;
-        i;
+        mdb_cursor_close(cur2);
+        rc = mdb_txn_commit(txn);
+        if rc == 0 as std::ffi::c_int {
+        } else {
+            fprintf(
+                get_stderr(),
+                b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
+                b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
+                158 as std::ffi::c_int,
+                b"mdb_txn_commit(txn)\0" as *const u8 as *const std::ffi::c_char,
+                mdb_strerror(rc),
+            );
+            abort();
+        };
+        printf(b"Restarting cursor outside txn\n\0" as *const u8 as *const std::ffi::c_char);
+        rc = mdb_txn_begin(env, std::ptr::null_mut::<MDB_txn>(), 0 as std::ffi::c_uint, &mut txn);
+        if rc == 0 as std::ffi::c_int {
+        } else {
+            fprintf(
+                get_stderr(),
+                b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
+                b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
+                161 as std::ffi::c_int,
+                b"mdb_txn_begin(env, NULL, 0, &txn)\0" as *const u8 as *const std::ffi::c_char,
+                mdb_strerror(rc),
+            );
+            abort();
+        };
+        rc = mdb_cursor_open(txn, dbi, &mut cursor);
+        if rc == 0 as std::ffi::c_int {
+        } else {
+            fprintf(
+                get_stderr(),
+                b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
+                b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
+                162 as std::ffi::c_int,
+                b"mdb_cursor_open(txn, dbi, &cursor)\0" as *const u8 as *const std::ffi::c_char,
+                mdb_strerror(rc),
+            );
+            abort();
+        };
+        op = MDB_FIRST;
+        i = 0 as std::ffi::c_int;
+        while i <= 32 as std::ffi::c_int {
+            rc = mdb_cursor_get(cursor, &mut key, &mut data, op);
+            if rc == -(30798 as std::ffi::c_int) || {
+                if rc == 0 {
+                } else {
+                    fprintf(
+                        get_stderr(),
+                        b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
+                        b"mtest.c\0" as *const u8 as *const std::ffi::c_char,
+                        164 as std::ffi::c_int,
+                        b"mdb_cursor_get(cursor, &key, &data, op)\0" as *const u8
+                            as *const std::ffi::c_char,
+                        mdb_strerror(rc),
+                    );
+                    abort();
+                };
+                0 as std::ffi::c_int != 0
+            } {
+                break;
+            }
+            printf(
+                b"key: %p %.*s, data: %p %.*s\n\0" as *const u8 as *const std::ffi::c_char,
+                key.mv_data,
+                key.mv_size as std::ffi::c_int,
+                key.mv_data as *mut std::ffi::c_char,
+                data.mv_data,
+                data.mv_size as std::ffi::c_int,
+                data.mv_data as *mut std::ffi::c_char,
+            );
+            op = MDB_NEXT;
+            i += 1;
+        }
+        mdb_cursor_close(cursor);
+        mdb_txn_abort(txn);
+        mdb_dbi_close(env, dbi);
+        mdb_env_close(env);
+        0 as std::ffi::c_int
     }
-    mdb_cursor_close(cursor);
-    mdb_txn_abort(txn);
-    mdb_dbi_close(env, dbi);
-    mdb_env_close(env);
-    return 0 as std::ffi::c_int;
 }
 pub fn main() {
     let mut args: Vec<*mut std::ffi::c_char> = Vec::new();
