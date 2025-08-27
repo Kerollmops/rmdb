@@ -114,8 +114,8 @@ pub const MDB_GET_BOTH: MDB_cursor_op = 2;
 pub const MDB_FIRST_DUP: MDB_cursor_op = 1;
 pub const MDB_FIRST: MDB_cursor_op = 0;
 unsafe fn main_0(
-    mut argc: std::ffi::c_int,
-    mut argv: *mut *mut std::ffi::c_char,
+    mut _argc: std::ffi::c_int,
+    mut _argv: *mut *mut std::ffi::c_char,
 ) -> std::ffi::c_int {
     unsafe {
         let mut i: std::ffi::c_int = 0 as std::ffi::c_int;
@@ -154,7 +154,6 @@ unsafe fn main_0(
         while i < count {
             *values.offset(i as isize) = i * 5 as std::ffi::c_int;
             i += 1;
-            i;
         }
         rc = mdb_env_create(&mut env);
         if rc == 0 as std::ffi::c_int {
@@ -279,10 +278,8 @@ unsafe fn main_0(
                 0 as std::ffi::c_int != 0
             } {
                 j += 1;
-                j;
             }
             i += 1;
-            i;
         }
         if j != 0 {
             printf(b"%d duplicates skipped\n\0" as *const u8 as *const std::ffi::c_char, j);
@@ -400,8 +397,7 @@ unsafe fn main_0(
         rc = mdb_put(txn, dbi, &mut key, &mut data, 0x20 as std::ffi::c_uint);
         if rc != -(30799 as std::ffi::c_int) {
             {
-                if rc == 0 {
-                } else {
+                if rc != 0 {
                     fprintf(
                         get_stderr(),
                         b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
@@ -412,8 +408,7 @@ unsafe fn main_0(
                         mdb_strerror(rc),
                     );
                     abort();
-                };
-                0 as std::ffi::c_int != 0
+                }
             };
         }
         mdb_txn_abort(txn);
@@ -438,8 +433,7 @@ unsafe fn main_0(
         rc = mdb_put(txn, dbi, &mut key, &mut data, 0x20 as std::ffi::c_uint);
         if rc != -(30799 as std::ffi::c_int) {
             {
-                if rc == 0 {
-                } else {
+                if rc != 0 {
                     fprintf(
                         get_stderr(),
                         b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
@@ -450,8 +444,7 @@ unsafe fn main_0(
                         mdb_strerror(rc),
                     );
                     abort();
-                };
-                0 as std::ffi::c_int != 0
+                }
             };
         }
         mdb_txn_abort(txn);
@@ -476,8 +469,7 @@ unsafe fn main_0(
         rc = mdb_put(txn, dbi, &mut key, &mut data, 0x20 as std::ffi::c_uint);
         if rc != -(30799 as std::ffi::c_int) {
             {
-                if rc == 0 {
-                } else {
+                if rc != 0 {
                     fprintf(
                         get_stderr(),
                         b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
@@ -488,8 +480,7 @@ unsafe fn main_0(
                         mdb_strerror(rc),
                     );
                     abort();
-                };
-                0 as std::ffi::c_int != 0
+                }
             };
         }
         rc = mdb_txn_commit(txn);
@@ -562,7 +553,6 @@ unsafe fn main_0(
         i = count - 1 as std::ffi::c_int;
         while i > -(1 as std::ffi::c_int) {
             j += 1;
-            j;
             txn = std::ptr::null_mut::<MDB_txn>();
             rc = mdb_txn_begin(
                 env,
@@ -609,7 +599,6 @@ unsafe fn main_0(
                 0 as std::ffi::c_int != 0
             } {
                 j -= 1;
-                j;
                 mdb_txn_abort(txn);
             } else {
                 rc = mdb_txn_commit(txn);

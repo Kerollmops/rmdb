@@ -230,15 +230,12 @@ unsafe fn main_0(
                         usage(prog);
                     }
                     alldbs += 1;
-                    alldbs;
                 }
                 101 => {
                     envinfo += 1;
-                    envinfo;
                 }
                 102 => {
                     freinfo += 1;
-                    freinfo;
                 }
                 110 => {
                     envflags |= MDB_NOSUBDIR;
@@ -248,7 +245,6 @@ unsafe fn main_0(
                 }
                 114 => {
                     rdrinfo += 1;
-                    rdrinfo;
                 }
                 115 => {
                     if alldbs != 0 {
@@ -486,9 +482,7 @@ unsafe fn main_0(
                                                     && *iptr.offset((i_0 - span) as isize) == pg
                                                 {
                                                     span += 1;
-                                                    span;
                                                     pg = pg.wrapping_add(1);
-                                                    pg;
                                                 }
                                             }
                                             printf(
@@ -502,7 +496,6 @@ unsafe fn main_0(
                                             );
                                             if freinfo > 2 as std::ffi::c_int {
                                                 j -= 1;
-                                                j;
                                                 while j >= 0 as std::ffi::c_long {
                                                     pg = *iptr.offset(j as isize);
                                                     span = 1 as ssize_t;
@@ -517,7 +510,6 @@ unsafe fn main_0(
                                                             break;
                                                         }
                                                         span += 1;
-                                                        span;
                                                     }
                                                     printf(
                                                         if span > 1 as std::ffi::c_long {
@@ -692,7 +684,11 @@ unsafe fn main_0(
             }
         }
         mdb_env_close(env);
-        if rc != 0 { EXIT_FAILURE } else { EXIT_SUCCESS }
+        if rc != 0 {
+            EXIT_FAILURE
+        } else {
+            EXIT_SUCCESS
+        }
     }
 }
 pub fn main() {

@@ -266,7 +266,6 @@ unsafe extern "C" fn readhdr() {
         .is_null()
         {
             lineno = lineno.wrapping_add(1);
-            lineno;
             if strncmp(
                 dbuf.mv_data as *const std::ffi::c_char,
                 b"VERSION=\0" as *const u8 as *const std::ffi::c_char,
@@ -529,7 +528,6 @@ unsafe extern "C" fn readhdr() {
                             break;
                         } else {
                             i_2 += 1;
-                            i_2;
                         }
                     }
                     if dbflags[i_2 as usize].bit == 0 {
@@ -606,7 +604,6 @@ unsafe extern "C" fn readline(mut out: *mut MDB_val, mut buf: *mut MDB_val) -> s
             }
             if c != ' ' as i32 {
                 lineno = lineno.wrapping_add(1);
-                lineno;
                 if !(fgets(
                     (*buf).mv_data as *mut std::ffi::c_char,
                     (*buf).mv_size as std::ffi::c_int,
@@ -639,7 +636,6 @@ unsafe extern "C" fn readline(mut out: *mut MDB_val, mut buf: *mut MDB_val) -> s
             return -(1 as std::ffi::c_int);
         }
         lineno = lineno.wrapping_add(1);
-        lineno;
         c1 = (*buf).mv_data as *mut std::ffi::c_uchar;
         len = strlen(c1 as *mut std::ffi::c_char);
         l2 = len;
@@ -749,9 +745,10 @@ unsafe extern "C" fn usage() {
         exit(EXIT_FAILURE);
     }
 }
-unsafe extern "C" fn greater(mut a: *const MDB_val, mut b: *const MDB_val) -> std::ffi::c_int {
-    1 as std::ffi::c_int
+unsafe extern "C" fn greater(mut _a: *const MDB_val, mut _b: *const MDB_val) -> std::ffi::c_int {
+    1
 }
+
 unsafe fn main_0(
     mut argc: std::ffi::c_int,
     mut argv: *mut *mut std::ffi::c_char,
@@ -1033,7 +1030,6 @@ unsafe fn main_0(
                                         break 's_222;
                                     } else {
                                         batch += 1;
-                                        batch;
                                         if batch != 100 as std::ffi::c_int {
                                             continue;
                                         }
@@ -1153,7 +1149,11 @@ unsafe fn main_0(
             }
         }
         mdb_env_close(env);
-        if rc != 0 { EXIT_FAILURE } else { EXIT_SUCCESS }
+        if rc != 0 {
+            EXIT_FAILURE
+        } else {
+            EXIT_SUCCESS
+        }
     }
 }
 pub fn main() {

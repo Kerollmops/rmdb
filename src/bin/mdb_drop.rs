@@ -94,7 +94,7 @@ pub const SIGTERM: std::ffi::c_int = 15 as std::ffi::c_int;
 pub const SIGHUP: std::ffi::c_int = 1 as std::ffi::c_int;
 pub const SIGPIPE: std::ffi::c_int = 13 as std::ffi::c_int;
 static mut gotsig: sig_atomic_t = 0;
-unsafe extern "C" fn dumpsig(mut sig: std::ffi::c_int) {
+unsafe extern "C" fn dumpsig(mut _sig: std::ffi::c_int) {
     unsafe {
         ::core::ptr::write_volatile(&raw mut gotsig, 1 as std::ffi::c_int as sig_atomic_t);
     }
@@ -242,7 +242,11 @@ unsafe fn main_0(
             }
         }
         mdb_env_close(env);
-        if rc != 0 { EXIT_FAILURE } else { EXIT_SUCCESS }
+        if rc != 0 {
+            EXIT_FAILURE
+        } else {
+            EXIT_SUCCESS
+        }
     }
 }
 pub fn main() {

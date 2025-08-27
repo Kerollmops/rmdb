@@ -85,7 +85,7 @@ pub const SIGINT: std::ffi::c_int = 2 as std::ffi::c_int;
 pub const SIGTERM: std::ffi::c_int = 15 as std::ffi::c_int;
 pub const SIGHUP: std::ffi::c_int = 1 as std::ffi::c_int;
 pub const SIGPIPE: std::ffi::c_int = 13 as std::ffi::c_int;
-unsafe extern "C" fn sighandle(mut sig: std::ffi::c_int) {}
+unsafe extern "C" fn sighandle(mut _sig: std::ffi::c_int) {}
 unsafe fn main_0(
     mut argc: std::ffi::c_int,
     mut argv: *mut *mut std::ffi::c_char,
@@ -142,9 +142,7 @@ unsafe fn main_0(
                 argc = 0 as std::ffi::c_int;
             }
             argc -= 1;
-            argc;
             argv = argv.offset(1);
-            argv;
         }
         if argc < 2 as std::ffi::c_int || argc > 3 as std::ffi::c_int {
             fprintf(
@@ -188,7 +186,11 @@ unsafe fn main_0(
             );
         }
         mdb_env_close(env);
-        if rc != 0 { EXIT_FAILURE } else { EXIT_SUCCESS }
+        if rc != 0 {
+            EXIT_FAILURE
+        } else {
+            EXIT_SUCCESS
+        }
     }
 }
 pub fn main() {

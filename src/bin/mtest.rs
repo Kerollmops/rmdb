@@ -109,8 +109,8 @@ pub const MDB_GET_BOTH: MDB_cursor_op = 2;
 pub const MDB_FIRST_DUP: MDB_cursor_op = 1;
 pub const MDB_FIRST: MDB_cursor_op = 0;
 unsafe fn main_0(
-    mut argc: std::ffi::c_int,
-    mut argv: *mut *mut std::ffi::c_char,
+    mut _argc: std::ffi::c_int,
+    mut _argv: *mut *mut std::ffi::c_char,
 ) -> std::ffi::c_int {
     unsafe {
         let mut i: std::ffi::c_int = 0 as std::ffi::c_int;
@@ -149,7 +149,6 @@ unsafe fn main_0(
         while i < count {
             *values.offset(i as isize) = rand() % 1024 as std::ffi::c_int;
             i += 1;
-            i;
         }
         rc = mdb_env_create(&mut env);
         if rc == 0 as std::ffi::c_int {
@@ -272,13 +271,11 @@ unsafe fn main_0(
                 0 as std::ffi::c_int != 0
             } {
                 j += 1;
-                j;
                 data.mv_size =
                     ::core::mem::size_of::<[std::ffi::c_char; 32]>() as std::ffi::c_ulong as size_t;
                 data.mv_data = sval.as_mut_ptr() as *mut std::ffi::c_void;
             }
             i += 1;
-            i;
         }
         if j != 0 {
             printf(b"%d duplicates skipped\n\0" as *const u8 as *const std::ffi::c_char, j);
@@ -375,7 +372,6 @@ unsafe fn main_0(
         i = count - 1 as std::ffi::c_int;
         while i > -(1 as std::ffi::c_int) {
             j += 1;
-            j;
             txn = std::ptr::null_mut::<MDB_txn>();
             rc = mdb_txn_begin(
                 env,
@@ -417,7 +413,6 @@ unsafe fn main_0(
                 0 as std::ffi::c_int != 0
             } {
                 j -= 1;
-                j;
                 mdb_txn_abort(txn);
             } else {
                 rc = mdb_txn_commit(txn);
@@ -673,7 +668,6 @@ unsafe fn main_0(
                 abort();
             };
             i += 1;
-            i;
         }
         printf(b"Restarting cursor in txn\n\0" as *const u8 as *const std::ffi::c_char);
         op = MDB_FIRST;
@@ -709,7 +703,6 @@ unsafe fn main_0(
             );
             op = MDB_NEXT;
             i += 1;
-            i;
         }
         mdb_cursor_close(cur2);
         rc = mdb_txn_commit(txn);
@@ -785,7 +778,6 @@ unsafe fn main_0(
             );
             op = MDB_NEXT;
             i += 1;
-            i;
         }
         mdb_cursor_close(cursor);
         mdb_txn_abort(txn);

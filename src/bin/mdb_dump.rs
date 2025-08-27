@@ -244,7 +244,7 @@ pub static mut dbflags: [flagbit; 7] = [
     },
 ];
 static mut gotsig: sig_atomic_t = 0;
-unsafe extern "C" fn dumpsig(mut sig: std::ffi::c_int) {
+unsafe extern "C" fn dumpsig(mut _sig: std::ffi::c_int) {
     unsafe {
         ::core::ptr::write_volatile(&raw mut gotsig, 1 as std::ffi::c_int as sig_atomic_t);
     }
@@ -276,7 +276,6 @@ unsafe extern "C" fn text(mut v: *mut MDB_val) {
                 hex(*c);
             }
             c = c.offset(1);
-            c;
         }
         putchar('\n' as i32);
     }
@@ -368,7 +367,6 @@ unsafe extern "C" fn dumpit(
                 );
             }
             i += 1;
-            i;
         }
         printf(b"db_pagesize=%d\n\0" as *const u8 as *const std::ffi::c_char, ms.ms_psize);
         printf(b"HEADER=END\n\0" as *const u8 as *const std::ffi::c_char);
@@ -505,7 +503,6 @@ unsafe fn main_0(
                     usage(prog);
                 }
                 alldbs += 1;
-                alldbs;
             }
         }
         if optind != argc - 1 as std::ffi::c_int {
@@ -602,7 +599,6 @@ unsafe fn main_0(
                                     continue;
                                 }
                                 count += 1;
-                                count;
                                 str = malloc((key.mv_size).wrapping_add(1 as size_t))
                                     as *mut std::ffi::c_char;
                                 memcpy(str as *mut std::ffi::c_void, key.mv_data, key.mv_size);
@@ -615,7 +611,6 @@ unsafe fn main_0(
                                             str,
                                         );
                                         list += 1;
-                                        list;
                                     } else {
                                         rc = dumpit(txn, db2, str);
                                         if rc != 0 {
@@ -625,7 +620,9 @@ unsafe fn main_0(
                                     mdb_dbi_close(env, db2);
                                 }
                                 free(str as *mut std::ffi::c_void);
-                                rc != 0;
+                                if rc != 0 {
+                                    continue;
+                                }
                             }
                             mdb_cursor_close(cursor);
                             if count == 0 {
@@ -666,7 +663,11 @@ unsafe fn main_0(
             }
         }
         mdb_env_close(env);
-        if rc != 0 { EXIT_FAILURE } else { EXIT_SUCCESS }
+        if rc != 0 {
+            EXIT_FAILURE
+        } else {
+            EXIT_SUCCESS
+        }
     }
 }
 pub fn main() {
