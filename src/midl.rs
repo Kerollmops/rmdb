@@ -8,12 +8,13 @@
     unused_mut
 )]
 unsafe extern "C" {
-    fn malloc(__size: std::ffi::c_ulong) -> *mut std::ffi::c_void;
     fn realloc(__ptr: *mut std::ffi::c_void, __size: size_t) -> *mut std::ffi::c_void;
     fn free(__ptr: *mut std::ffi::c_void);
 }
 pub type size_t = usize;
 pub type mdb_size_t = size_t;
+
+use ::core::mem::size_of;
 
 use crate::{MDB_ID, MDB_ID2, MDB_ID2L, MDB_IDL};
 
@@ -54,9 +55,8 @@ pub unsafe extern "C" fn mdb_midl_search(mut ids: MDB_IDL, mut id: MDB_ID) -> st
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mdb_midl_alloc(mut num: std::ffi::c_int) -> MDB_IDL {
     unsafe {
-        let mut ids: MDB_IDL = malloc(
-            ((num + 2 as std::ffi::c_int) as std::ffi::c_ulong)
-                .wrapping_mul(::core::mem::size_of::<MDB_ID>() as std::ffi::c_ulong),
+        let mut ids: MDB_IDL = libc::malloc(
+            ((num + 2 as std::ffi::c_int) as usize).wrapping_mul(size_of::<MDB_ID>() as usize),
         ) as MDB_IDL;
         if !ids.is_null() {
             let fresh0 = ids;
@@ -89,7 +89,7 @@ pub unsafe extern "C" fn mdb_midl_shrink(mut idp: *mut MDB_IDL) {
                     ((((1 as std::ffi::c_int) << (MDB_IDL_LOGN + 1 as std::ffi::c_int))
                         - 1 as std::ffi::c_int
                         + 2 as std::ffi::c_int) as size_t)
-                        .wrapping_mul(::core::mem::size_of::<MDB_ID>()),
+                        .wrapping_mul(size_of::<MDB_ID>()),
                 ) as MDB_IDL;
                 !ids.is_null()
             }
@@ -113,7 +113,7 @@ unsafe extern "C" fn mdb_midl_grow(
             (*idn as usize)
                 .wrapping_add(num as usize)
                 .wrapping_add(2)
-                .wrapping_mul(::core::mem::size_of::<MDB_ID>()),
+                .wrapping_mul(size_of::<MDB_ID>()),
         ) as MDB_IDL;
         if idn.is_null() {
             return ENOMEM;
@@ -143,7 +143,7 @@ pub unsafe extern "C" fn mdb_midl_need(
                 & -(256 as std::ffi::c_int) as std::ffi::c_uint;
             ids = realloc(
                 ids.offset(-(1 as std::ffi::c_int as isize)) as *mut std::ffi::c_void,
-                (num as size_t).wrapping_mul(::core::mem::size_of::<MDB_ID>() as size_t),
+                (num as size_t).wrapping_mul(size_of::<MDB_ID>() as size_t),
             ) as MDB_IDL;
             if ids.is_null() {
                 return ENOMEM;
