@@ -395,9 +395,8 @@ unsafe fn main_0(
             abort();
         };
         rc = mdb_put(txn, dbi, &mut key, &mut data, 0x20 as std::ffi::c_uint);
-        if rc != -(30799 as std::ffi::c_int) {
-            {
-                if rc != 0 {
+        if rc != -(30799 as std::ffi::c_int)
+            && rc != 0 {
                     fprintf(
                         get_stderr(),
                         b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
@@ -408,9 +407,7 @@ unsafe fn main_0(
                         mdb_strerror(rc),
                     );
                     abort();
-                }
-            };
-        }
+                };
         mdb_txn_abort(txn);
         sprintf(
             sval.as_mut_ptr(),
@@ -431,9 +428,8 @@ unsafe fn main_0(
             abort();
         };
         rc = mdb_put(txn, dbi, &mut key, &mut data, 0x20 as std::ffi::c_uint);
-        if rc != -(30799 as std::ffi::c_int) {
-            {
-                if rc != 0 {
+        if rc != -(30799 as std::ffi::c_int)
+            && rc != 0 {
                     fprintf(
                         get_stderr(),
                         b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
@@ -444,9 +440,7 @@ unsafe fn main_0(
                         mdb_strerror(rc),
                     );
                     abort();
-                }
-            };
-        }
+                };
         mdb_txn_abort(txn);
         sprintf(
             sval.as_mut_ptr(),
@@ -467,9 +461,8 @@ unsafe fn main_0(
             abort();
         };
         rc = mdb_put(txn, dbi, &mut key, &mut data, 0x20 as std::ffi::c_uint);
-        if rc != -(30799 as std::ffi::c_int) {
-            {
-                if rc != 0 {
+        if rc != -(30799 as std::ffi::c_int)
+            && rc != 0 {
                     fprintf(
                         get_stderr(),
                         b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
@@ -480,9 +473,7 @@ unsafe fn main_0(
                         mdb_strerror(rc),
                     );
                     abort();
-                }
-            };
-        }
+                };
         rc = mdb_txn_commit(txn);
         if rc == 0 as std::ffi::c_int {
         } else {

@@ -111,7 +111,7 @@ unsafe extern "C" {
     fn pthread_self() -> pthread_t;
     fn pthread_setspecific(_: pthread_key_t, _: *const std::ffi::c_void) -> std::ffi::c_int;
     fn pthread_sigmask(_: std::ffi::c_int, _: *const sigset_t, _: *mut sigset_t)
-    -> std::ffi::c_int;
+        -> std::ffi::c_int;
     fn sigwait(_: *const sigset_t, _: *mut std::ffi::c_int) -> std::ffi::c_int;
     fn ftok(_: *const std::ffi::c_char, _: std::ffi::c_int) -> key_t;
     fn semctl(
@@ -1009,7 +1009,6 @@ unsafe extern "C" fn mdb_page_loose(
             *fresh0 = (*txn).mt_loose_pgs;
             (*txn).mt_loose_pgs = mp;
             (*txn).mt_loose_count += 1;
-            (*txn).mt_loose_count;
             (*mp).mp_flags =
                 ((*mp).mp_flags as std::ffi::c_int | 0x4000 as std::ffi::c_int) as uint16_t;
         } else {
@@ -1333,7 +1332,6 @@ unsafe extern "C" fn mdb_page_dirty(mut txn: *mut MDB_txn, mut mp: *mut MDB_page
             );
         };
         (*txn).mt_dirty_room = ((*txn).mt_dirty_room).wrapping_sub(1);
-        (*txn).mt_dirty_room;
     }
 }
 unsafe extern "C" fn mdb_page_alloc(
@@ -1381,7 +1379,6 @@ unsafe extern "C" fn mdb_page_alloc(
             np = (*txn).mt_loose_pgs;
             (*txn).mt_loose_pgs = *(np.offset(2 as std::ffi::c_int as isize) as *mut *mut MDB_page);
             (*txn).mt_loose_count -= 1;
-            (*txn).mt_loose_count;
             *mp = np;
             return 0 as std::ffi::c_int;
         }
@@ -14140,7 +14137,11 @@ unsafe extern "C" fn mdb_env_copyfd1(
             pthread_cond_destroy(&mut my.mc_cond);
         }
         pthread_mutex_destroy(&mut my.mc_mutex);
-        if rc != 0 { rc } else { my.mc_error }
+        if rc != 0 {
+            rc
+        } else {
+            my.mc_error
+        }
     }
 }
 #[cold]
@@ -14411,7 +14412,11 @@ pub unsafe extern "C" fn mdb_env_set_userctx(
 #[cold]
 pub unsafe extern "C" fn mdb_env_get_userctx(mut env: *mut MDB_env) -> *mut std::ffi::c_void {
     unsafe {
-        if !env.is_null() { (*env).me_userctx } else { std::ptr::null_mut::<std::ffi::c_void>() }
+        if !env.is_null() {
+            (*env).me_userctx
+        } else {
+            std::ptr::null_mut::<std::ffi::c_void>()
+        }
     }
 }
 #[unsafe(no_mangle)]
