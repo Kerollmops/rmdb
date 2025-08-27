@@ -7,9 +7,7 @@
     unused_assignments,
     unused_mut
 )]
-unsafe extern "C" {
-    fn realloc(__ptr: *mut std::ffi::c_void, __size: size_t) -> *mut std::ffi::c_void;
-}
+
 pub type size_t = usize;
 pub type mdb_size_t = size_t;
 
@@ -83,7 +81,7 @@ pub unsafe extern "C" fn mdb_midl_shrink(mut idp: *mut MDB_IDL) {
             > (((1 as std::ffi::c_int) << (MDB_IDL_LOGN + 1 as std::ffi::c_int))
                 - 1 as std::ffi::c_int) as MDB_ID
             && {
-                ids = realloc(
+                ids = libc::realloc(
                     ids as *mut std::ffi::c_void,
                     ((((1 as std::ffi::c_int) << (MDB_IDL_LOGN + 1 as std::ffi::c_int))
                         - 1 as std::ffi::c_int
@@ -107,7 +105,7 @@ unsafe extern "C" fn mdb_midl_grow(
 ) -> std::ffi::c_int {
     unsafe {
         let mut idn: MDB_IDL = (*idp).offset(-(1 as std::ffi::c_int as isize));
-        idn = realloc(
+        idn = libc::realloc(
             idn as *mut std::ffi::c_void,
             (*idn as usize)
                 .wrapping_add(num as usize)
@@ -140,7 +138,7 @@ pub unsafe extern "C" fn mdb_midl_need(
                 .wrapping_add(num.wrapping_div(4 as std::ffi::c_uint))
                 .wrapping_add((256 as std::ffi::c_int + 2 as std::ffi::c_int) as std::ffi::c_uint)
                 & -(256 as std::ffi::c_int) as std::ffi::c_uint;
-            ids = realloc(
+            ids = libc::realloc(
                 ids.offset(-(1 as std::ffi::c_int as isize)) as *mut std::ffi::c_void,
                 (num as size_t).wrapping_mul(size_of::<MDB_ID>() as size_t),
             ) as MDB_IDL;
