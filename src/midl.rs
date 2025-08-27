@@ -18,8 +18,7 @@ use crate::{MDB_ID, MDB_ID2, MDB_ID2L, MDB_IDL};
 pub const MDB_IDL_LOGN: std::ffi::c_int = 16 as std::ffi::c_int;
 pub const ENOMEM: std::ffi::c_int = 12 as std::ffi::c_int;
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mdb_midl_search(mut ids: MDB_IDL, mut id: MDB_ID) -> std::ffi::c_uint {
+pub unsafe fn mdb_midl_search(mut ids: MDB_IDL, mut id: MDB_ID) -> std::ffi::c_uint {
     unsafe {
         let mut base: std::ffi::c_uint = 0 as std::ffi::c_uint;
         let mut cursor: std::ffi::c_uint = 1 as std::ffi::c_uint;
@@ -49,8 +48,8 @@ pub unsafe extern "C" fn mdb_midl_search(mut ids: MDB_IDL, mut id: MDB_ID) -> st
         cursor
     }
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mdb_midl_alloc(mut num: std::ffi::c_int) -> MDB_IDL {
+
+pub unsafe fn mdb_midl_alloc(mut num: std::ffi::c_int) -> MDB_IDL {
     unsafe {
         let mut ids: MDB_IDL = libc::malloc(
             ((num + 2 as std::ffi::c_int) as usize).wrapping_mul(size_of::<MDB_ID>() as usize),
@@ -64,16 +63,16 @@ pub unsafe extern "C" fn mdb_midl_alloc(mut num: std::ffi::c_int) -> MDB_IDL {
         ids
     }
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mdb_midl_free(mut ids: MDB_IDL) {
+
+pub unsafe fn mdb_midl_free(mut ids: MDB_IDL) {
     unsafe {
         if !ids.is_null() {
             libc::free(ids.offset(-(1 as isize)) as *mut std::ffi::c_void);
         }
     }
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mdb_midl_shrink(mut idp: *mut MDB_IDL) {
+
+pub unsafe fn mdb_midl_shrink(mut idp: *mut MDB_IDL) {
     unsafe {
         let mut ids: MDB_IDL = *idp;
         ids = ids.offset(-1);
@@ -99,10 +98,8 @@ pub unsafe extern "C" fn mdb_midl_shrink(mut idp: *mut MDB_IDL) {
         }
     }
 }
-unsafe extern "C" fn mdb_midl_grow(
-    mut idp: *mut MDB_IDL,
-    mut num: std::ffi::c_int,
-) -> std::ffi::c_int {
+
+unsafe fn mdb_midl_grow(mut idp: *mut MDB_IDL, mut num: std::ffi::c_int) -> std::ffi::c_int {
     unsafe {
         let mut idn: MDB_IDL = (*idp).offset(-(1 as std::ffi::c_int as isize));
         idn = libc::realloc(
@@ -123,11 +120,8 @@ unsafe extern "C" fn mdb_midl_grow(
         0 as std::ffi::c_int
     }
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mdb_midl_need(
-    mut idp: *mut MDB_IDL,
-    mut num: std::ffi::c_uint,
-) -> std::ffi::c_int {
+
+pub unsafe fn mdb_midl_need(mut idp: *mut MDB_IDL, mut num: std::ffi::c_uint) -> std::ffi::c_int {
     unsafe {
         let mut ids: MDB_IDL = *idp;
         num = (num as std::ffi::c_ulong)
@@ -153,8 +147,8 @@ pub unsafe extern "C" fn mdb_midl_need(
         0 as std::ffi::c_int
     }
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mdb_midl_append(mut idp: *mut MDB_IDL, mut id: MDB_ID) -> std::ffi::c_int {
+
+pub unsafe fn mdb_midl_append(mut idp: *mut MDB_IDL, mut id: MDB_ID) -> std::ffi::c_int {
     unsafe {
         let mut ids: MDB_IDL = *idp;
         if *ids.offset(0 as std::ffi::c_int as isize)
@@ -176,11 +170,8 @@ pub unsafe extern "C" fn mdb_midl_append(mut idp: *mut MDB_IDL, mut id: MDB_ID) 
         0 as std::ffi::c_int
     }
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mdb_midl_append_list(
-    mut idp: *mut MDB_IDL,
-    mut app: MDB_IDL,
-) -> std::ffi::c_int {
+
+pub unsafe fn mdb_midl_append_list(mut idp: *mut MDB_IDL, mut app: MDB_IDL) -> std::ffi::c_int {
     unsafe {
         let mut ids: MDB_IDL = *idp;
         if (*ids.offset(0 as std::ffi::c_int as isize))
@@ -210,8 +201,8 @@ pub unsafe extern "C" fn mdb_midl_append_list(
         0 as std::ffi::c_int
     }
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mdb_midl_append_range(
+
+pub unsafe fn mdb_midl_append_range(
     mut idp: *mut MDB_IDL,
     mut id: MDB_ID,
     mut n: std::ffi::c_uint,
@@ -242,8 +233,8 @@ pub unsafe extern "C" fn mdb_midl_append_range(
         0 as std::ffi::c_int
     }
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mdb_midl_xmerge(mut idl: MDB_IDL, mut merge: MDB_IDL) {
+
+pub unsafe fn mdb_midl_xmerge(mut idl: MDB_IDL, mut merge: MDB_IDL) {
     unsafe {
         let mut old_id: MDB_ID = 0;
         let mut merge_id: MDB_ID = 0;
@@ -271,9 +262,9 @@ pub unsafe extern "C" fn mdb_midl_xmerge(mut idl: MDB_IDL, mut merge: MDB_IDL) {
         *idl.offset(0 as std::ffi::c_int as isize) = total;
     }
 }
+
 pub const SMALL: std::ffi::c_int = 8 as std::ffi::c_int;
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mdb_midl_sort(mut ids: MDB_IDL) {
+pub unsafe fn mdb_midl_sort(mut ids: MDB_IDL) {
     unsafe {
         let mut istack: [std::ffi::c_int; 64] = [0; 64];
         let mut i: std::ffi::c_int = 0;
@@ -371,8 +362,8 @@ pub unsafe extern "C" fn mdb_midl_sort(mut ids: MDB_IDL) {
         }
     }
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mdb_mid2l_search(mut ids: MDB_ID2L, mut id: MDB_ID) -> std::ffi::c_uint {
+
+pub unsafe fn mdb_mid2l_search(mut ids: MDB_ID2L, mut id: MDB_ID) -> std::ffi::c_uint {
     unsafe {
         let mut base: std::ffi::c_uint = 0 as std::ffi::c_uint;
         let mut cursor: std::ffi::c_uint = 1 as std::ffi::c_uint;
@@ -402,11 +393,8 @@ pub unsafe extern "C" fn mdb_mid2l_search(mut ids: MDB_ID2L, mut id: MDB_ID) -> 
         cursor
     }
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mdb_mid2l_insert(
-    mut ids: MDB_ID2L,
-    mut id: *mut MDB_ID2,
-) -> std::ffi::c_int {
+
+pub unsafe fn mdb_mid2l_insert(mut ids: MDB_ID2L, mut id: *mut MDB_ID2) -> std::ffi::c_int {
     unsafe {
         let mut x: std::ffi::c_uint = 0;
         let mut i: std::ffi::c_uint = 0;
@@ -438,11 +426,8 @@ pub unsafe extern "C" fn mdb_mid2l_insert(
         0 as std::ffi::c_int
     }
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mdb_mid2l_append(
-    mut ids: MDB_ID2L,
-    mut id: *mut MDB_ID2,
-) -> std::ffi::c_int {
+
+pub unsafe fn mdb_mid2l_append(mut ids: MDB_ID2L, mut id: *mut MDB_ID2) -> std::ffi::c_int {
     unsafe {
         if (*ids.offset(0 as std::ffi::c_int as isize)).mid
             >= (((1 as std::ffi::c_int) << (MDB_IDL_LOGN + 1 as std::ffi::c_int))
