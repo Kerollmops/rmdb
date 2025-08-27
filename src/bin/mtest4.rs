@@ -395,19 +395,18 @@ unsafe fn main_0(
             abort();
         };
         rc = mdb_put(txn, dbi, &mut key, &mut data, 0x20 as std::ffi::c_uint);
-        if rc != -(30799 as std::ffi::c_int)
-            && rc != 0 {
-                    fprintf(
-                        get_stderr(),
-                        b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
-                        b"mtest4.c\0" as *const u8 as *const std::ffi::c_char,
-                        100 as std::ffi::c_int,
-                        b"mdb_put(txn, dbi, &key, &data, MDB_NODUPDATA)\0" as *const u8
-                            as *const std::ffi::c_char,
-                        mdb_strerror(rc),
-                    );
-                    abort();
-                };
+        if rc != -(30799 as std::ffi::c_int) && rc != 0 {
+            fprintf(
+                get_stderr(),
+                b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
+                b"mtest4.c\0" as *const u8 as *const std::ffi::c_char,
+                100 as std::ffi::c_int,
+                b"mdb_put(txn, dbi, &key, &data, MDB_NODUPDATA)\0" as *const u8
+                    as *const std::ffi::c_char,
+                mdb_strerror(rc),
+            );
+            abort();
+        };
         mdb_txn_abort(txn);
         sprintf(
             sval.as_mut_ptr(),
@@ -428,19 +427,18 @@ unsafe fn main_0(
             abort();
         };
         rc = mdb_put(txn, dbi, &mut key, &mut data, 0x20 as std::ffi::c_uint);
-        if rc != -(30799 as std::ffi::c_int)
-            && rc != 0 {
-                    fprintf(
-                        get_stderr(),
-                        b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
-                        b"mtest4.c\0" as *const u8 as *const std::ffi::c_char,
-                        105 as std::ffi::c_int,
-                        b"mdb_put(txn, dbi, &key, &data, MDB_NODUPDATA)\0" as *const u8
-                            as *const std::ffi::c_char,
-                        mdb_strerror(rc),
-                    );
-                    abort();
-                };
+        if rc != -(30799 as std::ffi::c_int) && rc != 0 {
+            fprintf(
+                get_stderr(),
+                b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
+                b"mtest4.c\0" as *const u8 as *const std::ffi::c_char,
+                105 as std::ffi::c_int,
+                b"mdb_put(txn, dbi, &key, &data, MDB_NODUPDATA)\0" as *const u8
+                    as *const std::ffi::c_char,
+                mdb_strerror(rc),
+            );
+            abort();
+        };
         mdb_txn_abort(txn);
         sprintf(
             sval.as_mut_ptr(),
@@ -461,19 +459,18 @@ unsafe fn main_0(
             abort();
         };
         rc = mdb_put(txn, dbi, &mut key, &mut data, 0x20 as std::ffi::c_uint);
-        if rc != -(30799 as std::ffi::c_int)
-            && rc != 0 {
-                    fprintf(
-                        get_stderr(),
-                        b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
-                        b"mtest4.c\0" as *const u8 as *const std::ffi::c_char,
-                        110 as std::ffi::c_int,
-                        b"mdb_put(txn, dbi, &key, &data, MDB_NODUPDATA)\0" as *const u8
-                            as *const std::ffi::c_char,
-                        mdb_strerror(rc),
-                    );
-                    abort();
-                };
+        if rc != -(30799 as std::ffi::c_int) && rc != 0 {
+            fprintf(
+                get_stderr(),
+                b"%s:%d: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,
+                b"mtest4.c\0" as *const u8 as *const std::ffi::c_char,
+                110 as std::ffi::c_int,
+                b"mdb_put(txn, dbi, &key, &data, MDB_NODUPDATA)\0" as *const u8
+                    as *const std::ffi::c_char,
+                mdb_strerror(rc),
+            );
+            abort();
+        };
         rc = mdb_txn_commit(txn);
         if rc == 0 as std::ffi::c_int {
         } else {
