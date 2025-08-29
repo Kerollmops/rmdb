@@ -90,31 +90,39 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@nightly
 
+      - name: Set sed command for cross-platform compatibility
+        run: |
+          if [[ "$OSTYPE" == "darwin"* ]]; then
+            echo "SED_INPLACE=sed -i ''" >> $GITHUB_ENV
+          else
+            echo "SED_INPLACE=sed -i" >> $GITHUB_ENV
+          fi
+
       - name: Rename rmdb crate to lmdb-master-sys
         run: |
           cd rmdb
-          sed -i 's/^name = "rmdb"/name = "lmdb-master-sys"/' Cargo.toml
+          $SED_INPLACE 's/^name = "rmdb"/name = "lmdb-master-sys"/' Cargo.toml
 
       - name: Modify heed dependencies and remove unsupported features
         run: |
           cd heed/heed
 
           # Update lmdb-master-sys dependency to use local version
-          sed -i 's/lmdb-master-sys = { [^}]* }/lmdb-master-sys = { version = "0.1.0" }/' Cargo.toml
+          $SED_INPLACE 's/lmdb-master-sys = { [^}]* }/lmdb-master-sys = { version = "0.1.0" }/' Cargo.toml
 
           # Comment out unsupported features
-          sed -i 's/^posix-sem = /# posix-sem = /' Cargo.toml
-          sed -i 's/^mdb_idl_logn_8 = /# mdb_idl_logn_8 = /' Cargo.toml
-          sed -i 's/^mdb_idl_logn_9 = /# mdb_idl_logn_9 = /' Cargo.toml
-          sed -i 's/^mdb_idl_logn_10 = /# mdb_idl_logn_10 = /' Cargo.toml
-          sed -i 's/^mdb_idl_logn_11 = /# mdb_idl_logn_11 = /' Cargo.toml
-          sed -i 's/^mdb_idl_logn_12 = /# mdb_idl_logn_12 = /' Cargo.toml
-          sed -i 's/^mdb_idl_logn_13 = /# mdb_idl_logn_13 = /' Cargo.toml
-          sed -i 's/^mdb_idl_logn_14 = /# mdb_idl_logn_14 = /' Cargo.toml
-          sed -i 's/^mdb_idl_logn_15 = /# mdb_idl_logn_15 = /' Cargo.toml
-          sed -i 's/^mdb_idl_logn_16 = /# mdb_idl_logn_16 = /' Cargo.toml
-          sed -i 's/^longer-keys = /# longer-keys = /' Cargo.toml
-          sed -i 's/^use-valgrind = /# use-valgrind = /' Cargo.toml
+          $SED_INPLACE 's/^posix-sem = /# posix-sem = /' Cargo.toml
+          $SED_INPLACE 's/^mdb_idl_logn_8 = /# mdb_idl_logn_8 = /' Cargo.toml
+          $SED_INPLACE 's/^mdb_idl_logn_9 = /# mdb_idl_logn_9 = /' Cargo.toml
+          $SED_INPLACE 's/^mdb_idl_logn_10 = /# mdb_idl_logn_10 = /' Cargo.toml
+          $SED_INPLACE 's/^mdb_idl_logn_11 = /# mdb_idl_logn_11 = /' Cargo.toml
+          $SED_INPLACE 's/^mdb_idl_logn_12 = /# mdb_idl_logn_12 = /' Cargo.toml
+          $SED_INPLACE 's/^mdb_idl_logn_13 = /# mdb_idl_logn_13 = /' Cargo.toml
+          $SED_INPLACE 's/^mdb_idl_logn_14 = /# mdb_idl_logn_14 = /' Cargo.toml
+          $SED_INPLACE 's/^mdb_idl_logn_15 = /# mdb_idl_logn_15 = /' Cargo.toml
+          $SED_INPLACE 's/^mdb_idl_logn_16 = /# mdb_idl_logn_16 = /' Cargo.toml
+          $SED_INPLACE 's/^longer-keys = /# longer-keys = /' Cargo.toml
+          $SED_INPLACE 's/^use-valgrind = /# use-valgrind = /' Cargo.toml
 
       - name: Add patch for local lmdb-master-sys
         run: |
