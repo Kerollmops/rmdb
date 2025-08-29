@@ -27,12 +27,23 @@ pub type MDB_ID2L = *mut MDB_ID2;
 pub const MDB_IDL_LOGN: std::ffi::c_int = 16 as std::ffi::c_int;
 pub const ENOMEM: std::ffi::c_int = 12 as std::ffi::c_int;
 
+// /** Append ID to IDL. The IDL must be big enough. */
+// #define mdb_midl_xappend(idl, id) do { \
+// 		MDB_ID *xidl = (idl), xlen = ++(xidl[0]); \
+// 		xidl[xlen] = (id); \
+// 	} while (0)
+
 /// Search for an ID in an IDL.
 ///
 /// @param[in] ids	The IDL to search.
 /// @param[in] id	The ID to search for.
 /// @return	The index of the first ID greater than or equal to \b id.
 pub unsafe fn mdb_midl_search(ids: MDB_IDL, id: MDB_ID) -> std::ffi::c_uint {
+    /*
+     * binary search of id in ids
+     * if found, returns position of id
+     * if not found, returns first position greater than id
+     */
     unsafe {
         let mut base: std::ffi::c_uint = 0 as std::ffi::c_uint;
         let mut cursor: std::ffi::c_uint = 1 as std::ffi::c_uint;
