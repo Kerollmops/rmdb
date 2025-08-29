@@ -111,7 +111,7 @@ unsafe extern "C" {
     fn pthread_self() -> pthread_t;
     fn pthread_setspecific(_: pthread_key_t, _: *const std::ffi::c_void) -> std::ffi::c_int;
     fn pthread_sigmask(_: std::ffi::c_int, _: *const sigset_t, _: *mut sigset_t)
-    -> std::ffi::c_int;
+        -> std::ffi::c_int;
     fn sigwait(_: *const sigset_t, _: *mut std::ffi::c_int) -> std::ffi::c_int;
     fn ftok(_: *const std::ffi::c_char, _: std::ffi::c_int) -> key_t;
     fn semctl(
@@ -396,15 +396,6 @@ pub struct mdb_mutex {
     pub semnum: std::ffi::c_int,
     pub locked: *mut std::ffi::c_int,
 }
-pub type MDB_ID2L = *mut MDB_ID2;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct MDB_ID2 {
-    pub mid: MDB_ID,
-    pub mptr: *mut std::ffi::c_void,
-}
-pub type MDB_ID = mdb_size_t;
-pub type MDB_IDL = *mut MDB_ID;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct MDB_page {
@@ -1997,7 +1988,7 @@ pub unsafe extern "C" fn mdb_env_sync0(
                     };
                 if msync(
                     (*env).me_map as *mut std::ffi::c_void,
-                    (*env).me_psize as pgno_t * numpgs,
+                    ((*env).me_psize as pgno_t * numpgs) as u64,
                     flags,
                 ) != 0
                 {
@@ -2510,7 +2501,7 @@ pub unsafe extern "C" fn mdb_txn_begin(
                 if !((*env).me_pgstate.mf_pghead).is_null() {
                     size = (*((*env).me_pgstate.mf_pghead).offset(0 as std::ffi::c_int as isize))
                         .wrapping_add(1 as std::ffi::c_int as pgno_t)
-                        .wrapping_mul(::core::mem::size_of::<MDB_ID>() as std::ffi::c_ulong)
+                        .wrapping_mul(::core::mem::size_of::<MDB_ID>() as _)
                         as std::ffi::c_int;
                     (*env).me_pgstate.mf_pghead = mdb_midl_alloc(
                         *((*env).me_pgstate.mf_pghead).offset(0 as std::ffi::c_int as isize)
@@ -2571,7 +2562,7 @@ pub unsafe extern "C" fn mdb_txn_id(mut txn: *mut MDB_txn) -> mdb_size_t {
         if txn.is_null() {
             return 0 as std::ffi::c_int as mdb_size_t;
         }
-        (*txn).mt_txnid
+        (*txn).mt_txnid as _
     }
 }
 unsafe extern "C" fn mdb_dbis_update(mut txn: *mut MDB_txn, mut keep: std::ffi::c_int) {
@@ -2916,10 +2907,11 @@ unsafe extern "C" fn mdb_freelist_save(mut txn: *mut MDB_txn) -> std::ffi::c_int
                 key.mv_size = ::core::mem::size_of::<txnid_t>() as std::ffi::c_ulong;
                 key.mv_data = &mut (*txn).mt_txnid as *mut txnid_t as *mut std::ffi::c_void;
                 loop {
-                    freecnt = *free_pgs.offset(0 as std::ffi::c_int as isize);
-                    data.mv_size = (*free_pgs.offset(0 as std::ffi::c_int as isize))
+                    freecnt = *free_pgs.offset(0);
+                    data.mv_size = (*free_pgs.offset(0))
                         .wrapping_add(1 as std::ffi::c_int as pgno_t)
-                        .wrapping_mul(::core::mem::size_of::<MDB_ID>() as std::ffi::c_ulong);
+                        .wrapping_mul(::core::mem::size_of::<MDB_ID>() as _)
+                        as _;
                     rc = _mdb_cursor_put(
                         &mut mc,
                         &mut key,
@@ -4072,9 +4064,9 @@ pub unsafe extern "C" fn mdb_env_set_mapsize(
             if size == 0 {
                 size = (*meta).mm_mapsize;
             }
-            let mut minsize: mdb_size_t = ((*meta).mm_last_pg)
+            let mut minsize: mdb_size_t = (((*meta).mm_last_pg)
                 .wrapping_add(1 as std::ffi::c_int as pgno_t)
-                * (*env).me_psize as pgno_t;
+                * (*env).me_psize as pgno_t) as _;
             if size < minsize {
                 size = minsize;
             }
@@ -4092,7 +4084,7 @@ pub unsafe extern "C" fn mdb_env_set_mapsize(
         }
         (*env).me_mapsize = size;
         if (*env).me_psize != 0 {
-            (*env).me_maxpg = (*env).me_mapsize / (*env).me_psize as mdb_size_t;
+            (*env).me_maxpg = ((*env).me_mapsize / (*env).me_psize as mdb_size_t) as _;
         }
         0 as std::ffi::c_int
     }
@@ -4335,9 +4327,9 @@ unsafe extern "C" fn mdb_env_open2(
         if (*env).me_mapsize == 0 {
             (*env).me_mapsize = meta.mm_mapsize;
         }
-        let mut minsize: mdb_size_t = (meta.mm_last_pg)
-            .wrapping_add(1 as std::ffi::c_int as pgno_t)
-            * meta.mm_dbs[0 as std::ffi::c_int as usize].md_pad as pgno_t;
+        let mut minsize: mdb_size_t =
+            ((meta.mm_last_pg).wrapping_add(1 as std::ffi::c_int as pgno_t)
+                * meta.mm_dbs[0 as std::ffi::c_int as usize].md_pad as pgno_t) as _;
         if (*env).me_mapsize < minsize {
             (*env).me_mapsize = minsize;
         }
@@ -4382,7 +4374,7 @@ unsafe extern "C" fn mdb_env_open2(
             as std::ffi::c_ulong)
             .wrapping_sub(::core::mem::size_of::<indx_t>() as std::ffi::c_ulong)
             as std::ffi::c_uint;
-        (*env).me_maxpg = (*env).me_mapsize / (*env).me_psize as mdb_size_t;
+        (*env).me_maxpg = ((*env).me_mapsize / (*env).me_psize as mdb_size_t) as _;
         if prev != 0 && !((*env).me_txns).is_null() {
             ::core::ptr::write_volatile(
                 &mut (*(*env).me_txns).mt1.mtb.mtb_txnid as *mut txnid_t,
@@ -14132,7 +14124,11 @@ unsafe extern "C" fn mdb_env_copyfd1(
             pthread_cond_destroy(&mut my.mc_cond);
         }
         pthread_mutex_destroy(&mut my.mc_mutex);
-        if rc != 0 { rc } else { my.mc_error }
+        if rc != 0 {
+            rc
+        } else {
+            my.mc_error
+        }
     }
 }
 #[cold]
@@ -14222,7 +14218,7 @@ unsafe extern "C" fn mdb_env_copyfd0(
                 semop((*wmutex).semid, &mut sb_0, 1 as std::ffi::c_int as size_t);
             }
             if rc == 0 {
-                w3 = (*txn).mt_next_pgno * (*env).me_psize as pgno_t;
+                w3 = ((*txn).mt_next_pgno * (*env).me_psize as pgno_t) as _;
                 let mut fsize: mdb_size_t = 0 as std::ffi::c_int as mdb_size_t;
                 rc = mdb_fsize((*env).me_fd, &mut fsize);
                 if rc == 0 {
@@ -14403,7 +14399,11 @@ pub unsafe extern "C" fn mdb_env_set_userctx(
 #[cold]
 pub unsafe extern "C" fn mdb_env_get_userctx(mut env: *mut MDB_env) -> *mut std::ffi::c_void {
     unsafe {
-        if !env.is_null() { (*env).me_userctx } else { std::ptr::null_mut::<std::ffi::c_void>() }
+        if !env.is_null() {
+            (*env).me_userctx
+        } else {
+            std::ptr::null_mut::<std::ffi::c_void>()
+        }
     }
 }
 #[unsafe(no_mangle)]
@@ -14457,9 +14457,9 @@ unsafe extern "C" fn mdb_stat0(
     unsafe {
         (*arg).ms_psize = (*env).me_psize;
         (*arg).ms_depth = (*db).md_depth as std::ffi::c_uint;
-        (*arg).ms_branch_pages = (*db).md_branch_pages;
-        (*arg).ms_leaf_pages = (*db).md_leaf_pages;
-        (*arg).ms_overflow_pages = (*db).md_overflow_pages;
+        (*arg).ms_branch_pages = (*db).md_branch_pages as _;
+        (*arg).ms_leaf_pages = (*db).md_leaf_pages as _;
+        (*arg).ms_overflow_pages = (*db).md_overflow_pages as _;
         (*arg).ms_entries = (*db).md_entries;
         0 as std::ffi::c_int
     }
@@ -14496,8 +14496,8 @@ pub unsafe extern "C" fn mdb_env_info(
         }
         meta = mdb_env_pick_meta(env);
         (*arg).me_mapaddr = (*meta).mm_address;
-        (*arg).me_last_pgno = (*meta).mm_last_pg;
-        (*arg).me_last_txnid = (*meta).mm_txnid;
+        (*arg).me_last_pgno = (*meta).mm_last_pg as _;
+        (*arg).me_last_txnid = (*meta).mm_txnid as _;
         (*arg).me_mapsize = (*env).me_mapsize;
         (*arg).me_maxreaders = (*env).me_maxreaders;
         (*arg).me_numreaders = if !((*env).me_txns).is_null() {
