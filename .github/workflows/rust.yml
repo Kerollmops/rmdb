@@ -67,7 +67,7 @@ jobs:
           args: --bin ${{ matrix.bins }}
 
   test-heed-integration:
-    runs-on: ${{ matrix.os }}
+    runs-on: macos-latest
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
