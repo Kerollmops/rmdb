@@ -1132,11 +1132,7 @@ unsafe fn main_0(
             }
         }
         mdb_env_close(env);
-        if rc != 0 {
-            EXIT_FAILURE
-        } else {
-            EXIT_SUCCESS
-        }
+        if rc != 0 { EXIT_FAILURE } else { EXIT_SUCCESS }
     }
 }
 pub fn main() {

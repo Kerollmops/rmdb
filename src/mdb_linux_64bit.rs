@@ -185,9 +185,9 @@ unsafe extern "C" {
     fn fstatfs(__fildes: std::ffi::c_int, __buf: *mut statfs) -> std::ffi::c_int;
 }
 
-use crate::midl::*;
 use crate::MDB_cursor_op;
 use crate::MDB_cursor_op::*;
+use crate::midl::*;
 
 pub type __uint16_t = u16;
 pub type __uint32_t = u32;
