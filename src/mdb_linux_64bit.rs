@@ -185,6 +185,8 @@ unsafe extern "C" {
     fn fstatfs(__fildes: std::ffi::c_int, __buf: *mut statfs) -> std::ffi::c_int;
 }
 
+use crate::MDB_cursor_op;
+use crate::MDB_cursor_op::*;
 use crate::midl::*;
 
 pub type __uint16_t = u16;
@@ -643,15 +645,6 @@ pub struct MDB_env {
     pub me_assert_func: Option<MDB_assert_func>,
 }
 pub type MDB_assert_func = unsafe extern "C" fn(*mut MDB_env, *const std::ffi::c_char) -> ();
-pub type MDB_ID2L = *mut MDB_ID2;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct MDB_ID2 {
-    pub mid: MDB_ID,
-    pub mptr: *mut std::ffi::c_void,
-}
-pub type MDB_ID = mdb_size_t;
-pub type MDB_IDL = *mut MDB_ID;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct MDB_page {
@@ -834,26 +827,6 @@ pub struct MDB_txbody {
     pub mtb_numreaders: std::ffi::c_uint,
     pub mtb_rmutex: mdb_mutex_t,
 }
-pub type MDB_cursor_op = std::ffi::c_uint;
-pub const MDB_PREV_MULTIPLE: MDB_cursor_op = 18;
-pub const MDB_SET_RANGE: MDB_cursor_op = 17;
-pub const MDB_SET_KEY: MDB_cursor_op = 16;
-pub const MDB_SET: MDB_cursor_op = 15;
-pub const MDB_PREV_NODUP: MDB_cursor_op = 14;
-pub const MDB_PREV_DUP: MDB_cursor_op = 13;
-pub const MDB_PREV: MDB_cursor_op = 12;
-pub const MDB_NEXT_NODUP: MDB_cursor_op = 11;
-pub const MDB_NEXT_MULTIPLE: MDB_cursor_op = 10;
-pub const MDB_NEXT_DUP: MDB_cursor_op = 9;
-pub const MDB_NEXT: MDB_cursor_op = 8;
-pub const MDB_LAST_DUP: MDB_cursor_op = 7;
-pub const MDB_LAST: MDB_cursor_op = 6;
-pub const MDB_GET_MULTIPLE: MDB_cursor_op = 5;
-pub const MDB_GET_CURRENT: MDB_cursor_op = 4;
-pub const MDB_GET_BOTH_RANGE: MDB_cursor_op = 3;
-pub const MDB_GET_BOTH: MDB_cursor_op = 2;
-pub const MDB_FIRST_DUP: MDB_cursor_op = 1;
-pub const MDB_FIRST: MDB_cursor_op = 0;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct MDB_stat {
@@ -1593,17 +1566,13 @@ unsafe extern "C" fn mdb_find_oldest(mut txn: *mut MDB_txn) -> txnid_t {
 unsafe extern "C" fn mdb_page_dirty(mut txn: *mut MDB_txn, mut mp: *mut MDB_page) {
     let mut mid: MDB_ID2 = MDB_ID2 { mid: 0, mptr: 0 as *mut std::ffi::c_void };
     let mut rc: std::ffi::c_int = 0;
-    let mut insert: Option<unsafe extern "C" fn(MDB_ID2L, *mut MDB_ID2) -> std::ffi::c_int> = None;
+    let mut insert: Option<unsafe fn(MDB_ID2L, *mut MDB_ID2) -> std::ffi::c_int> = None;
     if (*txn).mt_flags & 0x80000 as std::ffi::c_uint != 0 {
-        insert = Some(
-            mdb_mid2l_append as unsafe extern "C" fn(MDB_ID2L, *mut MDB_ID2) -> std::ffi::c_int,
-        )
-            as Option<unsafe extern "C" fn(MDB_ID2L, *mut MDB_ID2) -> std::ffi::c_int>;
+        insert = Some(mdb_mid2l_append as unsafe fn(MDB_ID2L, *mut MDB_ID2) -> std::ffi::c_int)
+            as Option<unsafe fn(MDB_ID2L, *mut MDB_ID2) -> std::ffi::c_int>;
     } else {
-        insert = Some(
-            mdb_mid2l_insert as unsafe extern "C" fn(MDB_ID2L, *mut MDB_ID2) -> std::ffi::c_int,
-        )
-            as Option<unsafe extern "C" fn(MDB_ID2L, *mut MDB_ID2) -> std::ffi::c_int>;
+        insert = Some(mdb_mid2l_insert as unsafe fn(MDB_ID2L, *mut MDB_ID2) -> std::ffi::c_int)
+            as Option<unsafe fn(MDB_ID2L, *mut MDB_ID2) -> std::ffi::c_int>;
     }
     mid.mid = (*mp).mp_p.p_pgno as MDB_ID;
     mid.mptr = mp as *mut std::ffi::c_void;
