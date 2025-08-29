@@ -131,18 +131,9 @@ jobs:
           echo "[patch.crates-io]" >> Cargo.toml
           echo 'lmdb-master-sys = { path = "../rmdb" }' >> Cargo.toml
 
-      - name: Show modified files for debugging
-        run: |
-          echo "=== rmdb Cargo.toml ==="
-          head -10 rmdb/Cargo.toml
-          echo "=== heed/heed Cargo.toml (dependencies section) ==="
-          grep -A 20 "\[dependencies\]" heed/heed/Cargo.toml
-          echo "=== heed Cargo.toml (patch section) ==="
-          tail -5 heed/Cargo.toml
-
       - name: Run heed tests with rmdb
         run: |
-          cd heed
+          cd heed/heed
           cargo test
 
   clippy:
