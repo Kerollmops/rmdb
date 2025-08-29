@@ -186,6 +186,8 @@ unsafe extern "C" {
 }
 
 use crate::midl::*;
+use crate::MDB_cursor_op;
+use crate::MDB_cursor_op::*;
 
 pub type __uint16_t = u16;
 pub type __uint32_t = u32;
@@ -825,26 +827,6 @@ pub struct MDB_txbody {
     pub mtb_numreaders: std::ffi::c_uint,
     pub mtb_rmutex: mdb_mutex_t,
 }
-pub type MDB_cursor_op = std::ffi::c_uint;
-pub const MDB_PREV_MULTIPLE: MDB_cursor_op = 18;
-pub const MDB_SET_RANGE: MDB_cursor_op = 17;
-pub const MDB_SET_KEY: MDB_cursor_op = 16;
-pub const MDB_SET: MDB_cursor_op = 15;
-pub const MDB_PREV_NODUP: MDB_cursor_op = 14;
-pub const MDB_PREV_DUP: MDB_cursor_op = 13;
-pub const MDB_PREV: MDB_cursor_op = 12;
-pub const MDB_NEXT_NODUP: MDB_cursor_op = 11;
-pub const MDB_NEXT_MULTIPLE: MDB_cursor_op = 10;
-pub const MDB_NEXT_DUP: MDB_cursor_op = 9;
-pub const MDB_NEXT: MDB_cursor_op = 8;
-pub const MDB_LAST_DUP: MDB_cursor_op = 7;
-pub const MDB_LAST: MDB_cursor_op = 6;
-pub const MDB_GET_MULTIPLE: MDB_cursor_op = 5;
-pub const MDB_GET_CURRENT: MDB_cursor_op = 4;
-pub const MDB_GET_BOTH_RANGE: MDB_cursor_op = 3;
-pub const MDB_GET_BOTH: MDB_cursor_op = 2;
-pub const MDB_FIRST_DUP: MDB_cursor_op = 1;
-pub const MDB_FIRST: MDB_cursor_op = 0;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct MDB_stat {
