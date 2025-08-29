@@ -643,15 +643,6 @@ pub struct MDB_env {
     pub me_assert_func: Option<MDB_assert_func>,
 }
 pub type MDB_assert_func = unsafe extern "C" fn(*mut MDB_env, *const std::ffi::c_char) -> ();
-pub type MDB_ID2L = *mut MDB_ID2;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct MDB_ID2 {
-    pub mid: MDB_ID,
-    pub mptr: *mut std::ffi::c_void,
-}
-pub type MDB_ID = mdb_size_t;
-pub type MDB_IDL = *mut MDB_ID;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct MDB_page {
