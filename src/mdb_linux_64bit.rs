@@ -1584,17 +1584,13 @@ unsafe extern "C" fn mdb_find_oldest(mut txn: *mut MDB_txn) -> txnid_t {
 unsafe extern "C" fn mdb_page_dirty(mut txn: *mut MDB_txn, mut mp: *mut MDB_page) {
     let mut mid: MDB_ID2 = MDB_ID2 { mid: 0, mptr: 0 as *mut std::ffi::c_void };
     let mut rc: std::ffi::c_int = 0;
-    let mut insert: Option<unsafe extern "C" fn(MDB_ID2L, *mut MDB_ID2) -> std::ffi::c_int> = None;
+    let mut insert: Option<unsafe fn(MDB_ID2L, *mut MDB_ID2) -> std::ffi::c_int> = None;
     if (*txn).mt_flags & 0x80000 as std::ffi::c_uint != 0 {
-        insert = Some(
-            mdb_mid2l_append as unsafe extern "C" fn(MDB_ID2L, *mut MDB_ID2) -> std::ffi::c_int,
-        )
-            as Option<unsafe extern "C" fn(MDB_ID2L, *mut MDB_ID2) -> std::ffi::c_int>;
+        insert = Some(mdb_mid2l_append as unsafe fn(MDB_ID2L, *mut MDB_ID2) -> std::ffi::c_int)
+            as Option<unsafe fn(MDB_ID2L, *mut MDB_ID2) -> std::ffi::c_int>;
     } else {
-        insert = Some(
-            mdb_mid2l_insert as unsafe extern "C" fn(MDB_ID2L, *mut MDB_ID2) -> std::ffi::c_int,
-        )
-            as Option<unsafe extern "C" fn(MDB_ID2L, *mut MDB_ID2) -> std::ffi::c_int>;
+        insert = Some(mdb_mid2l_insert as unsafe fn(MDB_ID2L, *mut MDB_ID2) -> std::ffi::c_int)
+            as Option<unsafe fn(MDB_ID2L, *mut MDB_ID2) -> std::ffi::c_int>;
     }
     mid.mid = (*mp).mp_p.p_pgno as MDB_ID;
     mid.mptr = mp as *mut std::ffi::c_void;
