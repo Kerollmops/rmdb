@@ -151,26 +151,9 @@ pub type sig_atomic_t = __sig_atomic_t;
 pub type __sighandler_t = Option<unsafe extern "C" fn(std::ffi::c_int) -> ()>;
 pub type mdb_size_t = size_t;
 pub type MDB_dbi = std::ffi::c_uint;
-pub type MDB_cursor_op = std::ffi::c_uint;
-pub const MDB_PREV_MULTIPLE: MDB_cursor_op = 18;
-pub const MDB_SET_RANGE: MDB_cursor_op = 17;
-pub const MDB_SET_KEY: MDB_cursor_op = 16;
-pub const MDB_SET: MDB_cursor_op = 15;
-pub const MDB_PREV_NODUP: MDB_cursor_op = 14;
-pub const MDB_PREV_DUP: MDB_cursor_op = 13;
-pub const MDB_PREV: MDB_cursor_op = 12;
-pub const MDB_NEXT_NODUP: MDB_cursor_op = 11;
-pub const MDB_NEXT_MULTIPLE: MDB_cursor_op = 10;
-pub const MDB_NEXT_DUP: MDB_cursor_op = 9;
-pub const MDB_NEXT: MDB_cursor_op = 8;
-pub const MDB_LAST_DUP: MDB_cursor_op = 7;
-pub const MDB_LAST: MDB_cursor_op = 6;
-pub const MDB_GET_MULTIPLE: MDB_cursor_op = 5;
-pub const MDB_GET_CURRENT: MDB_cursor_op = 4;
-pub const MDB_GET_BOTH_RANGE: MDB_cursor_op = 3;
-pub const MDB_GET_BOTH: MDB_cursor_op = 2;
-pub const MDB_FIRST_DUP: MDB_cursor_op = 1;
-pub const MDB_FIRST: MDB_cursor_op = 0;
+
+use rmdb::{MDB_NEXT, MDB_NEXT_NODUP};
+
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct flagbit {
@@ -663,7 +646,11 @@ unsafe fn main_0(
             }
         }
         mdb_env_close(env);
-        if rc != 0 { EXIT_FAILURE } else { EXIT_SUCCESS }
+        if rc != 0 {
+            EXIT_FAILURE
+        } else {
+            EXIT_SUCCESS
+        }
     }
 }
 pub fn main() {
