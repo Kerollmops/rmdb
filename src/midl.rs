@@ -82,7 +82,7 @@ pub unsafe fn mdb_midl_search(ids: MDB_IDL, id: MDB_ID) -> u32 {
 ///
 /// Allocates memory for an IDL of the given size.
 /// @return	IDL on success, NULL on failure.
-pub unsafe fn mdb_midl_alloc(mut num: u32) -> MDB_IDL {
+pub unsafe fn mdb_midl_alloc(mut num: i32) -> MDB_IDL {
     unsafe {
         let mut ids = libc::malloc((num as usize + 2).wrapping_mul(size_of::<MDB_ID>())) as MDB_IDL;
         if !ids.is_null() {

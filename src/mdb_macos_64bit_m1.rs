@@ -1464,7 +1464,7 @@ unsafe extern "C" fn mdb_page_alloc(
                     idl = data.mv_data as *mut MDB_ID;
                     i = *idl.offset(0 as std::ffi::c_int as isize) as std::ffi::c_uint;
                     if mop.is_null() {
-                        mop = mdb_midl_alloc(i);
+                        mop = mdb_midl_alloc(i as _);
                         (*env).me_pgstate.mf_pghead = mop;
                         if ((*env).me_pgstate.mf_pghead).is_null() {
                             rc = 12;
@@ -2480,7 +2480,7 @@ pub unsafe extern "C" fn mdb_txn_begin(
                         .wrapping_mul(::core::mem::size_of::<MDB_ID>() as _)
                         as std::ffi::c_int;
                     (*env).me_pgstate.mf_pghead =
-                        mdb_midl_alloc(*((*env).me_pgstate.mf_pghead).offset(0 as isize) as u32);
+                        mdb_midl_alloc(*((*env).me_pgstate.mf_pghead).offset(0 as isize) as _);
                     if !((*env).me_pgstate.mf_pghead).is_null() {
                         memcpy(
                             (*env).me_pgstate.mf_pghead as *mut std::ffi::c_void,
