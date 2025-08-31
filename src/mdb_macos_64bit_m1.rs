@@ -1144,10 +1144,7 @@ unsafe extern "C" fn mdb_page_spill(
             return 0 as std::ffi::c_int;
         }
         if ((*txn).mt_spill_pgs).is_null() {
-            (*txn).mt_spill_pgs = mdb_midl_alloc(
-                ((1 as std::ffi::c_int) << (16 as std::ffi::c_int + 1 as std::ffi::c_int))
-                    - 1 as std::ffi::c_int,
-            );
+            (*txn).mt_spill_pgs = mdb_midl_alloc(((1) << (16 + 1)) - 1);
             if ((*txn).mt_spill_pgs).is_null() {
                 return 12 as std::ffi::c_int;
             }
@@ -1467,10 +1464,10 @@ unsafe extern "C" fn mdb_page_alloc(
                     idl = data.mv_data as *mut MDB_ID;
                     i = *idl.offset(0 as std::ffi::c_int as isize) as std::ffi::c_uint;
                     if mop.is_null() {
-                        mop = mdb_midl_alloc(i as std::ffi::c_int);
+                        mop = mdb_midl_alloc(i);
                         (*env).me_pgstate.mf_pghead = mop;
                         if ((*env).me_pgstate.mf_pghead).is_null() {
-                            rc = 12 as std::ffi::c_int;
+                            rc = 12;
                             current_block = 11154531721185249356;
                             break;
                         }
@@ -1706,10 +1703,7 @@ unsafe extern "C" fn mdb_page_touch(mut mc: *mut MDB_cursor) -> std::ffi::c_int 
                 11181162895269274365 => {}
                 _ => {
                     if current_block == 11006700562992250127 {
-                        rc = mdb_midl_need(
-                            &mut (*txn).mt_free_pgs,
-                            1 as std::ffi::c_int as std::ffi::c_uint,
-                        );
+                        rc = mdb_midl_need(&mut (*txn).mt_free_pgs, 1);
                         if rc != 0 || {
                             rc = mdb_page_alloc(mc, 1 as std::ffi::c_int, &mut np);
                             rc != 0
@@ -2446,10 +2440,7 @@ pub unsafe extern "C" fn mdb_txn_begin(
                             as std::ffi::c_ulong,
                     )) as MDB_ID2L;
                 if ((*txn).mt_u.dirty_list).is_null() || {
-                    (*txn).mt_free_pgs = mdb_midl_alloc(
-                        ((1 as std::ffi::c_int) << (16 as std::ffi::c_int + 1 as std::ffi::c_int))
-                            - 1 as std::ffi::c_int,
-                    );
+                    (*txn).mt_free_pgs = mdb_midl_alloc(((1) << (16 + 1)) - 1);
                     ((*txn).mt_free_pgs).is_null()
                 } {
                     free((*txn).mt_u.dirty_list as *mut std::ffi::c_void);
@@ -2488,10 +2479,8 @@ pub unsafe extern "C" fn mdb_txn_begin(
                         .wrapping_add(1 as std::ffi::c_int as pgno_t)
                         .wrapping_mul(::core::mem::size_of::<MDB_ID>() as _)
                         as std::ffi::c_int;
-                    (*env).me_pgstate.mf_pghead = mdb_midl_alloc(
-                        *((*env).me_pgstate.mf_pghead).offset(0 as std::ffi::c_int as isize)
-                            as std::ffi::c_int,
-                    );
+                    (*env).me_pgstate.mf_pghead =
+                        mdb_midl_alloc(*((*env).me_pgstate.mf_pghead).offset(0 as isize) as u32);
                     if !((*env).me_pgstate.mf_pghead).is_null() {
                         memcpy(
                             (*env).me_pgstate.mf_pghead as *mut std::ffi::c_void,
@@ -4784,10 +4773,7 @@ pub unsafe extern "C" fn mdb_env_open(
         if flags & 0x20000 as std::ffi::c_int as std::ffi::c_uint != 0 {
             flags &= !(0x80000 as std::ffi::c_int) as std::ffi::c_uint;
         } else {
-            (*env).me_free_pgs = mdb_midl_alloc(
-                ((1 as std::ffi::c_int) << (16 as std::ffi::c_int + 1 as std::ffi::c_int))
-                    - 1 as std::ffi::c_int,
-            );
+            (*env).me_free_pgs = mdb_midl_alloc(((1) << (16 + 1)) - 1);
             if !(!((*env).me_free_pgs).is_null() && {
                 (*env).me_dirty_list = calloc(
                     ((1 as std::ffi::c_int) << (16 as std::ffi::c_int + 1 as std::ffi::c_int))
