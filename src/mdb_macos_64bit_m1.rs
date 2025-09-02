@@ -353,8 +353,8 @@ pub union semun {
 pub type mdb_mode_t = mode_t;
 pub type mdb_size_t = size_t;
 pub type mdb_filehandle_t = std::ffi::c_int;
+
 #[derive(Clone)]
-#[repr(C)]
 pub struct MDB_env {
     pub me_fd: std::ffi::c_int,
     pub me_lfd: std::ffi::c_int,
@@ -433,7 +433,6 @@ pub union C2RustUnnamed_1 {
 }
 pub type pgno_t = MDB_ID;
 #[derive(Clone)]
-#[repr(C)]
 pub struct MDB_pgstate {
     pub mf_pghead: Option<MDB_IDL>,
     pub mf_pglast: txnid_t,
@@ -662,8 +661,8 @@ pub const Size: C2RustUnnamed_7 = 152;
 pub type C2RustUnnamed_7 = std::ffi::c_uint;
 pub const MDB_lock_desc: C2RustUnnamed_11 = 166042;
 pub const MDB_END_ABORT: C2RustUnnamed_12 = 2;
+
 #[derive(Clone)]
-#[repr(C)]
 pub struct MDB_ntxn {
     pub mnt_txn: MDB_txn,
     pub mnt_pgstate: MDB_pgstate,
@@ -2524,30 +2523,13 @@ pub unsafe extern "C" fn mdb_txn_begin(
                 }
                 rc = 0 as std::ffi::c_int;
                 ntxn = txn as *mut MDB_ntxn;
-                // Note: we just copied pglast and will clone pghead just after
+                // Note: This complex part is literally just a clone with a check for
+                //       memory allocation failures. We will handle allocation failures later.
                 // (*ntxn).mnt_pgstate = (*env).me_pgstate; /* save parent me_pghead & co */
-                (*ntxn).mnt_pgstate.mf_pglast = (*env).me_pgstate.mf_pglast;
-                if let Some(env_pghead) = (*env).me_pgstate.mf_pghead.as_ref() {
-                    // size = env_pghead
-                    //     .len()
-                    //     .wrapping_add(1)
-                    //     .wrapping_mul(::core::mem::size_of::<MDB_ID>() as _)
-                    //     as std::ffi::c_int;
-                    // (*env).me_pgstate.mf_pghead =
-                    //     mdb_midl_alloc(*((*env).me_pgstate.mf_pghead).offset(0 as isize) as _);
-                    // if !((*env).me_pgstate.mf_pghead).is_null() {
-                    //     memcpy(
-                    //         (*env).me_pgstate.mf_pghead as *mut std::ffi::c_void,
-                    //         (*ntxn).mnt_pgstate.mf_pghead as *const std::ffi::c_void,
-                    //         size as std::ffi::c_ulong,
-                    //     );
-                    // } else {
-                    //     rc = ENOMEM;
-                    // }
-                    // Note: This complex part is literally just a clone with a check for memory allocation failures.
-                    //       We will handle allocation failures later.
-                    (*env).me_pgstate.mf_pghead = Some(env_pghead.clone());
-                }
+                (*ntxn).mnt_pgstate = MDB_pgstate {
+                    mf_pghead: (*env).me_pgstate.mf_pghead.clone(),
+                    mf_pglast: (*env).me_pgstate.mf_pglast,
+                };
                 if rc == 0 {
                     rc = mdb_cursor_shadow(parent, txn);
                 }
