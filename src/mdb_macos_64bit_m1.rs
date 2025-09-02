@@ -126,9 +126,12 @@ unsafe extern "C" {
 
 use std::mem::offset_of;
 
-use crate::MDB_cursor_op;
+use bitflags::bitflags;
+use libc::ENOMEM;
+
 use crate::MDB_cursor_op::*;
 use crate::midl::*;
+use crate::{MDB_CURRENT, MDB_NOTFOUND, MDB_RESERVE, MDB_WRITEMAP, MDB_cursor_op};
 
 pub type __uint16_t = std::ffi::c_ushort;
 pub type __int32_t = std::ffi::c_int;
@@ -350,7 +353,7 @@ pub union semun {
 pub type mdb_mode_t = mode_t;
 pub type mdb_size_t = size_t;
 pub type mdb_filehandle_t = std::ffi::c_int;
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 #[repr(C)]
 pub struct MDB_env {
     pub me_fd: std::ffi::c_int,
@@ -381,7 +384,7 @@ pub struct MDB_env {
     pub me_pgoldest: txnid_t,
     pub me_pgstate: MDB_pgstate,
     pub me_dpages: *mut MDB_page,
-    pub me_free_pgs: MDB_IDL,
+    pub me_free_pgs: Option<MDB_IDL>,
     pub me_dirty_list: MDB_ID2L,
     pub me_maxfree_1pg: std::ffi::c_int,
     pub me_nodemax: std::ffi::c_uint,
@@ -405,7 +408,7 @@ pub struct mdb_mutex {
 pub struct MDB_page {
     pub mp_p: C2RustUnnamed_1,
     pub mp_pad: uint16_t,
-    pub mp_flags: uint16_t,
+    pub mp_flags: u16,
     pub mp_pb: C2RustUnnamed,
     pub mp_ptrs: [indx_t; 0],
 }
@@ -429,10 +432,10 @@ pub union C2RustUnnamed_1 {
     pub p_next: *mut MDB_page,
 }
 pub type pgno_t = MDB_ID;
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 #[repr(C)]
 pub struct MDB_pgstate {
-    pub mf_pghead: *mut pgno_t,
+    pub mf_pghead: Option<MDB_IDL>,
     pub mf_pglast: txnid_t,
 }
 pub type txnid_t = MDB_ID;
@@ -458,7 +461,7 @@ pub struct MDB_val {
     pub mv_data: *mut std::ffi::c_void,
 }
 pub type MDB_cmp_func = unsafe extern "C" fn(*const MDB_val, *const MDB_val) -> std::ffi::c_int;
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 #[repr(C)]
 pub struct MDB_txn {
     pub mt_parent: *mut MDB_txn,
@@ -469,7 +472,7 @@ pub struct MDB_txn {
     pub mt_free_pgs: MDB_IDL,
     pub mt_loose_pgs: *mut MDB_page,
     pub mt_loose_count: std::ffi::c_int,
-    pub mt_spill_pgs: MDB_IDL,
+    pub mt_spill_pgs: Option<MDB_IDL>,
     pub mt_u: C2RustUnnamed_2,
     pub mt_dbxs: *mut MDB_dbx,
     pub mt_dbs: *mut MDB_db,
@@ -617,6 +620,32 @@ pub const MDB_O_COPY: mdb_fopen_type = 16779777;
 pub const MDB_O_META: mdb_fopen_type = 20971521;
 pub const MDB_O_RDWR: mdb_fopen_type = 514;
 pub const MDB_O_RDONLY: mdb_fopen_type = 0;
+
+bitflags! {
+    /// Flags for the page headers.
+    #[derive(Debug, Clone, Copy)]
+    struct PageFlags: u16 {
+        /// branch page
+        const P_BRANCH = 0x01;
+        /// leaf page
+        const P_LEAF = 0x02;
+        /// overflow page
+        const P_OVERFLOW = 0x04;
+        /// meta page
+        const P_META = 0x08;
+        /// dirty page, also set for #P_SUBP pages
+        const P_DIRTY = 0x10;
+        /// for #MDB_DUPFIXED records
+        const P_LEAF2 = 0x20;
+        /// for #MDB_DUPSORT sub-pages
+        const P_SUBP = 0x40;
+        /// page was dirtied then freed, can be reused
+        const P_LOOSE = 0x4000;
+        /// leave this page alone during spill
+        const P_KEEP = 0x8000;
+    }
+}
+
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub union MDB_metabuf {
@@ -633,7 +662,7 @@ pub const Size: C2RustUnnamed_7 = 152;
 pub type C2RustUnnamed_7 = std::ffi::c_uint;
 pub const MDB_lock_desc: C2RustUnnamed_11 = 166042;
 pub const MDB_END_ABORT: C2RustUnnamed_12 = 2;
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 #[repr(C)]
 pub struct MDB_ntxn {
     pub mnt_txn: MDB_txn,
@@ -1143,26 +1172,19 @@ unsafe extern "C" fn mdb_page_spill(
         if (*txn).mt_dirty_room > i {
             return 0 as std::ffi::c_int;
         }
-        if ((*txn).mt_spill_pgs).is_null() {
-            (*txn).mt_spill_pgs = mdb_midl_alloc(((1) << (16 + 1)) - 1);
-            if ((*txn).mt_spill_pgs).is_null() {
-                return 12 as std::ffi::c_int;
-            }
-        } else {
-            let mut sl: MDB_IDL = (*txn).mt_spill_pgs;
-            let mut num: std::ffi::c_uint =
-                *sl.offset(0 as std::ffi::c_int as isize) as std::ffi::c_uint;
-            j = 0 as std::ffi::c_int as std::ffi::c_uint;
-            i = 1 as std::ffi::c_int as std::ffi::c_uint;
-            while i <= num {
-                if *sl.offset(i as isize) & 1 as std::ffi::c_int as MDB_ID == 0 {
-                    j = j.wrapping_add(1);
-                    *sl.offset(j as isize) = *sl.offset(i as isize);
+        match (*txn).mt_spill_pgs.as_mut() {
+            None => {
+                (*txn).mt_spill_pgs = mdb_midl_alloc(((1) << (16 + 1)) - 1);
+                if (*txn).mt_spill_pgs.is_none() {
+                    return ENOMEM;
                 }
-                i = i.wrapping_add(1);
             }
-            *sl.offset(0 as std::ffi::c_int as isize) = j as MDB_ID;
+            Some(sl) => {
+                /* purge deleted slots */
+                sl.retain(|id| !(id & 1) == 0);
+            }
         }
+
         rc = mdb_pages_xkeep(m0, 0x10 as std::ffi::c_int as std::ffi::c_uint, 1 as std::ffi::c_int);
         if rc == 0 as std::ffi::c_int {
             if need
@@ -1183,23 +1205,22 @@ unsafe extern "C" fn mdb_page_spill(
                 }
                 let mut pn: MDB_ID = (*dl.offset(i as isize)).mid << 1 as std::ffi::c_int;
                 dp = (*dl.offset(i as isize)).mptr as *mut MDB_page;
-                if (*dp).mp_flags as std::ffi::c_int
-                    & (0x4000 as std::ffi::c_int | 0x8000 as std::ffi::c_int)
-                    == 0
-                {
+                if (*dp).mp_flags & (PageFlags::P_LOOSE.bits() | PageFlags::P_KEEP.bits()) == 0 {
                     if !((*txn).mt_parent).is_null() {
                         let mut tx2: *mut MDB_txn = std::ptr::null_mut::<MDB_txn>();
                         tx2 = (*txn).mt_parent;
                         while !tx2.is_null() {
-                            if !((*tx2).mt_spill_pgs).is_null() {
-                                j = mdb_midl_search((*tx2).mt_spill_pgs, pn);
-                                if j as MDB_ID
-                                    <= *((*tx2).mt_spill_pgs).offset(0 as std::ffi::c_int as isize)
-                                    && *((*tx2).mt_spill_pgs).offset(j as isize) == pn
-                                {
-                                    (*dp).mp_flags = ((*dp).mp_flags as std::ffi::c_int
-                                        | 0x8000 as std::ffi::c_int)
-                                        as uint16_t;
+                            // if (tx2->mt_spill_pgs) {
+                            //     j = mdb_midl_search(tx2->mt_spill_pgs, pn);
+                            //     if (j <= tx2->mt_spill_pgs[0] && tx2->mt_spill_pgs[j] == pn) {
+                            //         dp->mp_flags |= P_KEEP;
+                            //         break;
+                            //     }
+                            // }
+                            if let Some(spill_pgs) = (*tx2).mt_spill_pgs.as_mut() {
+                                j = mdb_midl_search(spill_pgs, pn);
+                                if j as usize <= spill_pgs.len() && spill_pgs[j as usize] == pn {
+                                    (*dp).mp_flags |= PageFlags::P_KEEP.bits();
                                     break;
                                 }
                             }
@@ -1216,7 +1237,7 @@ unsafe extern "C" fn mdb_page_spill(
                     match current_block {
                         13472856163611868459 => {}
                         _ => {
-                            rc = mdb_midl_append(&mut (*txn).mt_spill_pgs, pn);
+                            rc = mdb_midl_append((*txn).mt_spill_pgs.as_mut().unwrap(), pn);
                             if rc != 0 {
                                 current_block = 17826759996572660473;
                                 break;
@@ -1230,7 +1251,7 @@ unsafe extern "C" fn mdb_page_spill(
             match current_block {
                 17826759996572660473 => {}
                 _ => {
-                    mdb_midl_sort((*txn).mt_spill_pgs);
+                    mdb_midl_sort((*txn).mt_spill_pgs.as_mut().unwrap());
                     rc = mdb_page_flush(txn, i as std::ffi::c_int);
                     if rc == 0 as std::ffi::c_int {
                         rc = mdb_pages_xkeep(
@@ -1301,6 +1322,23 @@ unsafe extern "C" fn mdb_page_dirty(mut txn: *mut MDB_txn, mut mp: *mut MDB_page
         (*txn).mt_dirty_room = ((*txn).mt_dirty_room).wrapping_sub(1);
     }
 }
+
+/// Allocate page numbers and memory for writing.  Maintain me_pglast,
+/// me_pghead and mt_next_pgno.  Set #MDB_TXN_ERROR on failure.
+///
+/// If there are free pages available from older transactions, they
+/// are re-used first. Otherwise allocate a new page at mt_next_pgno.
+/// Do not modify the freedB, just merge freeDB records into me_pghead[]
+/// and move me_pglast to say which records were consumed.  Only this
+/// function can create me_pghead and move me_pglast/mt_next_pgno.
+/// When #MDB_DEVEL & 2, it is not affected by #mdb_freelist_save(): it
+/// then uses the transaction's original snapshot of the freeDB.
+/// @param[in] mc cursor A cursor handle identifying the transaction and
+///	database for which we are allocating.
+/// @param[in] num the number of pages to allocate.
+/// @param[out] mp Address of the allocated page(s). Requests for multiple pages
+///  will always be satisfied by a single contiguous chunk of memory.
+/// @return 0 on success, non-zero on failure.
 unsafe extern "C" fn mdb_page_alloc(
     mut mc: *mut MDB_cursor,
     mut num: std::ffi::c_int,
@@ -1313,15 +1351,11 @@ unsafe extern "C" fn mdb_page_alloc(
         let mut txn: *mut MDB_txn = (*mc).mc_txn;
         let mut env: *mut MDB_env = (*txn).mt_env;
         let mut pgno: pgno_t = 0;
-        let mut mop: *mut pgno_t = (*env).me_pgstate.mf_pghead;
+        let mut mop: Option<&mut MDB_IDL> = (*env).me_pgstate.mf_pghead.as_mut();
         let mut i: std::ffi::c_uint = 0;
         let mut j: std::ffi::c_uint = 0;
-        let mut mop_len: std::ffi::c_uint = (if !mop.is_null() {
-            *mop.offset(0 as std::ffi::c_int as isize)
-        } else {
-            0 as std::ffi::c_int as pgno_t
-        }) as std::ffi::c_uint;
-        let mut n2: std::ffi::c_uint = (num - 1 as std::ffi::c_int) as std::ffi::c_uint;
+        let mut mop_len: std::ffi::c_uint = mop.as_ref().map_or(0, |m| m.len() as u32);
+        let mut n2: u32 = (num as u32).checked_sub(1).unwrap();
         let mut np: *mut MDB_page = std::ptr::null_mut::<MDB_page>();
         let mut oldest: txnid_t = 0 as std::ffi::c_int as txnid_t;
         let mut last: txnid_t = 0;
@@ -1361,13 +1395,13 @@ unsafe extern "C" fn mdb_page_alloc(
                     MDB_val { mv_size: 0, mv_data: std::ptr::null_mut::<std::ffi::c_void>() };
                 let mut leaf: *mut MDB_node = std::ptr::null_mut::<MDB_node>();
                 let mut idl: *mut pgno_t = std::ptr::null_mut::<pgno_t>();
-                if mop_len > n2 {
+                if let Some(mop) = mop.as_mut()
+                    && mop_len > n2
+                {
                     i = mop_len;
                     loop {
-                        pgno = *mop.offset(i as isize);
-                        if *mop.offset(i.wrapping_sub(n2) as isize)
-                            == pgno.wrapping_add(n2 as pgno_t)
-                        {
+                        pgno = mop[i as usize];
+                        if mop[i.wrapping_sub(n2) as usize] == pgno.wrapping_add(n2 as pgno_t) {
                             current_block = 11643083498027723715;
                             break 's_69;
                         }
@@ -1463,25 +1497,29 @@ unsafe extern "C" fn mdb_page_alloc(
                     }
                     idl = data.mv_data as *mut MDB_ID;
                     i = *idl.offset(0 as std::ffi::c_int as isize) as std::ffi::c_uint;
-                    if mop.is_null() {
-                        mop = mdb_midl_alloc(i as _);
-                        (*env).me_pgstate.mf_pghead = mop;
-                        if ((*env).me_pgstate.mf_pghead).is_null() {
-                            rc = 12;
+                    if mop.is_none() {
+                        (*env).me_pgstate.mf_pghead = mdb_midl_alloc(i as _);
+                        mop = (*env).me_pgstate.mf_pghead.as_mut();
+                        if (*env).me_pgstate.mf_pghead.is_none() {
+                            rc = ENOMEM;
                             current_block = 11154531721185249356;
                             break;
                         }
                     } else {
-                        rc = mdb_midl_need(&mut (*env).me_pgstate.mf_pghead, i);
-                        if rc != 0 as std::ffi::c_int {
+                        rc = mdb_midl_need(
+                            (*env).me_pgstate.mf_pghead.as_mut().unwrap(),
+                            i as usize,
+                        );
+                        if rc != 0 {
                             current_block = 11154531721185249356;
                             break;
                         }
-                        mop = (*env).me_pgstate.mf_pghead;
+                        mop = (*env).me_pgstate.mf_pghead.as_mut();
                     }
                     (*env).me_pgstate.mf_pglast = last;
-                    mdb_midl_xmerge(mop, idl);
-                    mop_len = *mop.offset(0 as std::ffi::c_int as isize) as std::ffi::c_uint;
+                    // Merge in descending sorted order
+                    mdb_midl_xmerge_ref(mop.as_mut().unwrap(), MDB_IDLRef::from_pointer(idl));
+                    mop_len = mop.as_ref().map_or(0, |m| m.len() as u32);
                     op = MDB_NEXT;
                 }
             }
@@ -1518,23 +1556,28 @@ unsafe extern "C" fn mdb_page_alloc(
                             match current_block {
                                 11154531721185249356 => {}
                                 _ => {
-                                    if i != 0 {
-                                        mop_len = mop_len.wrapping_sub(num as std::ffi::c_uint);
-                                        *mop.offset(0 as std::ffi::c_int as isize) =
-                                            mop_len as pgno_t;
-                                        j = i.wrapping_sub(num as std::ffi::c_uint);
+                                    if let Some(mop) = mop.as_mut()
+                                        && i != 0
+                                    {
+                                        mop_len = mop_len.wrapping_sub(num as u32);
+                                        // *mop.offset(0 as isize) = mop_len as pgno_t;
+                                        // Note: I do a truncate just after the loop this way
+                                        //       I can continue to access the mop elements freely.
+                                        /* Move any stragglers down */
+                                        j = i.wrapping_sub(num as u32);
                                         while j < mop_len {
                                             i = i.wrapping_add(1);
                                             j = j.wrapping_add(1);
-                                            *mop.offset(j as isize) = *mop.offset(i as isize);
+                                            mop[j as usize] = mop[i as usize];
                                         }
+                                        mop.truncate(mop_len as usize);
                                     } else {
                                         (*txn).mt_next_pgno = pgno.wrapping_add(num as pgno_t);
                                     }
                                     (*np).mp_p.p_pgno = pgno;
                                     mdb_page_dirty(txn, np);
                                     *mp = np;
-                                    return 0 as std::ffi::c_int;
+                                    return 0; // MDB_SUCCESS
                                 }
                             }
                         }
@@ -1542,7 +1585,7 @@ unsafe extern "C" fn mdb_page_alloc(
                 }
             }
         }
-        (*txn).mt_flags |= 0x2 as std::ffi::c_int as std::ffi::c_uint;
+        (*txn).mt_flags |= 0x2 as std::ffi::c_uint;
         rc
     }
 }
@@ -1604,20 +1647,18 @@ unsafe extern "C" fn mdb_page_unspill(
 ) -> std::ffi::c_int {
     unsafe {
         let mut env: *mut MDB_env = (*txn).mt_env;
-        let mut tx2: *const MDB_txn = std::ptr::null::<MDB_txn>();
+        let mut tx2: *mut MDB_txn = std::ptr::null_mut::<MDB_txn>();
         let mut x: std::ffi::c_uint = 0;
         let mut pgno: pgno_t = (*mp).mp_p.p_pgno;
         let mut pn: pgno_t = pgno << 1 as std::ffi::c_int;
         tx2 = txn;
         while !tx2.is_null() {
-            if !((*tx2).mt_spill_pgs).is_null() {
-                x = mdb_midl_search((*tx2).mt_spill_pgs, pn);
-                if x as MDB_ID <= *((*tx2).mt_spill_pgs).offset(0 as std::ffi::c_int as isize)
-                    && *((*tx2).mt_spill_pgs).offset(x as isize) == pn
-                {
+            if let Some(spill_pgs) = ((*tx2).mt_spill_pgs).as_mut() {
+                x = mdb_midl_search(spill_pgs, pn);
+                if x as MDB_ID <= spill_pgs.len() && spill_pgs[x as usize] == pn {
                     let mut np: *mut MDB_page = std::ptr::null_mut::<MDB_page>();
                     let mut num: std::ffi::c_int = 0;
-                    if (*txn).mt_dirty_room == 0 as std::ffi::c_int as std::ffi::c_uint {
+                    if (*txn).mt_dirty_room == 0 as std::ffi::c_uint {
                         return -(30788 as std::ffi::c_int);
                     }
                     if (*(mp as *mut std::ffi::c_void as *mut MDB_page2)).mp2_flags
@@ -1629,14 +1670,14 @@ unsafe extern "C" fn mdb_page_unspill(
                     } else {
                         num = 1 as std::ffi::c_int;
                     }
-                    if (*env).me_flags & 0x80000 as std::ffi::c_int as uint32_t != 0 {
+                    if (*env).me_flags & 0x80000 as uint32_t != 0 {
                         np = mp;
                     } else {
                         np = mdb_page_malloc(txn, num as std::ffi::c_uint);
                         if np.is_null() {
                             return 12 as std::ffi::c_int;
                         }
-                        if num > 1 as std::ffi::c_int {
+                        if num > 1 {
                             memcpy(
                                 np as *mut std::ffi::c_void,
                                 mp as *const std::ffi::c_void,
@@ -1648,15 +1689,13 @@ unsafe extern "C" fn mdb_page_unspill(
                         }
                     }
                     if std::ptr::eq(tx2, txn) {
-                        if x as MDB_ID
-                            == *((*txn).mt_spill_pgs).offset(0 as std::ffi::c_int as isize)
-                        {
-                            let fresh1 =
-                                &mut (*((*txn).mt_spill_pgs).offset(0 as std::ffi::c_int as isize));
-                            *fresh1 = (*fresh1).wrapping_sub(1);
+                        if x as MDB_ID == spill_pgs.len() {
+                            // let fresh1 =
+                            //     &mut (*((*txn).mt_spill_pgs).offset(0 as std::ffi::c_int as isize));
+                            // *fresh1 = (*fresh1).wrapping_sub(1);
+                            spill_pgs.pop();
                         } else {
-                            *((*txn).mt_spill_pgs).offset(x as isize) |=
-                                1 as std::ffi::c_int as MDB_ID;
+                            spill_pgs[x as usize] |= 1 as MDB_ID;
                         }
                     }
                     mdb_page_dirty(txn, np);
@@ -1671,7 +1710,13 @@ unsafe extern "C" fn mdb_page_unspill(
         0 as std::ffi::c_int
     }
 }
-unsafe extern "C" fn mdb_page_touch(mut mc: *mut MDB_cursor) -> std::ffi::c_int {
+
+/// Touch a page: make it dirty and re-insert into tree with updated pgno.
+///
+/// Set #MDB_TXN_ERROR on failure.
+/// @param[in] mc cursor pointing to the page to be touched
+/// @return 0 on success, non-zero on failure.
+unsafe extern "C" fn mdb_page_touch(mut mc: *mut MDB_cursor) -> i32 {
     unsafe {
         let mut current_block: u64;
         let mut mp: *mut MDB_page = (*mc).mc_pg[(*mc).mc_top as usize];
@@ -1725,11 +1770,13 @@ unsafe extern "C" fn mdb_page_touch(mut mc: *mut MDB_cursor) -> std::ffi::c_int 
                                     2800 as std::ffi::c_int,
                                 );
                             };
-                            let mut xidl: *mut MDB_ID = (*txn).mt_free_pgs;
-                            let fresh2 = &mut (*xidl.offset(0 as std::ffi::c_int as isize));
-                            *fresh2 = (*fresh2).wrapping_add(1);
-                            let mut xlen: MDB_ID = *fresh2;
-                            *xidl.offset(xlen as isize) = (*mp).mp_p.p_pgno;
+                            // let mut xidl: &mut MDB_IDL = &mut (*txn).mt_free_pgs;
+                            // let fresh2 = &mut (*xidl.offset(0 as std::ffi::c_int as isize));
+                            // *fresh2 = (*fresh2).wrapping_add(1);
+                            // let mut xlen: MDB_ID = *fresh2;
+                            // *xidl.offset(xlen as isize) = (*mp).mp_p.p_pgno;
+                            mdb_midl_xappend(&mut (*txn).mt_free_pgs, (*mp).mp_p.p_pgno);
+                            /* Update the parent page, if any, to point to the new page */
                             if (*mc).mc_top != 0 {
                                 let mut parent: *mut MDB_page = (*mc).mc_pg[((*mc).mc_top
                                     as std::ffi::c_int
@@ -2294,10 +2341,12 @@ unsafe extern "C" fn mdb_txn_renew0(mut txn: *mut MDB_txn) -> std::ffi::c_int {
             (*txn).mt_u.dirty_list = (*env).me_dirty_list;
             (*((*txn).mt_u.dirty_list).offset(0 as std::ffi::c_int as isize)).mid =
                 0 as std::ffi::c_int as MDB_ID;
-            (*txn).mt_free_pgs = (*env).me_free_pgs;
-            *((*txn).mt_free_pgs).offset(0 as std::ffi::c_int as isize) =
-                0 as std::ffi::c_int as MDB_ID;
-            (*txn).mt_spill_pgs = 0 as MDB_IDL;
+            // (*txn).mt_free_pgs = (*env).me_free_pgs;
+            // *((*txn).mt_free_pgs).offset(0 as std::ffi::c_int as isize) =
+            //     0 as std::ffi::c_int as MDB_ID;
+            // Note: I loose the capacity, for now
+            (*txn).mt_free_pgs = MDB_IDL::default();
+            (*txn).mt_spill_pgs = None;
             (*env).me_txn = txn;
             memcpy(
                 (*txn).mt_dbiseqs as *mut std::ffi::c_void,
@@ -2440,18 +2489,20 @@ pub unsafe extern "C" fn mdb_txn_begin(
                             as std::ffi::c_ulong,
                     )) as MDB_ID2L;
                 if ((*txn).mt_u.dirty_list).is_null() || {
-                    (*txn).mt_free_pgs = mdb_midl_alloc(((1) << (16 + 1)) - 1);
-                    ((*txn).mt_free_pgs).is_null()
+                    // Note: We must not unwrap here and return an actual ENOMEM error
+                    (*txn).mt_free_pgs = mdb_midl_alloc(((1) << (16 + 1)) - 1).unwrap_or_default();
+                    // ((*txn).mt_free_pgs).is_null()
+                    (*txn).mt_free_pgs.capacity() == 0
                 } {
                     free((*txn).mt_u.dirty_list as *mut std::ffi::c_void);
                     free(txn as *mut std::ffi::c_void);
-                    return 12 as std::ffi::c_int;
+                    return ENOMEM;
                 }
                 (*txn).mt_txnid = (*parent).mt_txnid;
                 (*txn).mt_dirty_room = (*parent).mt_dirty_room;
                 (*((*txn).mt_u.dirty_list).offset(0 as std::ffi::c_int as isize)).mid =
                     0 as std::ffi::c_int as MDB_ID;
-                (*txn).mt_spill_pgs = 0 as MDB_IDL;
+                (*txn).mt_spill_pgs = None;
                 (*txn).mt_next_pgno = (*parent).mt_next_pgno;
                 (*parent).mt_flags |= 0x10 as std::ffi::c_int as std::ffi::c_uint;
                 (*parent).mt_child = txn;
@@ -2473,23 +2524,29 @@ pub unsafe extern "C" fn mdb_txn_begin(
                 }
                 rc = 0 as std::ffi::c_int;
                 ntxn = txn as *mut MDB_ntxn;
-                (*ntxn).mnt_pgstate = (*env).me_pgstate;
-                if !((*env).me_pgstate.mf_pghead).is_null() {
-                    size = (*((*env).me_pgstate.mf_pghead).offset(0 as std::ffi::c_int as isize))
-                        .wrapping_add(1 as std::ffi::c_int as pgno_t)
-                        .wrapping_mul(::core::mem::size_of::<MDB_ID>() as _)
-                        as std::ffi::c_int;
-                    (*env).me_pgstate.mf_pghead =
-                        mdb_midl_alloc(*((*env).me_pgstate.mf_pghead).offset(0 as isize) as _);
-                    if !((*env).me_pgstate.mf_pghead).is_null() {
-                        memcpy(
-                            (*env).me_pgstate.mf_pghead as *mut std::ffi::c_void,
-                            (*ntxn).mnt_pgstate.mf_pghead as *const std::ffi::c_void,
-                            size as std::ffi::c_ulong,
-                        );
-                    } else {
-                        rc = 12 as std::ffi::c_int;
-                    }
+                // Note: we just copied pglast and will clone pghead just after
+                // (*ntxn).mnt_pgstate = (*env).me_pgstate; /* save parent me_pghead & co */
+                (*ntxn).mnt_pgstate.mf_pglast = (*env).me_pgstate.mf_pglast;
+                if let Some(env_pghead) = (*env).me_pgstate.mf_pghead.as_ref() {
+                    // size = env_pghead
+                    //     .len()
+                    //     .wrapping_add(1)
+                    //     .wrapping_mul(::core::mem::size_of::<MDB_ID>() as _)
+                    //     as std::ffi::c_int;
+                    // (*env).me_pgstate.mf_pghead =
+                    //     mdb_midl_alloc(*((*env).me_pgstate.mf_pghead).offset(0 as isize) as _);
+                    // if !((*env).me_pgstate.mf_pghead).is_null() {
+                    //     memcpy(
+                    //         (*env).me_pgstate.mf_pghead as *mut std::ffi::c_void,
+                    //         (*ntxn).mnt_pgstate.mf_pghead as *const std::ffi::c_void,
+                    //         size as std::ffi::c_ulong,
+                    //     );
+                    // } else {
+                    //     rc = ENOMEM;
+                    // }
+                    // Note: This complex part is literally just a clone with a check for memory allocation failures.
+                    //       We will handle allocation failures later.
+                    (*env).me_pgstate.mf_pghead = Some(env_pghead.clone());
                 }
                 if rc == 0 {
                     rc = mdb_cursor_shadow(parent, txn);
@@ -2608,20 +2665,20 @@ unsafe extern "C" fn mdb_txn_end(mut txn: *mut MDB_txn, mut mode: std::ffi::c_ui
         } else if (*txn).mt_flags & 0x1 as std::ffi::c_int as std::ffi::c_uint
             != 0x1 as std::ffi::c_int as std::ffi::c_uint
         {
-            let mut pghead: *mut pgno_t = (*env).me_pgstate.mf_pghead;
-            if mode & 0x10 as std::ffi::c_int as std::ffi::c_uint == 0 {
-                mdb_cursors_close(txn, 0 as std::ffi::c_int as std::ffi::c_uint);
+            // let mut pghead: Option<&mut MDB_IDL> = (*env).me_pgstate.mf_pghead.as_mut();
+            if mode & 0x10 == 0 {
+                mdb_cursors_close(txn, 0 as std::ffi::c_uint);
             }
-            if (*env).me_flags & 0x80000 as std::ffi::c_int as uint32_t == 0 {
+            if (*env).me_flags & 0x80000 as uint32_t == 0 {
                 mdb_dlist_free(txn);
             }
             (*txn).mt_numdbs = 0 as std::ffi::c_int as MDB_dbi;
             (*txn).mt_flags = 0x1 as std::ffi::c_int as std::ffi::c_uint;
             if ((*txn).mt_parent).is_null() {
                 mdb_midl_shrink(&mut (*txn).mt_free_pgs);
-                (*env).me_free_pgs = (*txn).mt_free_pgs;
-                (*env).me_pgstate.mf_pghead = std::ptr::null_mut::<pgno_t>();
-                (*env).me_pgstate.mf_pglast = 0 as std::ffi::c_int as txnid_t;
+                (*env).me_free_pgs = Some(std::mem::take(&mut (*txn).mt_free_pgs));
+                (*env).me_pgstate.mf_pghead = None;
+                (*env).me_pgstate.mf_pglast = 0;
                 (*env).me_txn = std::ptr::null_mut::<MDB_txn>();
                 mode = 0 as std::ffi::c_int as std::ffi::c_uint;
                 if !((*env).me_txns).is_null() {
@@ -2643,12 +2700,20 @@ unsafe extern "C" fn mdb_txn_end(mut txn: *mut MDB_txn, mut mode: std::ffi::c_ui
             } else {
                 (*(*txn).mt_parent).mt_child = std::ptr::null_mut::<MDB_txn>();
                 (*(*txn).mt_parent).mt_flags &= !(0x10 as std::ffi::c_int) as std::ffi::c_uint;
-                (*env).me_pgstate = (*(txn as *mut MDB_ntxn)).mnt_pgstate;
-                mdb_midl_free((*txn).mt_free_pgs);
+                // Note: not sure about the ownership transfer
+                // (*env).me_pgstate = (*(txn as *mut MDB_ntxn)).mnt_pgstate;
+                (*env).me_pgstate = MDB_pgstate {
+                    mf_pghead: (*(txn as *mut MDB_ntxn)).mnt_pgstate.mf_pghead.take(),
+                    mf_pglast: (*(txn as *mut MDB_ntxn)).mnt_pgstate.mf_pglast,
+                };
+                mdb_midl_free(std::mem::take(&mut (*txn).mt_free_pgs));
                 free((*txn).mt_u.dirty_list as *mut std::ffi::c_void);
             }
-            mdb_midl_free((*txn).mt_spill_pgs);
-            mdb_midl_free(pghead);
+            if let Some(spill_pgs) = (*txn).mt_spill_pgs.take() {
+                mdb_midl_free(spill_pgs);
+            }
+            // Note: Freed above when owner assigned to None
+            // mdb_midl_free(pghead);
         }
         if mode & 0x20 as std::ffi::c_int as std::ffi::c_uint != 0 {
             free(txn as *mut std::ffi::c_void);
@@ -2683,14 +2748,24 @@ unsafe extern "C" fn _mdb_txn_abort(mut txn: *mut MDB_txn) {
         );
     }
 }
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mdb_txn_abort(mut txn: *mut MDB_txn) {
     unsafe {
         _mdb_txn_abort(txn);
     }
 }
+
+/// Save the freelist as of this transaction to the freeDB.
+/// This changes the freelist. Keep trying until it stabilizes.
+///
+/// When (MDB_DEVEL) & 2, the changes do not affect #mdb_page_alloc(),
+/// it then uses the transaction's original snapshot of the freeDB.
 unsafe extern "C" fn mdb_freelist_save(mut txn: *mut MDB_txn) -> std::ffi::c_int {
     unsafe {
+        // env->me_pghead[] can grow and shrink during this call.
+        // env->me_pglast and txn->mt_free_pgs[] can only grow.
+        // Page numbers cannot disappear from txn->mt_free_pgs[].
         let mut mc: MDB_cursor = MDB_cursor {
             mc_next: std::ptr::null_mut::<MDB_cursor>(),
             mc_backup: std::ptr::null_mut::<MDB_cursor>(),
@@ -2713,42 +2788,44 @@ unsafe extern "C" fn mdb_freelist_save(mut txn: *mut MDB_txn) -> std::ffi::c_int
         let mut pglast: txnid_t = 0 as std::ffi::c_int as txnid_t;
         let mut head_id: txnid_t = 0 as std::ffi::c_int as txnid_t;
         let mut freecnt: pgno_t = 0 as std::ffi::c_int as pgno_t;
-        let mut free_pgs: *mut pgno_t = std::ptr::null_mut::<pgno_t>();
-        let mut mop: *mut pgno_t = std::ptr::null_mut::<pgno_t>();
+        let mut free_pgs: &mut MDB_IDL;
+        let mut mop: Option<&mut MDB_IDL> = None;
         let mut head_room: ssize_t = 0 as std::ffi::c_int as ssize_t;
         let mut total_room: ssize_t = 0 as std::ffi::c_int as ssize_t;
         let mut mop_len: ssize_t = 0;
         let mut clean_limit: ssize_t = 0;
+
         mdb_cursor_init(
             &mut mc,
             txn,
             0 as std::ffi::c_int as MDB_dbi,
             std::ptr::null_mut::<MDB_xcursor>(),
         );
-        if !((*env).me_pgstate.mf_pghead).is_null() {
+
+        if ((*env).me_pgstate.mf_pghead).is_some() {
+            /* Make sure first page of freeDB is touched and on freelist */
             rc = mdb_page_search(
                 &mut mc,
                 std::ptr::null_mut::<MDB_val>(),
                 4 as std::ffi::c_int | 1 as std::ffi::c_int,
             );
-            if rc != 0 && rc != -(30798 as std::ffi::c_int) {
+            if rc != 0 && rc != MDB_NOTFOUND {
                 return rc;
             }
         }
-        if ((*env).me_pgstate.mf_pghead).is_null() && !((*txn).mt_loose_pgs).is_null() {
+        if ((*env).me_pgstate.mf_pghead).is_some() && !((*txn).mt_loose_pgs).is_null() {
+            // Put loose page numbers in mt_free_pgs, since
+            // we may be unable to return them to me_pghead.
             let mut mp: *mut MDB_page = (*txn).mt_loose_pgs;
             let mut dl: *mut MDB_ID2 = (*txn).mt_u.dirty_list;
             let mut x: std::ffi::c_uint = 0;
-            rc = mdb_midl_need(&mut (*txn).mt_free_pgs, (*txn).mt_loose_count as std::ffi::c_uint);
+            rc = mdb_midl_need(&mut (*txn).mt_free_pgs, (*txn).mt_loose_count as usize);
             if rc != 0 as std::ffi::c_int {
                 return rc;
             }
             while !mp.is_null() {
-                let mut xidl: *mut MDB_ID = (*txn).mt_free_pgs;
-                let fresh7 = &mut (*xidl.offset(0 as std::ffi::c_int as isize));
-                *fresh7 = (*fresh7).wrapping_add(1);
-                let mut xlen: MDB_ID = *fresh7;
-                *xidl.offset(xlen as isize) = (*mp).mp_p.p_pgno;
+                mdb_midl_xappend(&mut (*txn).mt_free_pgs, (*mp).mp_p.p_pgno);
+                // must also remove from dirty list
                 if (*txn).mt_flags & 0x80000 as std::ffi::c_int as std::ffi::c_uint != 0 {
                     x = 1 as std::ffi::c_int as std::ffi::c_uint;
                     while x as MDB_ID <= (*dl.offset(0 as std::ffi::c_int as isize)).mid {
@@ -2833,12 +2910,16 @@ unsafe extern "C" fn mdb_freelist_save(mut txn: *mut MDB_txn) -> std::ffi::c_int
             maxfree_1pg as std::ffi::c_long
         };
         loop {
+            /* Come back here after each Put() in case freelist changed */
             let mut key: MDB_val =
                 MDB_val { mv_size: 0, mv_data: std::ptr::null_mut::<std::ffi::c_void>() };
             let mut data: MDB_val =
                 MDB_val { mv_size: 0, mv_data: std::ptr::null_mut::<std::ffi::c_void>() };
             let mut pgs: *mut pgno_t = std::ptr::null_mut::<pgno_t>();
             let mut j: ssize_t = 0;
+
+            // If using records from freeDB which we have not yet
+            // deleted, delete them and any we reserved for me_pghead.
             while pglast < (*env).me_pgstate.mf_pglast {
                 rc = mdb_cursor_first(&mut mc, &mut key, std::ptr::null_mut::<MDB_val>());
                 if rc != 0 {
@@ -2866,8 +2947,11 @@ unsafe extern "C" fn mdb_freelist_save(mut txn: *mut MDB_txn) -> std::ffi::c_int
                     return rc;
                 }
             }
-            if freecnt < *((*txn).mt_free_pgs).offset(0 as std::ffi::c_int as isize) {
+
+            // Save the IDL of pages freed by this txn, to a single record
+            if freecnt < (*txn).mt_free_pgs.len() {
                 if freecnt == 0 {
+                    // Make sure last page of freeDB is touched and on freelist
                     rc = mdb_page_search(
                         &mut mc,
                         std::ptr::null_mut::<MDB_val>(),
@@ -2877,39 +2961,39 @@ unsafe extern "C" fn mdb_freelist_save(mut txn: *mut MDB_txn) -> std::ffi::c_int
                         return rc;
                     }
                 }
-                free_pgs = (*txn).mt_free_pgs;
+                free_pgs = &mut (*txn).mt_free_pgs;
+                // Write to last page of freeDB
                 key.mv_size = ::core::mem::size_of::<txnid_t>() as std::ffi::c_ulong;
                 key.mv_data = &mut (*txn).mt_txnid as *mut txnid_t as *mut std::ffi::c_void;
                 loop {
-                    freecnt = *free_pgs.offset(0);
-                    data.mv_size = (*free_pgs.offset(0))
+                    freecnt = free_pgs.len();
+                    data.mv_size = free_pgs
+                        .len()
                         .wrapping_add(1 as std::ffi::c_int as pgno_t)
                         .wrapping_mul(::core::mem::size_of::<MDB_ID>() as _)
                         as _;
-                    rc = _mdb_cursor_put(
-                        &mut mc,
-                        &mut key,
-                        &mut data,
-                        0x10000 as std::ffi::c_int as std::ffi::c_uint,
-                    );
+                    rc = _mdb_cursor_put(&mut mc, &mut key, &mut data, MDB_RESERVE);
                     if rc != 0 {
                         return rc;
                     }
-                    free_pgs = (*txn).mt_free_pgs;
-                    if freecnt >= *free_pgs.offset(0 as std::ffi::c_int as isize) {
+                    // Retry if mt_free_pgs[] grew during the Put()
+                    free_pgs = &mut (*txn).mt_free_pgs;
+                    if freecnt >= free_pgs.len() {
                         break;
                     }
                 }
                 mdb_midl_sort(free_pgs);
-                memcpy(data.mv_data, free_pgs as *const std::ffi::c_void, data.mv_size);
+                // memcpy(data.mv_data, free_pgs as *const std::ffi::c_void, data.mv_size);
+                free_pgs.copy_with_len_into_data(data);
             } else {
-                mop = (*env).me_pgstate.mf_pghead;
-                mop_len = (if !mop.is_null() {
-                    *mop.offset(0 as std::ffi::c_int as isize)
-                } else {
-                    0 as std::ffi::c_int as pgno_t
-                })
-                .wrapping_add((*txn).mt_loose_count as pgno_t) as ssize_t;
+                mop = (*env).me_pgstate.mf_pghead.as_mut();
+                // mop_len = (if !mop.is_null() {
+                //     *mop.offset(0 as std::ffi::c_int as isize)
+                // } else {
+                //     0 as std::ffi::c_int as pgno_t
+                // })
+                // .wrapping_add((*txn).mt_loose_count as pgno_t) as ssize_t;
+                mop_len = mop.as_ref().map_or(0, |m| m.len() as i64) + (*txn).mt_loose_count as i64;
                 if total_room >= mop_len {
                     if total_room == mop_len || {
                         more -= 1;
@@ -2961,52 +3045,62 @@ unsafe extern "C" fn mdb_freelist_save(mut txn: *mut MDB_txn) -> std::ffi::c_int
                 total_room += head_room;
             }
         }
-        if !((*txn).mt_loose_pgs).is_null() {
-            let mut mp_0: *mut MDB_page = (*txn).mt_loose_pgs;
-            let mut count: std::ffi::c_uint = (*txn).mt_loose_count as std::ffi::c_uint;
-            let mut loose: MDB_IDL = std::ptr::null_mut::<MDB_ID>();
-            rc = mdb_midl_need(
-                &mut (*env).me_pgstate.mf_pghead,
-                (2 as std::ffi::c_int as std::ffi::c_uint)
-                    .wrapping_mul(count)
-                    .wrapping_add(1 as std::ffi::c_int as std::ffi::c_uint),
-            );
-            if rc != 0 as std::ffi::c_int {
-                return rc;
+
+        // Return loose page numbers to me_pghead, though usually none are
+        // left at this point.  The pages themselves remain in dirty_list.
+        if !((*txn).mt_loose_pgs).is_null()
+            && let Some(mop) = mop.as_mut()
+        {
+            // Note: This block is tricky to read and understand, the reason is because
+            //       they decided to use the tail of an MDB_IDL to temporarily store
+            //       the loose pgno and finally xmerge them with the front of the MDB_IDL.
+            //       I'll not do that for now and use a temp MDB_IDL.
+            let mut mp: *mut MDB_page = (*txn).mt_loose_pgs;
+            let mut loose = mdb_midl_alloc((*txn).mt_loose_count as usize).unwrap();
+
+            let mut count = 0;
+            while !mp.is_null() {
+                count += 1;
+                mdb_midl_append(&mut loose, (*mp).mp_p.p_pgno);
+                mp = *(mp.offset(2) as *mut *mut MDB_page);
             }
-            mop = (*env).me_pgstate.mf_pghead;
-            loose = mop
-                .offset(*mop.offset(-(1 as std::ffi::c_int) as isize) as isize)
-                .offset(-(count as isize));
-            count = 0 as std::ffi::c_int as std::ffi::c_uint;
-            while !mp_0.is_null() {
-                count = count.wrapping_add(1);
-                *loose.offset(count as isize) = (*mp_0).mp_p.p_pgno;
-                mp_0 = *(mp_0.offset(2 as std::ffi::c_int as isize) as *mut *mut MDB_page);
-            }
-            *loose.offset(0 as std::ffi::c_int as isize) = count as MDB_ID;
-            mdb_midl_sort(loose);
+
+            mdb_midl_sort(&mut loose);
             mdb_midl_xmerge(mop, loose);
             (*txn).mt_loose_pgs = std::ptr::null_mut::<MDB_page>();
-            (*txn).mt_loose_count = 0 as std::ffi::c_int;
-            mop_len = *mop.offset(0 as std::ffi::c_int as isize) as ssize_t;
+            (*txn).mt_loose_count = 0;
+            mop_len = mop.len() as i64;
         }
-        rc = 0 as std::ffi::c_int;
-        if mop_len != 0 {
-            let mut key_0: MDB_val =
+
+        /* Fill in the reserved me_pghead records */
+        rc = 0; // MDB_SUCCESS
+        if let Some(mop) = mop.as_ref()
+            && mop_len != 0
+        {
+            // Note: I rewrote this function to use a temporary buffer
+            //       The reason is because the MDB_IDL should be changed to be shapped
+            //       like the one in the original C library. They store the lenght of the
+            //       IDL at the front of the MDB_IDs and use this property to directly
+            //       memcpy into the mmap. In our case, we use a Vec and the length is
+            //       not at the front of the allocation. This will help us avoid useless memcpys.
+            let mut key = MDB_val { mv_size: 0, mv_data: std::ptr::null_mut::<std::ffi::c_void>() };
+            let mut data =
                 MDB_val { mv_size: 0, mv_data: std::ptr::null_mut::<std::ffi::c_void>() };
-            let mut data_0: MDB_val =
-                MDB_val { mv_size: 0, mv_data: std::ptr::null_mut::<std::ffi::c_void>() };
-            mop = mop.offset(mop_len as isize);
-            rc = mdb_cursor_first(&mut mc, &mut key_0, &mut data_0);
+            let mut buffer = vec![0; 1 + mop_len as usize]; // len + MDB_IDs
+
+            // We read the MDB_IDs from the back
+            // mop = mop.offset(mop_len as isize);
+            let mut mop_index = mop.len() - 1;
+            rc = mdb_cursor_first(&mut mc, &mut key, &mut data);
             while rc == 0 {
-                let mut id: txnid_t = *(key_0.mv_data as *mut txnid_t);
-                let mut len: ssize_t = (data_0.mv_size)
-                    .wrapping_div(::core::mem::size_of::<MDB_ID>() as std::ffi::c_ulong)
+                let mut id: txnid_t = (key.mv_data as *mut txnid_t).read();
+                let mut len = (data.mv_size).wrapping_div(::core::mem::size_of::<MDB_ID>() as u64)
                     as ssize_t
-                    - 1 as std::ffi::c_int as ssize_t;
-                let mut save: MDB_ID = 0;
-                if len >= 0 as std::ffi::c_int as ssize_t && id <= (*env).me_pgstate.mf_pglast {
+                    - 1;
+                // let mut save: MDB_ID = 0;
+
+                // mdb_tassert
+                if len >= 0 as ssize_t && id <= (*env).me_pgstate.mf_pglast {
                 } else {
                     mdb_assert_fail(
                         (*txn).mt_env,
@@ -3020,30 +3114,32 @@ unsafe extern "C" fn mdb_freelist_save(mut txn: *mut MDB_txn) -> std::ffi::c_int
                         3710 as std::ffi::c_int,
                     );
                 };
-                key_0.mv_data = &mut id as *mut txnid_t as *mut std::ffi::c_void;
+                key.mv_data = &mut id as *mut txnid_t as *mut std::ffi::c_void;
                 if len > mop_len {
                     len = mop_len;
-                    data_0.mv_size = ((len + 1 as std::ffi::c_int as ssize_t) as std::ffi::c_ulong)
-                        .wrapping_mul(::core::mem::size_of::<MDB_ID>() as std::ffi::c_ulong);
+                    data.mv_size = (len as u64 + 1) * (::core::mem::size_of::<MDB_ID>() as u64);
                 }
-                mop = mop.offset(-(len as isize));
-                data_0.mv_data = mop as *mut std::ffi::c_void;
-                save = *mop.offset(0 as std::ffi::c_int as isize);
-                *mop.offset(0 as std::ffi::c_int as isize) = len as pgno_t;
-                rc = _mdb_cursor_put(
-                    &mut mc,
-                    &mut key_0,
-                    &mut data_0,
-                    0x40 as std::ffi::c_int as std::ffi::c_uint,
+                // mop = mop.offset(-(len as isize));
+                mop_index -= len as usize;
+                // Note: this is the extra memcpy we need to get rid of
+                // *mop.offset(0 as std::ffi::c_int as isize) = len as pgno_t;
+                // buffer[0] = len as pgno_t; // already done below
+                mop.copy_range_with_len_into_buffer(
+                    mop_index - (len as usize + 1)..mop_index,
+                    &mut buffer[..len as usize],
                 );
-                *mop.offset(0 as std::ffi::c_int as isize) = save;
+                // data.mv_data = mop as *mut std::ffi::c_void;
+                data.mv_data = buffer.as_ptr() as *mut std::ffi::c_void;
+                // save = *mop.offset(0);
+                rc = _mdb_cursor_put(&mut mc, &mut key, &mut data, MDB_CURRENT);
+                // *mop.offset(0) = save;
                 if rc != 0 || {
                     mop_len -= len;
                     mop_len == 0
                 } {
                     break;
                 }
-                rc = mdb_cursor_next(&mut mc, &mut key_0, &mut data_0, MDB_NEXT);
+                rc = mdb_cursor_next(&mut mc, &mut key, &mut data, MDB_NEXT);
             }
         }
         rc
@@ -3265,16 +3361,19 @@ unsafe extern "C" fn _mdb_txn_commit(mut txn: *mut MDB_txn) -> std::ffi::c_int {
                 let mut lp: *mut *mut MDB_page = std::ptr::null_mut::<*mut MDB_page>();
                 let mut dst: MDB_ID2L = std::ptr::null_mut::<MDB_ID2>();
                 let mut src: MDB_ID2L = std::ptr::null_mut::<MDB_ID2>();
-                let mut pspill: MDB_IDL = std::ptr::null_mut::<MDB_ID>();
+                let mut pspill: Option<&mut MDB_IDL> = None;
                 let mut x: std::ffi::c_uint = 0;
                 let mut y: std::ffi::c_uint = 0;
                 let mut len: std::ffi::c_uint = 0;
                 let mut ps_len: std::ffi::c_uint = 0;
-                rc = mdb_midl_append_list(&mut (*parent).mt_free_pgs, (*txn).mt_free_pgs);
+                rc = mdb_midl_append_list(
+                    &mut (*parent).mt_free_pgs,
+                    std::mem::take(&mut (*txn).mt_free_pgs),
+                );
                 if rc != 0 {
                     current_block = 9928889463419475167;
                 } else {
-                    mdb_midl_free((*txn).mt_free_pgs);
+                    mdb_midl_free(std::mem::take(&mut (*txn).mt_free_pgs));
                     (*parent).mt_next_pgno = (*txn).mt_next_pgno;
                     (*parent).mt_flags = (*txn).mt_flags;
                     mdb_cursors_close(txn, 1 as std::ffi::c_int as std::ffi::c_uint);
@@ -3301,54 +3400,33 @@ unsafe extern "C" fn _mdb_txn_commit(mut txn: *mut MDB_txn) -> std::ffi::c_int {
                     }
                     dst = (*parent).mt_u.dirty_list;
                     src = (*txn).mt_u.dirty_list;
-                    pspill = (*parent).mt_spill_pgs;
-                    if !pspill.is_null() && {
-                        ps_len = *pspill.offset(0 as std::ffi::c_int as isize) as std::ffi::c_uint;
-                        ps_len != 0
-                    } {
+                    pspill = (*parent).mt_spill_pgs.as_mut();
+                    /* Remove anything in our dirty list from parent's spill list */
+                    if let Some(pspill) = pspill
+                        && {
+                            ps_len = pspill.len() as u32;
+                            ps_len != 0
+                        }
+                    {
                         y = ps_len;
                         x = y;
-                        *pspill.offset(0 as std::ffi::c_int as isize) =
-                            -(1 as std::ffi::c_int) as pgno_t;
-                        i = 0 as std::ffi::c_int as std::ffi::c_uint;
-                        len = (*src.offset(0 as std::ffi::c_int as isize)).mid as std::ffi::c_uint;
-                        loop {
-                            i = i.wrapping_add(1);
-                            if i > len {
-                                break;
-                            }
-                            let mut pn: MDB_ID =
-                                (*src.offset(i as isize)).mid << 1 as std::ffi::c_int;
-                            while pn > *pspill.offset(x as isize) {
-                                x = x.wrapping_sub(1);
-                            }
-                            if pn == *pspill.offset(x as isize) {
-                                *pspill.offset(x as isize) = 1 as std::ffi::c_int as MDB_ID;
-                                x = x.wrapping_sub(1);
-                                y = x;
-                            }
-                        }
-                        x = y;
-                        loop {
-                            x = x.wrapping_add(1);
-                            if x > ps_len {
-                                break;
-                            }
-                            if *pspill.offset(x as isize) & 1 as std::ffi::c_int as MDB_ID == 0 {
-                                y = y.wrapping_add(1);
-                                *pspill.offset(y as isize) = *pspill.offset(x as isize);
-                            }
-                        }
-                        *pspill.offset(0 as std::ffi::c_int as isize) = y as MDB_ID;
+                        // Note: This is not optimal, but it's a workaround to make this part
+                        //       more understandable for now. We will optimize it later.
+                        pspill.retain(|&id| {
+                            (1..=(*src.offset(0)).mid).any(|i| {
+                                let pn = (*src.offset(i as isize)).mid << 1;
+                                pn == id
+                            })
+                        });
                     }
-                    if !((*txn).mt_spill_pgs).is_null()
-                        && *((*txn).mt_spill_pgs).offset(0 as std::ffi::c_int as isize) != 0
+
+                    /* Remove anything in our spill list from parent's dirty list */
+                    if let Some(spill_pgs) =
+                        (*txn).mt_spill_pgs.as_mut().filter(|pgs| !pgs.is_empty())
                     {
                         i = 1 as std::ffi::c_int as std::ffi::c_uint;
-                        while i as MDB_ID
-                            <= *((*txn).mt_spill_pgs).offset(0 as std::ffi::c_int as isize)
-                        {
-                            let mut pn_0: MDB_ID = *((*txn).mt_spill_pgs).offset(i as isize);
+                        while i as MDB_ID <= spill_pgs.len() {
+                            let mut pn_0: MDB_ID = spill_pgs[i as usize];
                             if pn_0 & 1 as std::ffi::c_int as MDB_ID == 0 {
                                 pn_0 >>= 1 as std::ffi::c_int;
                                 y = mdb_mid2l_search(dst, pn_0);
@@ -3443,19 +3521,18 @@ unsafe extern "C" fn _mdb_txn_commit(mut txn: *mut MDB_txn) -> std::ffi::c_int {
                     (*dst.offset(0 as std::ffi::c_int as isize)).mid = len as MDB_ID;
                     free((*txn).mt_u.dirty_list as *mut std::ffi::c_void);
                     (*parent).mt_dirty_room = (*txn).mt_dirty_room;
-                    if !((*txn).mt_spill_pgs).is_null() {
-                        if !((*parent).mt_spill_pgs).is_null() {
-                            rc = mdb_midl_append_list(
-                                &mut (*parent).mt_spill_pgs,
-                                (*txn).mt_spill_pgs,
-                            );
+                    if let Some(spill_pgs) = (*txn).mt_spill_pgs.take() {
+                        if let Some(parent_spill_pgs) = (*parent).mt_spill_pgs.as_mut() {
+                            rc = mdb_midl_append_list(parent_spill_pgs, spill_pgs);
                             if rc != 0 {
                                 (*parent).mt_flags |= 0x2 as std::ffi::c_int as std::ffi::c_uint;
                             }
-                            mdb_midl_free((*txn).mt_spill_pgs);
-                            mdb_midl_sort((*parent).mt_spill_pgs);
+                            // Note: Already freed above
+                            // mdb_midl_free((*txn).mt_spill_pgs);
+                            mdb_midl_sort(parent_spill_pgs);
                         } else {
-                            (*parent).mt_spill_pgs = (*txn).mt_spill_pgs;
+                            // Note: not sure about the ownership transfer
+                            (*parent).mt_spill_pgs = (*txn).mt_spill_pgs.take();
                         }
                     }
                     lp = &mut (*parent).mt_loose_pgs;
@@ -3465,7 +3542,9 @@ unsafe extern "C" fn _mdb_txn_commit(mut txn: *mut MDB_txn) -> std::ffi::c_int {
                     *lp = (*txn).mt_loose_pgs;
                     (*parent).mt_loose_count += (*txn).mt_loose_count;
                     (*parent).mt_child = std::ptr::null_mut::<MDB_txn>();
-                    mdb_midl_free((*(txn as *mut MDB_ntxn)).mnt_pgstate.mf_pghead);
+                    if let Some(pghead) = (*(txn as *mut MDB_ntxn)).mnt_pgstate.mf_pghead.take() {
+                        mdb_midl_free(pghead);
+                    }
                     free(txn as *mut std::ffi::c_void);
                     return rc;
                 }
@@ -3553,8 +3632,10 @@ unsafe extern "C" fn _mdb_txn_commit(mut txn: *mut MDB_txn) -> std::ffi::c_int {
                             if rc != 0 {
                                 current_block = 9928889463419475167;
                             } else {
-                                mdb_midl_free((*env).me_pgstate.mf_pghead);
-                                (*env).me_pgstate.mf_pghead = std::ptr::null_mut::<pgno_t>();
+                                if let Some(pghead) = (*env).me_pgstate.mf_pghead.take() {
+                                    mdb_midl_free(pghead);
+                                    // (*env).me_pgstate.mf_pghead = std::ptr::null_mut::<pgno_t>();
+                                }
                                 mdb_midl_shrink(&mut (*txn).mt_free_pgs);
                                 rc = mdb_page_flush(txn, 0 as std::ffi::c_int);
                                 if rc != 0 {
@@ -4774,7 +4855,7 @@ pub unsafe extern "C" fn mdb_env_open(
             flags &= !(0x80000 as std::ffi::c_int) as std::ffi::c_uint;
         } else {
             (*env).me_free_pgs = mdb_midl_alloc(((1) << (16 + 1)) - 1);
-            if !(!((*env).me_free_pgs).is_null() && {
+            if !(((*env).me_free_pgs).is_some() && {
                 (*env).me_dirty_list = calloc(
                     ((1 as std::ffi::c_int) << (16 as std::ffi::c_int + 1 as std::ffi::c_int))
                         as std::ffi::c_ulong,
@@ -5026,7 +5107,10 @@ unsafe extern "C" fn mdb_env_close0(mut env: *mut MDB_env, mut excl: std::ffi::c
         free((*env).me_path as *mut std::ffi::c_void);
         free((*env).me_dirty_list as *mut std::ffi::c_void);
         free((*env).me_txn0 as *mut std::ffi::c_void);
-        mdb_midl_free((*env).me_free_pgs);
+        // Note: will be freed later by dropping the environment
+        if let Some(free_pages) = (*env).me_free_pgs.take() {
+            mdb_midl_free(free_pages);
+        }
         if (*env).me_flags & 0x10000000 as std::ffi::c_uint != 0 {
             pthread_key_delete((*env).me_txkey);
         }
@@ -5416,13 +5500,11 @@ unsafe extern "C" fn mdb_page_get(
             level = 1 as std::ffi::c_int;
             loop {
                 let mut dl: MDB_ID2L = (*tx2).mt_u.dirty_list;
-                let mut x: std::ffi::c_uint = 0;
-                if !((*tx2).mt_spill_pgs).is_null() {
+                let mut x: u32 = 0;
+                if let Some(spill_pgs) = (*tx2).mt_spill_pgs.as_mut() {
                     let mut pn: MDB_ID = pgno << 1 as std::ffi::c_int;
-                    x = mdb_midl_search((*tx2).mt_spill_pgs, pn);
-                    if x as MDB_ID <= *((*tx2).mt_spill_pgs).offset(0 as std::ffi::c_int as isize)
-                        && *((*tx2).mt_spill_pgs).offset(x as isize) == pn
-                    {
+                    x = mdb_midl_search(spill_pgs, pn);
+                    if x as MDB_ID <= spill_pgs.len() && spill_pgs[x as usize] == pn {
                         current_block = 18052530224793637264;
                         break;
                     }
@@ -5862,42 +5944,51 @@ unsafe extern "C" fn mdb_ovpage_free(
     unsafe {
         let mut txn: *mut MDB_txn = (*mc).mc_txn;
         let mut pg: pgno_t = (*mp).mp_p.p_pgno;
-        let mut x: std::ffi::c_uint = 0 as std::ffi::c_int as std::ffi::c_uint;
-        let mut ovpages: std::ffi::c_uint = (*mp).mp_pb.pb_pages;
+        let mut x: u32 = 0;
+        let mut ovpages = (*mp).mp_pb.pb_pages;
         let mut env: *mut MDB_env = (*txn).mt_env;
-        let mut sl: MDB_IDL = (*txn).mt_spill_pgs;
-        let mut pn: MDB_ID = pg << 1 as std::ffi::c_int;
+        let mut sl: Option<&mut MDB_IDL> = (*txn).mt_spill_pgs.as_mut();
+        let mut pn: MDB_ID = pg << 1;
         let mut rc: std::ffi::c_int = 0;
-        if !((*env).me_pgstate.mf_pghead).is_null()
+
+        // If the page is dirty or on the spill list we just acquired it,
+        // so we should give it back to our current free list, if any.
+        // Otherwise put it onto the list of pages we freed in this txn.
+        //
+        // Won't create me_pghead: me_pglast must be inited along with it.
+        // Unsupported in nested txns: They would need to hide the page
+        // range in ancestor txns' dirty and spilled lists.
+        if let Some(pg_head) = ((*env).me_pgstate.mf_pghead).as_mut()
             && ((*txn).mt_parent).is_null()
-            && ((*mp).mp_flags as std::ffi::c_int & 0x10 as std::ffi::c_int != 0
-                || !sl.is_null()
-                    && {
-                        x = mdb_midl_search(sl, pn);
-                        x as MDB_ID <= *sl.offset(0 as std::ffi::c_int as isize)
-                    }
-                    && *sl.offset(x as isize) == pn)
+            && ((*mp).mp_flags & PageFlags::P_DIRTY.bits() != 0
+                || (sl.as_mut().map_or(false, |sl| {
+                    x = mdb_midl_search(sl, pn);
+                    x as MDB_ID <= sl.len()
+                }) && sl.as_mut().map_or(false, |sl| sl[x as usize] == pn)))
         {
             let mut i: std::ffi::c_uint = 0;
             let mut j: std::ffi::c_uint = 0;
-            let mut mop: *mut pgno_t = std::ptr::null_mut::<pgno_t>();
+            // let mut mop = None;
             let mut dl: *mut MDB_ID2 = std::ptr::null_mut::<MDB_ID2>();
             let mut ix: MDB_ID2 =
                 MDB_ID2 { mid: 0, mptr: std::ptr::null_mut::<std::ffi::c_void>() };
             let mut iy: MDB_ID2 =
                 MDB_ID2 { mid: 0, mptr: std::ptr::null_mut::<std::ffi::c_void>() };
-            rc = mdb_midl_need(&mut (*env).me_pgstate.mf_pghead, ovpages);
+            rc = mdb_midl_need(pg_head, ovpages as usize);
             if rc != 0 {
                 return rc;
             }
-            if (*mp).mp_flags as std::ffi::c_int & 0x10 as std::ffi::c_int == 0 {
-                if x as MDB_ID == *sl.offset(0 as std::ffi::c_int as isize) {
-                    let fresh22 = &mut (*sl.offset(0 as std::ffi::c_int as isize));
-                    *fresh22 = (*fresh22).wrapping_sub(1);
+            if (*mp).mp_flags & PageFlags::P_DIRTY.bits() == 0
+                && let Some(sl) = sl.as_mut()
+            {
+                /* This page is no longer spilled */
+                if x as MDB_ID == sl.len() {
+                    sl.pop();
                 } else {
-                    *sl.offset(x as isize) |= 1 as std::ffi::c_int as MDB_ID;
+                    sl[x as usize] |= 1 as MDB_ID;
                 }
             } else {
+                /* Remove from dirty list */
                 dl = (*txn).mt_u.dirty_list;
                 let fresh23 = &mut (*dl.offset(0 as std::ffi::c_int as isize)).mid;
                 let fresh24 = *fresh23;
@@ -5932,20 +6023,24 @@ unsafe extern "C" fn mdb_ovpage_free(
                     }
                     ix = iy;
                 }
-                (*txn).mt_dirty_room = ((*txn).mt_dirty_room).wrapping_add(1);
-                (*txn).mt_dirty_room;
-                if (*env).me_flags & 0x80000 as std::ffi::c_int as uint32_t == 0 {
+                (*txn).mt_dirty_room += 1;
+                if (*env).me_flags & MDB_WRITEMAP == 0 {
                     mdb_dpage_free(env, mp);
                 }
             }
-            mop = (*env).me_pgstate.mf_pghead;
-            j = (*mop.offset(0 as std::ffi::c_int as isize)).wrapping_add(ovpages as pgno_t)
-                as std::ffi::c_uint;
-            i = *mop.offset(0 as std::ffi::c_int as isize) as std::ffi::c_uint;
-            while i != 0 && *mop.offset(i as isize) < pg {
+            /* Insert in me_pghead */
+            // mop = (*env).me_pgstate.mf_pghead;
+            let mop = pg_head;
+            // j = (*mop.offset(0 as isize)).wrapping_add(ovpages as pgno_t) as std::ffi::c_uint;
+            j = mop.len() as u32 + ovpages;
+            // i = *mop.offset(0 as isize) as std::ffi::c_uint;
+            i = mop.len() as u32;
+            mop.extend(std::iter::repeat_n(0, ovpages as usize));
+            while i != 0 && mop[i as usize] < pg {
                 let fresh26 = j;
                 j = j.wrapping_sub(1);
-                *mop.offset(fresh26 as isize) = *mop.offset(i as isize);
+                // *mop.offset(fresh26 as isize) = *mop.offset(i as isize);
+                mop[fresh26 as usize] = mop[i as usize];
                 i = i.wrapping_sub(1);
             }
             while j > i {
@@ -5953,12 +6048,14 @@ unsafe extern "C" fn mdb_ovpage_free(
                 pg = pg.wrapping_add(1);
                 let fresh28 = j;
                 j = j.wrapping_sub(1);
-                *mop.offset(fresh28 as isize) = fresh27;
+                // *mop.offset(fresh28 as isize) = fresh27;
+                mop[fresh28 as usize] = fresh27;
             }
-            let fresh29 = &mut (*mop.offset(0 as std::ffi::c_int as isize));
-            *fresh29 = (*fresh29).wrapping_add(ovpages as pgno_t);
+            // Note: we extend the vector with zeros MDB_ID above the loops
+            // let fresh29 = &mut (*mop.offset(0 as std::ffi::c_int as isize));
+            // *fresh29 = (*fresh29).wrapping_add(ovpages as pgno_t);
         } else {
-            rc = mdb_midl_append_range(&mut (*txn).mt_free_pgs, pg, ovpages);
+            rc = mdb_midl_append_range(&mut (*txn).mt_free_pgs, pg, ovpages as usize);
             if rc != 0 {
                 return rc;
             }
@@ -15102,7 +15199,7 @@ unsafe extern "C" fn mdb_drop0(
                             rc = mdb_midl_append_range(
                                 &mut (*txn).mt_free_pgs,
                                 pg,
-                                (*omp).mp_pb.pb_pages,
+                                (*omp).mp_pb.pb_pages as usize,
                             );
                             if rc != 0 {
                                 current_block = 10688690059288260727;
@@ -15132,7 +15229,7 @@ unsafe extern "C" fn mdb_drop0(
                         current_block = 14434620278749266018;
                     }
                 } else {
-                    rc = mdb_midl_need(&mut (*txn).mt_free_pgs, n);
+                    rc = mdb_midl_need(&mut (*txn).mt_free_pgs, n as usize);
                     if rc != 0 as std::ffi::c_int {
                         current_block = 10688690059288260727;
                         break;
@@ -15175,11 +15272,7 @@ unsafe extern "C" fn mdb_drop0(
                             } else {
                                 0 as std::ffi::c_int as pgno_t
                             });
-                        let mut xidl: *mut MDB_ID = (*txn).mt_free_pgs;
-                        let fresh83 = &mut (*xidl.offset(0 as std::ffi::c_int as isize));
-                        *fresh83 = (*fresh83).wrapping_add(1);
-                        let mut xlen: MDB_ID = *fresh83;
-                        *xidl.offset(xlen as isize) = pg_0;
+                        mdb_midl_xappend(&mut (*txn).mt_free_pgs, pg_0);
                         i = i.wrapping_add(1);
                     }
                     current_block = 14434620278749266018;

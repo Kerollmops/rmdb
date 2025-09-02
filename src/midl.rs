@@ -11,8 +11,21 @@
 pub type size_t = usize;
 pub type mdb_size_t = size_t;
 
-use ::core::mem::size_of;
+use std::ops::{Index, IndexMut, Range};
+
 use libc::ENOMEM;
+
+use crate::MDB_val;
+
+// IDL sizes - likely should be even bigger
+// limiting factors: sizeof(ID), thread stack size
+/// DB_SIZE is 2^16, UM_SIZE is 2^17
+const MDB_IDL_LOGN: usize = 16;
+const MDB_IDL_DB_SIZE: usize = 1 << MDB_IDL_LOGN;
+const MDB_IDL_UM_SIZE: usize = 1 << (MDB_IDL_LOGN + 1);
+
+const MDB_IDL_DB_MAX: usize = MDB_IDL_DB_SIZE - 1;
+const MDB_IDL_UM_MAX: usize = MDB_IDL_UM_SIZE - 1;
 
 /// A generic unsigned ID number. These were entryIDs in back-bdb.
 /// Preferably it should have the same size as a pointer.
@@ -23,17 +36,10 @@ pub type MDB_ID = usize;
 /// IDs are in the list. In the original back-bdb code, IDLs are
 /// sorted in ascending order. For libmdb IDLs are sorted in
 /// descending order.
-pub type MDB_IDL = *mut MDB_ID;
-
-// IDL sizes - likely should be even bigger
-// limiting factors: sizeof(ID), thread stack size
-/// DB_SIZE is 2^16, UM_SIZE is 2^17
-const MDB_IDL_LOGN: i32 = 16;
-const MDB_IDL_DB_SIZE: i32 = 1 << MDB_IDL_LOGN;
-const MDB_IDL_UM_SIZE: i32 = 1 << (MDB_IDL_LOGN + 1);
-
-const MDB_IDL_DB_MAX: i32 = MDB_IDL_DB_SIZE - 1;
-const MDB_IDL_UM_MAX: i32 = MDB_IDL_UM_SIZE - 1;
+#[derive(Debug, Clone, Default)]
+pub struct MDB_IDL {
+    inner: Vec<MDB_ID>,
+}
 
 /// An ID2 is an ID/pointer pair.
 #[derive(Copy, Clone)]
@@ -58,21 +64,98 @@ pub type MDB_ID2L = *mut MDB_ID2;
 // 		xidl[xlen] = (id); \
 // 	} while (0)
 
+impl MDB_IDL {
+    pub fn capacity(&self) -> usize {
+        self.inner.capacity()
+    }
+
+    pub fn len(&self) -> usize {
+        self.inner.len()
+    }
+
+    pub fn truncate(&mut self, len: usize) {
+        self.inner.truncate(len);
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.inner.is_empty()
+    }
+
+    pub fn retain(&mut self, f: impl FnMut(&MDB_ID) -> bool) {
+        self.inner.retain(f);
+    }
+
+    pub fn pop(&mut self) -> Option<MDB_ID> {
+        self.inner.pop()
+    }
+
+    pub fn extend(&mut self, iter: impl Iterator<Item = MDB_ID>) {
+        self.inner.extend(iter);
+    }
+
+    pub fn size_of_with_len(&self) -> usize {
+        (self.len() + 1) * size_of::<MDB_ID>()
+    }
+
+    pub fn copy_with_len_into_data(&self, data: MDB_val) {
+        assert_eq!(data.mv_size, self.size_of_with_len() as _);
+        unsafe {
+            std::ptr::write_unaligned(data.mv_data as *mut MDB_ID, self.len());
+            std::ptr::copy_nonoverlapping(
+                self.inner.as_ptr() as *const u8,
+                (data.mv_data as *mut MDB_ID).offset(1) as *mut u8,
+                self.len() * size_of::<MDB_ID>(),
+            );
+        }
+    }
+
+    pub fn copy_range_with_len_into_buffer(&self, range: Range<usize>, buffer: &mut [usize]) {
+        let slice: &[MDB_ID] = &self.inner[range];
+        assert_eq!(buffer.len(), slice.len() + 1);
+        if let Some((len, tail)) = buffer.split_first_mut() {
+            *len = slice.len();
+            tail.copy_from_slice(slice);
+        }
+    }
+}
+
+impl Index<usize> for MDB_IDL {
+    type Output = MDB_ID;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        // TODO remove this (-1) and the (+1) in the search functions
+        &self.inner[index.checked_sub(1).unwrap()]
+    }
+}
+
+impl IndexMut<usize> for MDB_IDL {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        // TODO remove this (-1) and the (+1) in the search functions
+        &mut self.inner[index.checked_sub(1).unwrap()]
+    }
+}
+
+pub struct MDB_IDLRef<'a> {
+    inner: &'a [MDB_ID],
+}
+
+impl<'a> MDB_IDLRef<'a> {
+    pub unsafe fn from_pointer(ptr: *mut MDB_ID) -> Self {
+        let len: usize = unsafe { ptr.read() };
+        MDB_IDLRef { inner: unsafe { std::slice::from_raw_parts(ptr.offset(1), len) } }
+    }
+}
+
 /// Search for an ID in an IDL.
 ///
 /// @param[in] ids	The IDL to search.
 /// @param[in] id	The ID to search for.
 /// @return	The index of the first ID greater than or equal to \b id.
-pub unsafe fn mdb_midl_search(ids: MDB_IDL, id: MDB_ID) -> u32 {
-    let slice = unsafe {
-        let len = ids.read();
-        std::slice::from_raw_parts(ids.offset(1), len)
-    };
-
+pub fn mdb_midl_search(ids: &MDB_IDL, id: MDB_ID) -> u32 {
     // binary search of id in ids
     // if found, returns position of id
     // if not found, returns first position greater than id
-    match slice.binary_search_by(|m| m.cmp(&id).reverse()) {
+    match ids.inner.binary_search_by(|m| m.cmp(&id).reverse()) {
         Ok(pos) => pos as u32 + 1,
         Err(pos) => pos as u32 + 1,
     }
@@ -82,69 +165,28 @@ pub unsafe fn mdb_midl_search(ids: MDB_IDL, id: MDB_ID) -> u32 {
 ///
 /// Allocates memory for an IDL of the given size.
 /// @return	IDL on success, NULL on failure.
-pub unsafe fn mdb_midl_alloc(mut num: i32) -> MDB_IDL {
-    unsafe {
-        let mut ids = libc::malloc((num as usize + 2).wrapping_mul(size_of::<MDB_ID>())) as MDB_IDL;
-        if !ids.is_null() {
-            let fresh0 = ids;
-            ids = ids.offset(1);
-            *fresh0 = num as MDB_ID;
-            *ids = 0 as MDB_ID;
-        }
-        ids
+pub fn mdb_midl_alloc(num: usize) -> Option<MDB_IDL> {
+    let mut vec = Vec::new();
+    match vec.try_reserve(num) {
+        Ok(_) => Some(MDB_IDL { inner: vec }),
+        Err(_) => None,
     }
 }
 
 /// Free an IDL.
 ///
 /// @param[in] ids	The IDL to free.
-pub unsafe fn mdb_midl_free(mut ids: MDB_IDL) {
-    if !ids.is_null() {
-        unsafe { libc::free(ids.offset(-1) as *mut std::ffi::c_void) }
-    }
+pub fn mdb_midl_free(_ids: MDB_IDL) {
+    // drop(ids)
 }
 
 /// Shrink an IDL.
 ///
 /// Return the IDL to the default size if it has grown larger.
 /// @param[in,out] idp	Address of the IDL to shrink.
-pub unsafe fn mdb_midl_shrink(mut idp: *mut MDB_IDL) {
-    unsafe {
-        let mut ids: MDB_IDL = *idp;
-        ids = ids.offset(-1);
-        if *ids > (((1) << (MDB_IDL_LOGN + 1)) - 1) as MDB_ID && {
-            ids = libc::realloc(
-                ids as *mut std::ffi::c_void,
-                ((((1) << (MDB_IDL_LOGN + 1)) - 1 + 2) as size_t).wrapping_mul(size_of::<MDB_ID>()),
-            ) as MDB_IDL;
-            !ids.is_null()
-        } {
-            let fresh1 = ids;
-            ids = ids.offset(1);
-            *fresh1 = (((1) << (MDB_IDL_LOGN + 1)) - 1) as MDB_ID;
-            *idp = ids;
-        }
-    }
-}
-
-unsafe fn mdb_midl_grow(mut idp: *mut MDB_IDL, mut num: u32) -> i32 {
-    unsafe {
-        let mut idn: MDB_IDL = (*idp).offset(-1);
-        idn = libc::realloc(
-            idn as *mut std::ffi::c_void,
-            (idn.read())
-                .wrapping_add(num as usize)
-                .wrapping_add(2)
-                .wrapping_mul(size_of::<MDB_ID>()),
-        ) as MDB_IDL;
-        if idn.is_null() {
-            return ENOMEM;
-        }
-        let fresh2 = idn;
-        idn = idn.offset(1);
-        *fresh2 = (*fresh2).wrapping_add(num as usize);
-        *idp = idn;
-        0
+pub fn mdb_midl_shrink(idp: &mut MDB_IDL) {
+    if idp.inner.capacity() > MDB_IDL_UM_MAX {
+        idp.inner.shrink_to(MDB_IDL_UM_MAX);
     }
 }
 
@@ -153,31 +195,22 @@ unsafe fn mdb_midl_grow(mut idp: *mut MDB_IDL, mut num: u32) -> i32 {
 /// @param[in,out] idp	Address of the IDL.
 /// @param[in] num	Number of elements to make room for.
 /// @return	0 on success, ENOMEM on failure.
-pub unsafe fn mdb_midl_need(mut idp: *mut MDB_IDL, mut num: std::ffi::c_uint) -> std::ffi::c_int {
-    unsafe {
-        let mut ids: MDB_IDL = *idp;
-        num = (num as std::ffi::c_ulong)
-            .wrapping_add(*ids.offset(0 as std::ffi::c_int as isize) as std::ffi::c_ulong)
-            as std::ffi::c_uint as std::ffi::c_uint;
-        if num as MDB_ID > *ids.offset(-(1 as std::ffi::c_int) as isize) {
-            num = num
-                .wrapping_add(num.wrapping_div(4 as std::ffi::c_uint))
-                .wrapping_add((256 as std::ffi::c_int + 2 as std::ffi::c_int) as std::ffi::c_uint)
-                & -(256 as std::ffi::c_int) as std::ffi::c_uint;
-            ids = libc::realloc(
-                ids.offset(-(1 as std::ffi::c_int as isize)) as *mut std::ffi::c_void,
-                (num as size_t).wrapping_mul(size_of::<MDB_ID>() as size_t),
-            ) as MDB_IDL;
-            if ids.is_null() {
-                return ENOMEM;
-            }
-            let fresh3 = ids;
-            ids = ids.offset(1);
-            *fresh3 = num.wrapping_sub(2 as std::ffi::c_uint) as MDB_ID;
-            *idp = ids;
-        }
-        0 as std::ffi::c_int
+pub fn mdb_midl_need(idp: &mut MDB_IDL, num: usize) -> i32 {
+    match idp.inner.try_reserve(num) {
+        Ok(_) => 0,
+        Err(_) => ENOMEM,
     }
+}
+
+/// Append ID to IDL. The IDL must be big enough.
+pub fn mdb_midl_xappend(idl: &mut MDB_IDL, id: MDB_ID) {
+    // Note: It seems that it's simply an mdb_midl_append without the midl_need... but in a macro.
+    // #define mdb_midl_xappend(idl, id) do { \
+    // 		MDB_ID *xidl = (idl), xlen = ++(xidl[0]); \
+    // 		xidl[xlen] = (id); \
+    // 	} while (0)
+    assert!(idl.capacity() - idl.len() >= 1);
+    idl.inner.push(id);
 }
 
 /// Append an ID onto an IDL.
@@ -185,20 +218,12 @@ pub unsafe fn mdb_midl_need(mut idp: *mut MDB_IDL, mut num: std::ffi::c_uint) ->
 /// @param[in,out] idp	Address of the IDL to append to.
 /// @param[in] id	The ID to append.
 /// @return	0 on success, ENOMEM if the IDL is too large.
-pub unsafe fn mdb_midl_append(mut idp: *mut MDB_IDL, mut id: MDB_ID) -> i32 {
-    unsafe {
-        let mut ids: MDB_IDL = *idp;
-        if *ids.offset(0) >= *ids.offset(-1) {
-            if mdb_midl_grow(idp, ((1) << (MDB_IDL_LOGN + 1)) - 1) != 0 {
-                return ENOMEM;
-            }
-            ids = *idp;
-        }
-        let fresh4 = &mut (*ids.offset(0));
-        *fresh4 = (*fresh4).wrapping_add(1);
-        *ids.offset(*ids.offset(0) as isize) = id;
-        0
+pub fn mdb_midl_append(idp: &mut MDB_IDL, id: MDB_ID) -> i32 {
+    if mdb_midl_need(idp, 1) != 0 {
+        return ENOMEM;
     }
+    idp.inner.push(id);
+    0
 }
 
 /// Append an IDL onto an IDL.
@@ -206,113 +231,74 @@ pub unsafe fn mdb_midl_append(mut idp: *mut MDB_IDL, mut id: MDB_ID) -> i32 {
 /// @param[in,out] idp	Address of the IDL to append to.
 /// @param[in] app	The IDL to append.
 /// @return	0 on success, ENOMEM if the IDL is too large.
-pub unsafe fn mdb_midl_append_list(mut idp: *mut MDB_IDL, mut app: MDB_IDL) -> std::ffi::c_int {
-    unsafe {
-        let mut ids: MDB_IDL = *idp;
-        if (*ids.offset(0 as std::ffi::c_int as isize))
-            .wrapping_add(*app.offset(0 as std::ffi::c_int as isize))
-            >= *ids.offset(-(1 as std::ffi::c_int) as isize)
-        {
-            if mdb_midl_grow(idp, *app.offset(0 as isize) as u32) != 0 {
-                return ENOMEM;
-            }
-            ids = *idp;
-        }
-        std::ptr::copy_nonoverlapping(
-            // &app[1]
-            &mut *app.offset(1),
-            // &ids[ids[0]+1]
-            &mut *ids.offset((ids.read() + 1) as isize),
-            // app[0] * sizeof(MDB_ID)
-            app.read() as usize,
-        );
-
-        let fresh5 = &mut (*ids.offset(0 as std::ffi::c_int as isize));
-        *fresh5 = (*fresh5 as std::ffi::c_ulong)
-            .wrapping_add(*app.offset(0 as std::ffi::c_int as isize) as std::ffi::c_ulong)
-            as MDB_ID;
-        0 as std::ffi::c_int
+pub fn mdb_midl_append_list(idp: &mut MDB_IDL, mut app: MDB_IDL) -> i32 {
+    if mdb_midl_need(idp, app.inner.len()) != 0 {
+        return ENOMEM;
     }
+    idp.inner.append(&mut app.inner);
+    0
 }
 
 /// Append an ID range onto an IDL.
 ///
-/// @param[in,out] idp	Address of the IDL to append to.
-/// @param[in] id	The lowest ID to append.
-/// @param[in] n		Number of IDs to append.
-/// @return	0 on success, ENOMEM if the IDL is too large.
-pub unsafe fn mdb_midl_append_range(
-    mut idp: *mut MDB_IDL,
-    mut id: MDB_ID,
-    mut n: std::ffi::c_uint,
-) -> std::ffi::c_int {
-    unsafe {
-        let mut ids: *mut MDB_ID = *idp;
-        let mut len: MDB_ID = *ids.offset(0);
-        if len.wrapping_add(n as MDB_ID) > *ids.offset(-(1 as std::ffi::c_int) as isize) {
-            if mdb_midl_grow(idp, n | (((1) << (MDB_IDL_LOGN + 1)) - 1)) != 0 {
-                return ENOMEM;
-            }
-            ids = *idp as *mut MDB_ID;
-        }
-        *ids.offset(0) = len.wrapping_add(n as MDB_ID);
-        ids = ids.offset(len as isize);
-        while n != 0 {
-            let fresh6 = id;
-            id = id.wrapping_add(1);
-            let fresh7 = n;
-            n = n.wrapping_sub(1);
-            *ids.offset(fresh7 as isize) = fresh6;
-        }
-        0 as std::ffi::c_int
+/// @param[in,out] idp  Address of the IDL to append to.
+/// @param[in] id       The lowest ID to append.
+/// @param[in] n        Number of IDs to append.
+/// @return 0 on success, ENOMEM if the IDL is too large.
+pub fn mdb_midl_append_range(idp: &mut MDB_IDL, id: MDB_ID, n: usize) -> i32 {
+    if mdb_midl_need(idp, n) != 0 {
+        return ENOMEM;
     }
+    idp.inner.extend((0..n).map(|x| id + x));
+    0
 }
 
 /// Merge an IDL onto an IDL. The destination IDL must be big enough.
 ///
 /// @param[in] idl      The IDL to merge into.
 /// @param[in] merge    The IDL to merge.
-pub unsafe fn mdb_midl_xmerge(mut idl: MDB_IDL, mut merge: MDB_IDL) {
-    unsafe {
-        let mut old_id: MDB_ID = 0;
-        let mut merge_id: MDB_ID = 0;
-        let mut i: MDB_ID = *merge.offset(0 as std::ffi::c_int as isize);
-        let mut j: MDB_ID = *idl.offset(0 as std::ffi::c_int as isize);
-        let mut k: MDB_ID = i.wrapping_add(j);
-        let mut total: MDB_ID = k;
-        *idl.offset(0 as std::ffi::c_int as isize) = -(1 as std::ffi::c_int) as MDB_ID;
-        old_id = *idl.offset(j as isize);
-        while i != 0 {
-            let fresh8 = i;
-            i = i.wrapping_sub(1);
-            merge_id = *merge.offset(fresh8 as isize);
-            while old_id < merge_id {
-                let fresh9 = k;
-                k = k.wrapping_sub(1);
-                *idl.offset(fresh9 as isize) = old_id;
-                j = j.wrapping_sub(1);
-                old_id = *idl.offset(j as isize);
-            }
-            let fresh10 = k;
-            k = k.wrapping_sub(1);
-            *idl.offset(fresh10 as isize) = merge_id;
-        }
-        *idl.offset(0 as std::ffi::c_int as isize) = total;
+pub fn mdb_midl_xmerge(idl: &mut MDB_IDL, mut merge: MDB_IDL) {
+    // TODO Implement mdb_midl_xmerge
+    //    MDB_ID old_id, merge_id, i = merge[0], j = idl[0], k = i+j, total = k;
+    // idl[0] = (MDB_ID)-1;		/* delimiter for idl scan below */
+    // old_id = idl[j];
+    // while (i) {
+    // 	merge_id = merge[i--];
+    // 	for (; old_id < merge_id; old_id = idl[--j])
+    // 		idl[k--] = old_id;
+    // 	idl[k--] = merge_id;
+    // }
+    // idl[0] = total;
+
+    if idl.inner.capacity() < idl.inner.len() + merge.inner.len() {
+        panic!("Insufficient capacity when xmerging");
     }
+
+    idl.inner.append(&mut merge.inner);
+    mdb_midl_sort(idl);
 }
 
-pub const SMALL: std::ffi::c_int = 8 as std::ffi::c_int;
+/// Merge an IDL onto an IDL. The destination IDL must be big enough.
+///
+/// @param[in] idl      The IDL to merge into.
+/// @param[in] merge    The IDL to merge.
+pub fn mdb_midl_xmerge_ref(idl: &mut MDB_IDL, merge: MDB_IDLRef) {
+    // TODO Implement mdb_midl_xmerge
+    if idl.inner.capacity() < idl.inner.len() + merge.inner.len() {
+        panic!("Insufficient capacity when xmerging");
+    }
+
+    idl.extend(merge.inner.iter().copied());
+    mdb_midl_sort(idl);
+}
+
+pub const SMALL: i32 = 8;
 
 /// Sort an IDL.
 ///
 /// @param[in,out] ids	The IDL to sort.
-pub unsafe fn mdb_midl_sort(mut ids: MDB_IDL) {
-    let slice = unsafe {
-        let len = ids.read();
-        std::slice::from_raw_parts_mut(ids.offset(1), len)
-    };
-
-    slice.sort_unstable_by(|a, b| a.cmp(&b).reverse());
+pub fn mdb_midl_sort(ids: &mut MDB_IDL) {
+    ids.inner.sort_unstable_by(|a, b| a.cmp(&b).reverse());
 }
 
 /// Search for an ID in an ID2L.
