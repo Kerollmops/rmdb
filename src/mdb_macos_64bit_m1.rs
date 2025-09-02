@@ -3072,7 +3072,7 @@ unsafe extern "C" fn mdb_freelist_save(mut txn: *mut MDB_txn) -> std::ffi::c_int
 
             // We read the MDB_IDs from the back
             // mop = mop.offset(mop_len as isize);
-            let mut mop_index = mop.len() - 1;
+            let mut mop_index = mop.len();
             rc = mdb_cursor_first(&mut mc, &mut key, &mut data);
             while rc == 0 {
                 let mut id: txnid_t = (key.mv_data as *mut txnid_t).read();
@@ -3107,8 +3107,8 @@ unsafe extern "C" fn mdb_freelist_save(mut txn: *mut MDB_txn) -> std::ffi::c_int
                 // *mop.offset(0 as std::ffi::c_int as isize) = len as pgno_t;
                 // buffer[0] = len as pgno_t; // already done below
                 mop.copy_range_with_len_into_buffer(
-                    mop_index - (len as usize + 1)..mop_index,
-                    &mut buffer[..len as usize],
+                    mop_index..mop_index + len as usize,
+                    &mut buffer[..len as usize + 1],
                 );
                 // data.mv_data = mop as *mut std::ffi::c_void;
                 data.mv_data = buffer.as_ptr() as *mut std::ffi::c_void;
