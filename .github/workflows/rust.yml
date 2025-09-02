@@ -136,31 +136,39 @@ jobs:
           cd heed/heed
           cargo test
 
+      - name: Run the heed examples with rmdb
+        run: |
+          cd heed/heed
+          cargo clean
+          # rmp-serde needs a feature activated, so we'll just run it separately.
+          cargo run --example 2>&1 | grep -E '^ ' | awk '!/rmp-serde/' | xargs -n1 cargo run --example
+          cargo run --example rmp-serde --features serde-rmp
+
   clippy:
-      name: Ensure clippy is happy
-      runs-on: ${{ matrix.rust }}
-      continue-on-error: true
-      steps:
-        - uses: actions/checkout@v2
-        - uses: dtolnay/rust-toolchain@nightly
-          with:
-            components: clippy
-        - uses: actions-rs/cargo@v1
-          with:
-            toolchain: ${{ matrix.rust }}
-            command: clippy
-            args: --all-targets -- --deny warnings
+    name: Ensure clippy is happy
+    runs-on: ${{ matrix.rust }}
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v2
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: clippy
+      - uses: actions-rs/cargo@v1
+        with:
+          toolchain: ${{ matrix.rust }}
+          command: clippy
+          args: --all-targets -- --deny warnings
 
   fmt:
-      name: Ensure the project is formatted
-      runs-on: macos-latest # We will need to use matrix.rust, here.
-      steps:
-        - uses: actions/checkout@v2
-        - uses: dtolnay/rust-toolchain@nightly
-          with:
-            components: rustfmt
-        - uses: actions-rs/cargo@v1
-          with:
-            toolchain: ${{ matrix.rust }}
-            command: fmt
-            args: --check
+    name: Ensure the project is formatted
+    runs-on: macos-latest # We will need to use matrix.rust, here.
+    steps:
+      - uses: actions/checkout@v2
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rustfmt
+      - uses: actions-rs/cargo@v1
+        with:
+          toolchain: ${{ matrix.rust }}
+          command: fmt
+          args: --check
