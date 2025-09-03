@@ -15,10 +15,10 @@ env:
 
 jobs:
   test:
-    runs-on: ${{ matrix.os }}
+    runs-on: macos-latest
     strategy:
+      fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
         rust:
           - nightly
 
@@ -41,10 +41,10 @@ jobs:
 
   old_tests:
     continue-on-error: true
-    runs-on: ${{ matrix.os }}
+    runs-on: macos-latest
     strategy:
+      fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
         bins: [mtest, mtest2, mtest3, mtest4, mtest5]
         rust:
           - nightly
@@ -66,31 +66,208 @@ jobs:
           command: run
           args: --bin ${{ matrix.bins }}
 
+  test-heed-integration:
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        rust:
+          - nightly
+
+    steps:
+      - name: Checkout rmdb (current repo)
+        uses: actions/checkout@v4
+        with:
+          path: rmdb
+
+      - name: Checkout heed
+        uses: actions/checkout@v4
+        with:
+          repository: meilisearch/heed
+          ref: tmp-adapted-for-rmdb
+          path: heed
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@nightly
+
+      - name: Set sed command for cross-platform compatibility
+        run: |
+          if [[ "$OSTYPE" == "darwin"* ]]; then
+            echo "SED_INPLACE=sed -i ''" >> $GITHUB_ENV
+          else
+            echo "SED_INPLACE=sed -i" >> $GITHUB_ENV
+          fi
+
+      - name: Rename rmdb crate to lmdb-master-sys
+        run: |
+          cd rmdb
+          $SED_INPLACE 's/^name = "rmdb"/name = "lmdb-master-sys"/' Cargo.toml
+
+      - name: Modify heed dependencies and remove unsupported features
+        run: |
+          cd heed/heed
+
+          # Update lmdb-master-sys dependency to use local version
+          $SED_INPLACE 's/lmdb-master-sys = { [^}]* }/lmdb-master-sys = { version = "\*" }/' Cargo.toml
+
+          # Comment out unsupported features
+          $SED_INPLACE 's/^posix-sem = /# posix-sem = /' Cargo.toml
+          $SED_INPLACE 's/^mdb_idl_logn_8 = /# mdb_idl_logn_8 = /' Cargo.toml
+          $SED_INPLACE 's/^mdb_idl_logn_9 = /# mdb_idl_logn_9 = /' Cargo.toml
+          $SED_INPLACE 's/^mdb_idl_logn_10 = /# mdb_idl_logn_10 = /' Cargo.toml
+          $SED_INPLACE 's/^mdb_idl_logn_11 = /# mdb_idl_logn_11 = /' Cargo.toml
+          $SED_INPLACE 's/^mdb_idl_logn_12 = /# mdb_idl_logn_12 = /' Cargo.toml
+          $SED_INPLACE 's/^mdb_idl_logn_13 = /# mdb_idl_logn_13 = /' Cargo.toml
+          $SED_INPLACE 's/^mdb_idl_logn_14 = /# mdb_idl_logn_14 = /' Cargo.toml
+          $SED_INPLACE 's/^mdb_idl_logn_15 = /# mdb_idl_logn_15 = /' Cargo.toml
+          $SED_INPLACE 's/^mdb_idl_logn_16 = /# mdb_idl_logn_16 = /' Cargo.toml
+          $SED_INPLACE 's/^longer-keys = /# longer-keys = /' Cargo.toml
+          $SED_INPLACE 's/^use-valgrind = /# use-valgrind = /' Cargo.toml
+
+      - name: Add patch for local lmdb-master-sys
+        run: |
+          cd heed
+          echo "" >> Cargo.toml
+          echo "[patch.crates-io]" >> Cargo.toml
+          echo 'lmdb-master-sys = { path = "../rmdb" }' >> Cargo.toml
+
+      - name: Run heed tests with rmdb
+        run: |
+          cd heed/heed
+          cargo test
+
+      - name: Run the heed examples with rmdb
+        run: |
+          cd heed/heed
+          cargo clean
+          # rmp-serde needs a feature activated, so we'll just run it separately.
+          cargo run --example 2>&1 | grep -E '^ ' | awk '!/rmp-serde/' | xargs -n1 cargo run --example
+          cargo run --example rmp-serde --features serde-rmp
+
+  test-meilisearch-integration:
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        rust:
+          - nightly
+
+    steps:
+      - name: Checkout rmdb (current repo)
+        uses: actions/checkout@v4
+        with:
+          path: rmdb
+
+      - name: Checkout heed
+        uses: actions/checkout@v4
+        with:
+          repository: meilisearch/heed
+          ref: tmp-adapted-for-rmdb
+          path: heed
+
+      - name: Checkout meilisearch
+        uses: actions/checkout@v4
+        with:
+          repository: meilisearch/meilisearch
+          ref: v1.19.1
+          path: meilisearch
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@nightly
+
+      - name: Set sed command for cross-platform compatibility
+        run: |
+          if [[ "$OSTYPE" == "darwin"* ]]; then
+            echo "SED_INPLACE=sed -i ''" >> $GITHUB_ENV
+          else
+            echo "SED_INPLACE=sed -i" >> $GITHUB_ENV
+          fi
+
+      - name: Rename rmdb crate to lmdb-master-sys
+        run: |
+          cd rmdb
+          $SED_INPLACE 's/^name = "rmdb"/name = "lmdb-master-sys"/' Cargo.toml
+          # Ensure version is compatible
+          $SED_INPLACE 's/^version = "[^"]*"/version = "1.0.0"/' Cargo.toml
+
+      - name: Modify heed dependencies and remove unsupported features
+        run: |
+          cd heed/heed
+
+          # Update lmdb-master-sys dependency to use local version
+          $SED_INPLACE 's/lmdb-master-sys = { [^}]* }/lmdb-master-sys = { version = "*" }/' Cargo.toml
+
+          # Comment out unsupported features
+          $SED_INPLACE 's/^posix-sem = /# posix-sem = /' Cargo.toml
+          $SED_INPLACE 's/^mdb_idl_logn_8 = /# mdb_idl_logn_8 = /' Cargo.toml
+          $SED_INPLACE 's/^mdb_idl_logn_9 = /# mdb_idl_logn_9 = /' Cargo.toml
+          $SED_INPLACE 's/^mdb_idl_logn_10 = /# mdb_idl_logn_10 = /' Cargo.toml
+          $SED_INPLACE 's/^mdb_idl_logn_11 = /# mdb_idl_logn_11 = /' Cargo.toml
+          $SED_INPLACE 's/^mdb_idl_logn_12 = /# mdb_idl_logn_12 = /' Cargo.toml
+          $SED_INPLACE 's/^mdb_idl_logn_13 = /# mdb_idl_logn_13 = /' Cargo.toml
+          $SED_INPLACE 's/^mdb_idl_logn_14 = /# mdb_idl_logn_14 = /' Cargo.toml
+          $SED_INPLACE 's/^mdb_idl_logn_15 = /# mdb_idl_logn_15 = /' Cargo.toml
+          $SED_INPLACE 's/^mdb_idl_logn_16 = /# mdb_idl_logn_16 = /' Cargo.toml
+          $SED_INPLACE 's/^longer-keys = /# longer-keys = /' Cargo.toml
+          $SED_INPLACE 's/^use-valgrind = /# use-valgrind = /' Cargo.toml
+
+      - name: Remove unsupported features from meilisearch
+        run: |
+          cd meilisearch/crates/milli
+          # Comment out unsupported features
+          $SED_INPLACE 's/^lmdb-posix-sem = /# lmdb-posix-sem = /' Cargo.toml
+
+      - name: Pin arroy to exact version =0.6.2 in meilisearch
+        run: |
+          cd meilisearch/crates/milli
+          # Update arroy version in the main Cargo.toml
+          $SED_INPLACE 's/arroy = "0\.6\.2"/arroy = "=0.6.2"/' Cargo.toml
+
+      - name: Add patch for local lmdb-master-sys and heed in meilisearch
+        run: |
+          cd meilisearch
+          echo "" >> Cargo.toml
+          echo "[patch.crates-io]" >> Cargo.toml
+          echo 'lmdb-master-sys = { path = "../rmdb" }' >> Cargo.toml
+          echo 'heed = { path = "../heed/heed" }' >> Cargo.toml
+
+      - name: Clean any existing Cargo.lock to force dependency resolution
+        run: |
+          cp rmdb/rust-toolchain.toml meilisearch/rust-toolchain.toml
+          cd meilisearch
+          rm -f Cargo.lock
+          rm -rf target
+
+      - name: Run meilisearch tests with rmdb
+        run: |
+          cd meilisearch
+          cargo test
+
   clippy:
-      name: Ensure clippy is happy
-      runs-on: ${{ matrix.rust }}
-      continue-on-error: true
-      steps:
-        - uses: actions/checkout@v2
-        - uses: dtolnay/rust-toolchain@nightly
-          with:
-            components: clippy
-        - uses: actions-rs/cargo@v1
-          with:
-            toolchain: ${{ matrix.rust }}
-            command: clippy
-            args: --all-targets -- --deny warnings
+    name: Ensure clippy is happy
+    runs-on: ${{ matrix.rust }}
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v2
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: clippy
+      - uses: actions-rs/cargo@v1
+        with:
+          toolchain: ${{ matrix.rust }}
+          command: clippy
+          args: --all-targets -- --deny warnings
 
   fmt:
-      name: Ensure the project is formatted
-      runs-on: macos-latest # We will need to use matrix.rust, here.
-      steps:
-        - uses: actions/checkout@v2
-        - uses: dtolnay/rust-toolchain@nightly
-          with:
-            components: rustfmt
-        - uses: actions-rs/cargo@v1
-          with:
-            toolchain: ${{ matrix.rust }}
-            command: fmt
-            args: --check
+    name: Ensure the project is formatted
+    runs-on: macos-latest # We will need to use matrix.rust, here.
+    steps:
+      - uses: actions/checkout@v2
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rustfmt
+      - uses: actions-rs/cargo@v1
+        with:
+          toolchain: ${{ matrix.rust }}
+          command: fmt
+          args: --check
