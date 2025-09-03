@@ -3040,9 +3040,7 @@ unsafe extern "C" fn mdb_freelist_save(mut txn: *mut MDB_txn) -> std::ffi::c_int
             let mut mp: *mut MDB_page = (*txn).mt_loose_pgs;
             let mut loose = mdb_midl_alloc((*txn).mt_loose_count as usize).unwrap();
 
-            let mut count = 0;
             while !mp.is_null() {
-                count += 1;
                 mdb_midl_append(&mut loose, (*mp).mp_p.p_pgno);
                 mp = *(mp.offset(2) as *mut *mut MDB_page);
             }
