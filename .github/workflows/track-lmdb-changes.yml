@@ -1,0 +1,225 @@
+name: Track LMDB Upstream Changes
+
+on:
+  schedule:
+    # Run every Friday at 9:00 AM UTC
+    - cron: "0 9 * * 5"
+  workflow_dispatch: # Allow manual triggering
+
+jobs:
+  check-lmdb-upstream:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Checkout OpenLDAP LMDB repository
+        run: |
+          git clone --depth 100 --branch mdb.master https://git.openldap.org/openldap/openldap.git openldap-lmdb
+          echo "Cloned OpenLDAP repository from official GitLab source"
+
+      - name: Find existing LMDB upstream issue
+        id: find_issue
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Find the earliest opened issue with lmdb-upstream-updated label
+          ISSUE_NUMBER=$(gh issue list --label "lmdb-upstream-updated" --state open --json number,createdAt --jq 'sort_by(.createdAt) | .[0].number // empty')
+
+          if [ -n "$ISSUE_NUMBER" ]; then
+            echo "existing_issue=$ISSUE_NUMBER" >> $GITHUB_OUTPUT
+            echo "Found existing issue: #$ISSUE_NUMBER"
+          else
+            echo "existing_issue=" >> $GITHUB_OUTPUT
+            echo "No existing open issue found"
+          fi
+
+      - name: Get last processed commit
+        id: get_last_commit
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          LAST_COMMIT=""
+
+          if [ -n "${{ steps.find_issue.outputs.existing_issue }}" ]; then
+            # Get the latest comment from the existing issue
+            LATEST_COMMENT=$(gh issue view ${{ steps.find_issue.outputs.existing_issue }} --json comments --jq '.comments | if length > 0 then .[-1].body else empty end')
+
+            if [ -n "$LATEST_COMMENT" ]; then
+              # Extract commit hash from markdown link in the first line
+              LAST_COMMIT=$(echo "$LATEST_COMMENT" | head -1 | grep -oP '\[.*?\]\(.*?/commit/\K[a-f0-9]{40}' || echo "")
+            fi
+          fi
+
+          # Fallback: read from lmdb.commit file if it exists
+          if [ -z "$LAST_COMMIT" ] && [ -f "lmdb.commit" ]; then
+            LAST_COMMIT=$(cat lmdb.commit | tr -d '\n\r')
+          fi
+
+          echo "last_processed_commit=$LAST_COMMIT" >> $GITHUB_OUTPUT
+          echo "Last processed commit: $LAST_COMMIT"
+
+      - name: Get new commits from OpenLDAP LMDB
+        id: get_new_commits
+        run: |
+          cd openldap-lmdb
+
+          # Get the latest commit hash
+          LATEST_COMMIT=$(git rev-parse HEAD)
+          echo "latest_commit=$LATEST_COMMIT" >> $GITHUB_OUTPUT
+
+          # Get list of new commits (if we have a last processed commit)
+          LAST_COMMIT="${{ steps.get_last_commit.outputs.last_processed_commit }}"
+
+          if [ -n "$LAST_COMMIT" ]; then
+            # Get commits between last processed and HEAD
+            NEW_COMMITS=$(git rev-list --reverse ${LAST_COMMIT}..HEAD 2>/dev/null)
+            if [ $? -ne 0 ]; then
+              echo "ERROR: Failed to get commit range from $LAST_COMMIT to HEAD"
+              exit 1
+            fi
+          else
+            # No baseline commit found - fail the CI
+            echo "ERROR: Cannot determine baseline commit for comparison."
+            echo "Please ensure either:"
+            echo "1. An existing issue with 'lmdb-upstream-updated' label exists with commit links, OR"
+            echo "2. A 'lmdb.commit' file exists in the repository with a valid commit hash"
+            exit 1
+          fi
+
+          echo "New commits found:"
+          echo "$NEW_COMMITS"
+
+          # Save commits to a file for later processing
+          echo "$NEW_COMMITS" > /tmp/new_commits.txt
+
+          # Count new commits
+          COMMIT_COUNT=$(echo "$NEW_COMMITS" | wc -l)
+          if [ "$NEW_COMMITS" = "" ]; then
+            COMMIT_COUNT=0
+          fi
+          echo "commit_count=$COMMIT_COUNT" >> $GITHUB_OUTPUT
+
+      - name: Check if update needed
+        id: check_update
+        run: |
+          LATEST="${{ steps.get_new_commits.outputs.latest_commit }}"
+          LAST="${{ steps.get_last_commit.outputs.last_processed_commit }}"
+          COMMIT_COUNT="${{ steps.get_new_commits.outputs.commit_count }}"
+
+          if [ "$COMMIT_COUNT" -gt 0 ] && [ "$LATEST" != "$LAST" ]; then
+            echo "update_needed=true" >> $GITHUB_OUTPUT
+            echo "Update needed: $COMMIT_COUNT new commit(s) found"
+          else
+            echo "update_needed=false" >> $GITHUB_OUTPUT
+            echo "No update needed - repository is already up to date"
+            echo "## Workflow Summary" >> $GITHUB_STEP_SUMMARY
+            echo "- **Status:** No updates needed" >> $GITHUB_STEP_SUMMARY
+            echo "- **Latest LMDB commit:** $LATEST" >> $GITHUB_STEP_SUMMARY
+            echo "- **Last processed commit:** $LAST" >> $GITHUB_STEP_SUMMARY
+            echo "- **New commits found:** $COMMIT_COUNT" >> $GITHUB_STEP_SUMMARY
+            exit 0
+          fi
+
+      - name: Create new issue
+        id: create_issue
+        if: steps.check_update.outputs.update_needed == 'true' && steps.find_issue.outputs.existing_issue == ''
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Create issue body in a file using multiple echo statements
+          echo "## LMDB Upstream Repository Updated" > /tmp/issue_body.md
+          echo "" >> /tmp/issue_body.md
+          echo "This issue tracks updates from [the LMDB upstream repository](https://git.openldap.org/openldap/openldap/tree/mdb.master)." >> /tmp/issue_body.md
+          echo "" >> /tmp/issue_body.md
+          echo "**Action Required:**" >> /tmp/issue_body.md
+          echo "- Review the latest upstream changes" >> /tmp/issue_body.md
+          echo "- Apply necessary patches to maintain compatibility" >> /tmp/issue_body.md
+          echo "- Update the \`lmdb.commit\` file with the latest commit hash" >> /tmp/issue_body.md
+          echo "" >> /tmp/issue_body.md
+          echo "This issue is automatically managed by the LMDB Upstream Monitor workflow and will be updated weekly with new commits." >> /tmp/issue_body.md
+          echo "" >> /tmp/issue_body.md
+          echo "---" >> /tmp/issue_body.md
+          echo "**Note:** This is the first comment explaining the purpose. The actual commit information will be posted as subsequent comments." >> /tmp/issue_body.md
+
+          ISSUE_NUMBER=$(gh issue create \
+            --title "LMDB Upstream Updated - $(date +%Y-%m-%d)" \
+            --body-file /tmp/issue_body.md \
+            --label "lmdb-upstream-updated" \
+            --assignee "${{ github.actor }}" | grep -oP '#\K\d+')
+
+          echo "Created new issue: #$ISSUE_NUMBER"
+          echo "new_issue_number=$ISSUE_NUMBER" >> $GITHUB_OUTPUT
+
+      - name: Update issue with commit info
+        if: steps.check_update.outputs.update_needed == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Determine which issue to update
+          if [ -n "${{ steps.find_issue.outputs.existing_issue }}" ]; then
+            ISSUE_NUMBER="${{ steps.find_issue.outputs.existing_issue }}"
+          else
+            ISSUE_NUMBER="${{ steps.create_issue.outputs.new_issue_number }}"
+          fi
+
+          cd openldap-lmdb
+
+          # Process each new commit and create a comment
+          while IFS= read -r COMMIT_HASH; do
+            if [ -n "$COMMIT_HASH" ]; then
+              # Get commit details
+              COMMIT_TITLE=$(git log -1 --pretty=format:'%s' "$COMMIT_HASH")
+              COMMIT_AUTHOR=$(git log -1 --pretty=format:'%an' "$COMMIT_HASH")
+              COMMIT_DATE=$(git log -1 --pretty=format:'%cd' --date=iso "$COMMIT_HASH")
+              COMMIT_MESSAGE=$(git log -1 --pretty=format:'%B' "$COMMIT_HASH")
+
+              # Format commit message as proper quote block (prefix each line with >)
+              QUOTED_MESSAGE=$(echo "$COMMIT_MESSAGE" | sed 's/^/> /')
+
+              # Create commit URL (pointing to official OpenLDAP GitLab)
+              COMMIT_URL="https://git.openldap.org/openldap/openldap/-/commit/$COMMIT_HASH"
+
+              # Format the comment body for this specific commit using echo statements
+              echo "[LMDB Commit: \`${COMMIT_HASH:0:8}\`]($COMMIT_URL)" > /tmp/comment_body.md
+              echo "" >> /tmp/comment_body.md
+              echo "**Author:** $COMMIT_AUTHOR" >> /tmp/comment_body.md
+              echo "**Date:** $COMMIT_DATE" >> /tmp/comment_body.md
+              echo "**Title:** $COMMIT_TITLE" >> /tmp/comment_body.md
+              echo "" >> /tmp/comment_body.md
+              echo "**Commit Message:**" >> /tmp/comment_body.md
+              echo "$QUOTED_MESSAGE" >> /tmp/comment_body.md
+              echo "" >> /tmp/comment_body.md
+              echo "**Processed:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> /tmp/comment_body.md
+              echo "" >> /tmp/comment_body.md
+              echo "---" >> /tmp/comment_body.md
+              echo "Please review this commit and apply necessary patches." >> /tmp/comment_body.md
+
+              # Create the comment using the file
+              gh issue comment $ISSUE_NUMBER --body-file /tmp/comment_body.md
+              echo "Created comment for commit $COMMIT_HASH"
+
+              # Small delay to avoid rate limiting
+              sleep 2
+            fi
+          done < /tmp/new_commits.txt
+
+          echo "Processed all new commits for issue #$ISSUE_NUMBER"
+
+      - name: Summary
+        run: |
+          echo "## Workflow Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- **Latest LMDB commit:** ${{ steps.get_new_commits.outputs.latest_commit }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Last processed commit:** ${{ steps.get_last_commit.outputs.last_processed_commit }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **New commits found:** ${{ steps.get_new_commits.outputs.commit_count }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Update needed:** ${{ steps.check_update.outputs.update_needed }}" >> $GITHUB_STEP_SUMMARY
+          if [ -n "${{ steps.find_issue.outputs.existing_issue }}" ]; then
+            echo "- **Existing issue:** #${{ steps.find_issue.outputs.existing_issue }}" >> $GITHUB_STEP_SUMMARY
+          fi
+          if [ -n "${{ steps.create_issue.outputs.new_issue_number }}" ]; then
+            echo "- **New issue created:** #${{ steps.create_issue.outputs.new_issue_number }}" >> $GITHUB_STEP_SUMMARY
+          fi
