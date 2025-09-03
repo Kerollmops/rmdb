@@ -15,7 +15,7 @@ env:
 
 jobs:
   test:
-    runs-on: macos-latest
+    runs-on: macos-latest # We will need to use matrix.rust, here.
     strategy:
       fail-fast: false
       matrix:
@@ -41,7 +41,7 @@ jobs:
 
   old_tests:
     continue-on-error: true
-    runs-on: macos-latest
+    runs-on: macos-latest # We will need to use matrix.rust, here.
     strategy:
       fail-fast: false
       matrix:
@@ -67,7 +67,7 @@ jobs:
           args: --bin ${{ matrix.bins }}
 
   test-heed-integration:
-    runs-on: macos-latest
+    runs-on: macos-latest # We will need to use matrix.rust, here.
     strategy:
       fail-fast: false
       matrix:
@@ -145,7 +145,7 @@ jobs:
           cargo run --example rmp-serde --features serde-rmp
 
   test-meilisearch-integration:
-    runs-on: macos-latest
+    runs-on: macos-latest # We will need to use matrix.rust, here.
     strategy:
       fail-fast: false
       matrix:
@@ -245,7 +245,7 @@ jobs:
 
   clippy:
     name: Ensure clippy is happy
-    runs-on: ${{ matrix.rust }}
+    runs-on: macos-latest # We will need to use matrix.rust, here.
     continue-on-error: true
     steps:
       - uses: actions/checkout@v2
