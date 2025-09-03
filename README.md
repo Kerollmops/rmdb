@@ -31,8 +31,7 @@ cargo check
 
 ## Important information
 
-We started converting LMDB to Rust from [14d6629bc8a9fe40d8a6bee1bf71c45afe7576b6][start-commit].
-It will be important when we will have to maintain and port the updates to RMDB. I would like to add a bot that creates issues for each new commit upstream.
+The commit from which we started converting LMDB to Rust is in the `lmdb.commit` file. It will be important when we will have to maintain and port the updates to RMDB. We have [a weekly scheduled CI](https://github.com/Kerollmops/rmdb/actions/workflows/track-lmdb-changes.yml) that tracks the latest commits from the LMDB repository.
 
 ## Fun facts
 
