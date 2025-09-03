@@ -131,7 +131,7 @@ use libc::ENOMEM;
 
 use crate::MDB_cursor_op::*;
 use crate::midl::*;
-use crate::{MDB_CURRENT, MDB_NOTFOUND, MDB_RESERVE, MDB_WRITEMAP, MDB_cursor_op};
+use crate::{MDB_CURRENT, MDB_NOTFOUND, MDB_RESERVE, MDB_SUCCESS, MDB_WRITEMAP, MDB_cursor_op};
 
 pub type __uint16_t = std::ffi::c_ushort;
 pub type __int32_t = std::ffi::c_int;
@@ -620,28 +620,173 @@ pub const MDB_O_META: mdb_fopen_type = 20971521;
 pub const MDB_O_RDWR: mdb_fopen_type = 514;
 pub const MDB_O_RDONLY: mdb_fopen_type = 0;
 
+const P_INVALID: pgno_t = !(0 as pgno_t);
+
 bitflags! {
     /// Flags for the page headers.
     #[derive(Debug, Clone, Copy)]
     struct PageFlags: u16 {
         /// branch page
-        const P_BRANCH = 0x01;
+        const P_BRANCH   = 0x01;
         /// leaf page
-        const P_LEAF = 0x02;
+        const P_LEAF     = 0x02;
         /// overflow page
         const P_OVERFLOW = 0x04;
         /// meta page
-        const P_META = 0x08;
+        const P_META     = 0x08;
         /// dirty page, also set for #P_SUBP pages
-        const P_DIRTY = 0x10;
+        const P_DIRTY    = 0x10;
         /// for #MDB_DUPFIXED records
-        const P_LEAF2 = 0x20;
+        const P_LEAF2    = 0x20;
         /// for #MDB_DUPSORT sub-pages
-        const P_SUBP = 0x40;
+        const P_SUBP     = 0x40;
         /// page was dirtied then freed, can be reused
-        const P_LOOSE = 0x4000;
+        const P_LOOSE    = 0x4000;
         /// leave this page alone during spill
-        const P_KEEP = 0x8000;
+        const P_KEEP     = 0x8000;
+    }
+}
+
+bitflags! {
+    /// Cursor state flags.
+    #[derive(Debug, Clone, Copy)]
+    struct CursorFlags: u32 {
+        /// cursor has been initialized and is valid
+        const C_INITIALIZED     = 0x01;
+        /// No more data
+        const C_EOF             = 0x02;
+        /// Cursor is a sub-cursor
+        const C_SUB             = 0x04;
+        /// last op was a cursor_del
+        const C_DEL             = 0x08;
+        /// Un-track cursor when closing
+        const C_UNTRACK         = 0x40;
+        /// Copy of txn flag
+        const C_WRITEMAP        = TransactionFlags::MDB_TXN_WRITEMAP.bits();
+        /// Read-only cursor into the txn's original snapshot in the map.
+        ///
+        /// Set for read-only txns, and in #mdb_page_alloc() for #FREE_DBI when
+        /// #MDB_DEVEL & 2. Only implements code which is necessary for this.
+        const C_ORIG_RDONLY     = TransactionFlags::MDB_TXN_RDONLY.bits();
+    }
+}
+
+bitflags! {
+    /// Transaction Flags
+    #[derive(Debug, Clone, Copy)]
+    struct TransactionFlags: u32 {
+        /// #mdb_txn_begin() flags
+        const MDB_TXN_BEGIN_FLAGS   = EnvironmentFlags::MDB_NOMETASYNC.bits() | EnvironmentFlags::MDB_NOSYNC.bits() | EnvironmentFlags::MDB_RDONLY.bits();
+        /// don't sync meta for this txn on commit
+        const MDB_TXN_NOMETASYNC    = EnvironmentFlags::MDB_NOMETASYNC.bits();
+        /// don't sync this txn on commit
+        const MDB_TXN_NOSYNC        = EnvironmentFlags::MDB_NOSYNC.bits();
+        /// read-only transaction
+        const MDB_TXN_RDONLY        = EnvironmentFlags::MDB_RDONLY.bits();
+        // /* internal txn flags */
+        /// /**< copy of #MDB_env flag in writers
+        const MDB_TXN_WRITEMAP      = EnvironmentFlags::MDB_WRITEMAP.bits();
+        /// txn is finished or never began
+        const MDB_TXN_FINISHED      = 0x01;
+        /// txn is unusable after an error
+        const MDB_TXN_ERROR         = 0x02;
+        /// must write, even if dirty list is empty
+        const MDB_TXN_DIRTY         = 0x04;
+        /// txn or a parent has spilled pages
+        const MDB_TXN_SPILLS        = 0x08;
+        /// txn has an #MDB_txn.%mt_child
+        const MDB_TXN_HAS_CHILD     = 0x10;
+        /// most operations on the txn are currently illegal
+        const MDB_TXN_BLOCKED       = TransactionFlags::MDB_TXN_FINISHED.bits() | TransactionFlags::MDB_TXN_ERROR.bits() | TransactionFlags::MDB_TXN_HAS_CHILD.bits();
+    }
+}
+
+bitflags! {
+    /// Environment Flags
+    #[derive(Debug, Clone, Copy)]
+    struct EnvironmentFlags: u32 {
+        /// mmap at a fixed address (experimental)
+        const MDB_FIXEDMAP     = 0x01;
+        /// no environment directory
+        const MDB_NOSUBDIR     = 0x4000;
+        /// don't fsync after commit
+        const MDB_NOSYNC       = 0x10000;
+        /// read only
+        const MDB_RDONLY       = 0x20000;
+        /// don't fsync metapage after commit
+        const MDB_NOMETASYNC   = 0x40000;
+        /// use writable mmap
+        const MDB_WRITEMAP     = 0x80000;
+        /// use asynchronous msync when #MDB_WRITEMAP is used
+        const MDB_MAPASYNC     = 0x100000;
+        /// tie reader locktable slots to #MDB_txn objects instead of to threads
+        const MDB_NOTLS        = 0x200000;
+        /// don't do any locking, caller must manage their own locks
+        const MDB_NOLOCK       = 0x400000;
+        /// don't do readahead (no effect on Windows)
+        const MDB_NORDAHEAD    = 0x800000;
+        /// don't initialize malloc'd memory before writing to datafile
+        const MDB_NOMEMINIT    = 0x1000000;
+        /// use the previous snapshot rather than the latest one
+        const MDB_PREVSNAPSHOT = 0x2000000;
+    }
+}
+
+bitflags! {
+    /// Flags for node headers.
+    #[derive(Debug, Clone, Copy)]
+    struct NodeFlags: u32 {
+        /// data put on overflow page
+        const F_BIGDATA = 0x01;
+        /// data is a sub-database
+        const F_SUBDATA = 0x02;
+        /// data has duplicates
+        const F_DUPDATA = 0x04;
+        /// valid flags for #mdb_node_add()
+        const NODE_ADD_FLAGS = NodeFlags::F_DUPDATA.bits() | NodeFlags::F_SUBDATA.bits() | WriteFlags::MDB_RESERVE.bits() | WriteFlags::MDB_APPEND.bits();
+    }
+}
+
+bitflags! {
+    /// Write Flags
+    #[derive(Debug, Clone, Copy)]
+    struct WriteFlags: u32 {
+        /// For put: Don't write if the key already exists.
+        const MDB_NOOVERWRITE   = 0x10;
+        /// Only for #MDB_DUPSORT
+        /// For put: don't write if the key and data pair already exist.<br>
+        /// For mdb_cursor_del: remove all duplicate data items.
+        const MDB_NODUPDATA     = 0x20;
+        /// For mdb_cursor_put: overwrite the current key/data pair */
+        const MDB_CURRENT       = 0x40;
+        /// For put: Just reserve space for data, don't copy it. Return a
+        /// pointer to the reserved space.
+        const MDB_RESERVE       = 0x10000;
+        /// Data is being appended, don't split full pages.
+        const MDB_APPEND        = 0x20000;
+        /// Duplicate data is being appended, don't split full pages.
+        const MDB_APPENDDUP     = 0x40000;
+        /// Store multiple data items in one call. Only for #MDB_DUPFIXED.
+        const MDB_MULTIPLE      = 0x80000;
+    }
+}
+
+bitflags! {
+    /// Transaction DB Flags
+    #[derive(Debug, Clone, Copy)]
+    struct TransactionDbFlags: u8 {
+        /// DB was written in this txn
+        const DB_DIRTY = 0x01;
+        /// Named-DB record is older than txnID
+        const DB_STALE = 0x02;
+        /// Named-DB handle opened in this txn
+        const DB_NEW = 0x04;
+        /// DB handle is valid, see also #MDB_VALID
+        const DB_VALID = 0x08;
+        /// As #DB_VALID, but not set for #FREE_DBI
+        const DB_USRVALID = 0x10;
+        /// DB is #MDB_DUPSORT data
+        const DB_DUPDATA = 0x20;
     }
 }
 
@@ -716,7 +861,7 @@ pub const Paranoid: C2RustUnnamed_9 = 0;
 pub type C2RustUnnamed_9 = std::ffi::c_uint;
 pub const Max_retries: C2RustUnnamed_9 = 2147483647;
 pub const MDB_END_COMMITTED: C2RustUnnamed_12 = 0;
-pub const Mask: C2RustUnnamed_10 = 49232;
+// pub const mask: C2RustUnnamed_10 = 49232;
 pub type C2RustUnnamed_10 = std::ffi::c_uint;
 pub const MDB_END_EMPTY_COMMIT: C2RustUnnamed_12 = 1;
 pub const MDB_END_RESET: C2RustUnnamed_12 = 3;
@@ -1023,12 +1168,22 @@ unsafe extern "C" fn mdb_page_loose(
         0 as std::ffi::c_int
     }
 }
+
+/// Set or clear P_KEEP in dirty, non-overflow, non-sub pages watched by txn.
+///
+/// @param[in] mc A cursor handle for the current operation.
+/// @param[in] pflags Flags of the pages to update:
+/// P_DIRTY to set P_KEEP, P_DIRTY|P_KEEP to clear it.
+/// @param[in] all No shortcuts. Needed except after a full #mdb_page_flush().
+/// @return 0 on success, non-zero on failure.
 unsafe extern "C" fn mdb_pages_xkeep(
     mut mc: *mut MDB_cursor,
-    mut pflags: std::ffi::c_uint,
-    mut all: std::ffi::c_int,
-) -> std::ffi::c_int {
+    mut pflags: u32,
+    mut all: i32,
+) -> i32 {
     unsafe {
+        let mask = PageFlags::P_SUBP | PageFlags::P_DIRTY | PageFlags::P_LOOSE | PageFlags::P_KEEP;
+
         let mut txn: *mut MDB_txn = (*mc).mc_txn;
         let mut m3: *mut MDB_cursor = std::ptr::null_mut::<MDB_cursor>();
         let mut m0: *mut MDB_cursor = mc;
@@ -1036,101 +1191,86 @@ unsafe extern "C" fn mdb_pages_xkeep(
         let mut dp: *mut MDB_page = std::ptr::null_mut::<MDB_page>();
         let mut mp: *mut MDB_page = std::ptr::null_mut::<MDB_page>();
         let mut leaf: *mut MDB_node = std::ptr::null_mut::<MDB_node>();
-        let mut i: std::ffi::c_uint = 0;
-        let mut j: std::ffi::c_uint = 0;
-        let mut rc: std::ffi::c_int = 0 as std::ffi::c_int;
-        let mut level: std::ffi::c_int = 0;
+        let mut i = 0;
+        let mut j = 0;
+        let mut rc = MDB_SUCCESS;
+        let mut level = 0;
+
+        // Mark pages seen by cursors: First m0, then tracked cursors
         i = (*txn).mt_numdbs;
-        's_25: loop {
-            if (*mc).mc_flags & 0x1 as std::ffi::c_int as std::ffi::c_uint != 0 {
+        'outer: loop {
+            if (*mc).mc_flags & CursorFlags::C_INITIALIZED.bits() as u32 != 0 {
                 m3 = mc;
                 loop {
                     mp = std::ptr::null_mut::<MDB_page>();
-                    j = 0 as std::ffi::c_int as std::ffi::c_uint;
-                    while j < (*m3).mc_snum as std::ffi::c_uint {
+                    j = 0;
+                    while j < (*m3).mc_snum as u32 {
                         mp = (*m3).mc_pg[j as usize];
-                        if ((*mp).mp_flags as std::ffi::c_int & Mask as std::ffi::c_int)
-                            as std::ffi::c_uint
-                            == pflags
-                        {
-                            (*mp).mp_flags = ((*mp).mp_flags as std::ffi::c_int
-                                ^ 0x8000 as std::ffi::c_int)
-                                as uint16_t;
+                        if ((*mp).mp_flags & mask.bits()) as u32 == pflags {
+                            (*mp).mp_flags ^= PageFlags::P_KEEP.bits();
                         }
-                        j = j.wrapping_add(1);
+                        j += 1;
                     }
                     mx = (*m3).mc_xcursor;
+                    // Proceed to mx if it is at a sub-database
                     if !(!mx.is_null()
-                        && (*mx).mx_cursor.mc_flags & 0x1 as std::ffi::c_int as std::ffi::c_uint
-                            != 0)
+                        && (*mx).mx_cursor.mc_flags & CursorFlags::C_INITIALIZED.bits() as u32 != 0)
                     {
                         break;
                     }
-                    if !(!mp.is_null()
-                        && (*mp).mp_flags as std::ffi::c_int & 0x2 as std::ffi::c_int != 0)
-                    {
+                    if !(!mp.is_null() && (*mp).mp_flags & PageFlags::P_LEAF.bits() != 0) {
                         break;
                     }
+                    // leaf = NODEPTR(mp, m3->mc_ki[j-1]);
                     leaf = (mp as *mut std::ffi::c_char)
                         .offset(
-                            *((*(mp as *mut std::ffi::c_void as *mut MDB_page2)).mp2_ptrs)
+                            *((*(mp as *mut MDB_page2)).mp2_ptrs)
                                 .as_mut_ptr()
-                                .offset(
-                                    (*m3).mc_ki[j
-                                        .wrapping_sub(1 as std::ffi::c_int as std::ffi::c_uint)
-                                        as usize] as isize,
-                                ) as std::ffi::c_int as isize,
+                                .offset((*m3).mc_ki[j.wrapping_sub(1) as usize] as isize)
+                                as std::ffi::c_int as isize,
                         )
-                        .offset(
-                            (if 0 as std::ffi::c_int != 0 {
-                                16 as std::ffi::c_ulong as std::ffi::c_uint
-                            } else {
-                                0 as std::ffi::c_int as std::ffi::c_uint
-                            }) as isize,
-                        ) as *mut MDB_node;
-                    if (*leaf).mn_flags as std::ffi::c_int & 0x2 as std::ffi::c_int == 0 {
+                        .offset((if 0 as std::ffi::c_int != 0 { 16 } else { 0 }) as isize)
+                        as *mut MDB_node;
+                    if (*leaf).mn_flags as u32 & NodeFlags::F_SUBDATA.bits() == 0 {
                         break;
                     }
                     m3 = &mut (*mx).mx_cursor;
                 }
             }
+
             mc = (*mc).mc_next;
             while mc.is_null() || mc == m0 {
-                if i == 0 as std::ffi::c_int as std::ffi::c_uint {
-                    break 's_25;
+                if i == 0 {
+                    break 'outer;
                 }
-                i = i.wrapping_sub(1);
+                i -= i;
                 mc = *((*txn).mt_cursors).offset(i as isize);
             }
         }
+
         if all != 0 {
-            i = 0 as std::ffi::c_int as std::ffi::c_uint;
+            // Mark dirty root pages
+            i = 0;
             while i < (*txn).mt_numdbs {
-                if *((*txn).mt_dbflags).offset(i as isize) as std::ffi::c_int
-                    & 0x1 as std::ffi::c_int
+                if *((*txn).mt_dbflags).offset(i as isize) & TransactionDbFlags::DB_DIRTY.bits()
                     != 0
                 {
-                    let mut pgno: pgno_t = (*((*txn).mt_dbs).offset(i as isize)).md_root;
-                    if pgno != !(0 as std::ffi::c_int as pgno_t) {
+                    let pgno = (*((*txn).mt_dbs).offset(i as isize)).md_root;
+                    if pgno != P_INVALID {
                         rc = mdb_page_get(m0, pgno, &mut dp, &mut level);
-                        if rc != 0 as std::ffi::c_int {
+                        if rc != 0 {
                             break;
                         }
-                        if ((*dp).mp_flags as std::ffi::c_int & Mask as std::ffi::c_int)
-                            as std::ffi::c_uint
-                            == pflags
-                            && level <= 1 as std::ffi::c_int
-                        {
-                            (*dp).mp_flags = ((*dp).mp_flags as std::ffi::c_int
-                                ^ 0x8000 as std::ffi::c_int)
-                                as uint16_t;
+                        if ((*dp).mp_flags & mask.bits()) as u32 == pflags && level <= 1 {
+                            (*dp).mp_flags ^= PageFlags::P_KEEP.bits();
                         }
                     }
                 }
-                i = i.wrapping_add(1);
+                i += 1;
             }
         }
-        rc
+
+        return rc;
     }
 }
 unsafe extern "C" fn mdb_page_spill(
@@ -1991,6 +2131,7 @@ unsafe extern "C" fn mdb_page_touch(mut mc: *mut MDB_cursor) -> i32 {
         0 as std::ffi::c_int
     }
 }
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mdb_env_sync0(
     mut env: *mut MDB_env,
@@ -2030,6 +2171,7 @@ pub unsafe extern "C" fn mdb_env_sync0(
         rc
     }
 }
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mdb_env_sync(
     mut env: *mut MDB_env,
@@ -2040,6 +2182,7 @@ pub unsafe extern "C" fn mdb_env_sync(
         mdb_env_sync0(env, force, ((*m).mm_last_pg).wrapping_add(1 as std::ffi::c_int as pgno_t))
     }
 }
+
 unsafe extern "C" fn mdb_cursor_shadow(
     mut src: *mut MDB_txn,
     mut dst: *mut MDB_txn,
