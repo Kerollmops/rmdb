@@ -408,7 +408,7 @@ pub struct mdb_mutex {
 pub struct MDB_page {
     pub mp_p: C2RustUnnamed_1,
     pub mp_pad: uint16_t,
-    pub mp_flags: u16,
+    pub mp_flags: PageFlags,
     pub mp_pb: C2RustUnnamed,
     pub mp_ptrs: [indx_t; 0],
 }
@@ -1129,9 +1129,7 @@ unsafe extern "C" fn mdb_page_loose(
         let mut loose: std::ffi::c_int = 0 as std::ffi::c_int;
         let mut pgno: pgno_t = (*mp).mp_p.p_pgno;
         let mut txn: *mut MDB_txn = (*mc).mc_txn;
-        if (*mp).mp_flags as std::ffi::c_int & 0x10 as std::ffi::c_int != 0
-            && (*mc).mc_dbi != 0 as std::ffi::c_int as MDB_dbi
-        {
+        if (*mp).mp_flags.intersects(PageFlags::P_DIRTY) && (*mc).mc_dbi != 0 as MDB_dbi {
             if !((*txn).mt_parent).is_null() {
                 let mut dl: *mut MDB_ID2 = (*txn).mt_u.dirty_list;
                 if (*dl.offset(0 as std::ffi::c_int as isize)).mid != 0 {
@@ -1157,8 +1155,7 @@ unsafe extern "C" fn mdb_page_loose(
             *fresh0 = (*txn).mt_loose_pgs;
             (*txn).mt_loose_pgs = mp;
             (*txn).mt_loose_count += 1;
-            (*mp).mp_flags =
-                ((*mp).mp_flags as std::ffi::c_int | 0x4000 as std::ffi::c_int) as uint16_t;
+            (*mp).mp_flags |= PageFlags::P_LOOSE;
         } else {
             let mut rc: std::ffi::c_int = mdb_midl_append(&mut (*txn).mt_free_pgs, pgno);
             if rc != 0 {
@@ -1206,8 +1203,8 @@ unsafe extern "C" fn mdb_pages_xkeep(
                     j = 0;
                     while j < (*m3).mc_snum as u32 {
                         mp = (*m3).mc_pg[j as usize];
-                        if ((*mp).mp_flags & mask.bits()) as u32 == pflags {
-                            (*mp).mp_flags ^= PageFlags::P_KEEP.bits();
+                        if ((*mp).mp_flags & mask).bits() as u32 == pflags {
+                            (*mp).mp_flags ^= PageFlags::P_KEEP;
                         }
                         j += 1;
                     }
@@ -1218,7 +1215,7 @@ unsafe extern "C" fn mdb_pages_xkeep(
                     {
                         break;
                     }
-                    if !(!mp.is_null() && (*mp).mp_flags & PageFlags::P_LEAF.bits() != 0) {
+                    if !(!mp.is_null() && (*mp).mp_flags.intersects(PageFlags::P_LEAF)) {
                         break;
                     }
                     // leaf = NODEPTR(mp, m3->mc_ki[j-1]);
@@ -1261,8 +1258,8 @@ unsafe extern "C" fn mdb_pages_xkeep(
                         if rc != 0 {
                             break;
                         }
-                        if ((*dp).mp_flags & mask.bits()) as u32 == pflags && level <= 1 {
-                            (*dp).mp_flags ^= PageFlags::P_KEEP.bits();
+                        if ((*dp).mp_flags & mask).bits() as u32 == pflags && level <= 1 {
+                            (*dp).mp_flags ^= PageFlags::P_KEEP;
                         }
                     }
                 }
@@ -1344,7 +1341,7 @@ unsafe extern "C" fn mdb_page_spill(
                 }
                 let mut pn: MDB_ID = (*dl.offset(i as isize)).mid << 1 as std::ffi::c_int;
                 dp = (*dl.offset(i as isize)).mptr as *mut MDB_page;
-                if (*dp).mp_flags & (PageFlags::P_LOOSE.bits() | PageFlags::P_KEEP.bits()) == 0 {
+                if !(*dp).mp_flags.intersects(PageFlags::P_LOOSE | PageFlags::P_KEEP) {
                     if !((*txn).mt_parent).is_null() {
                         let mut tx2: *mut MDB_txn = std::ptr::null_mut::<MDB_txn>();
                         tx2 = (*txn).mt_parent;
@@ -1359,7 +1356,7 @@ unsafe extern "C" fn mdb_page_spill(
                             if let Some(spill_pgs) = (*tx2).mt_spill_pgs.as_mut() {
                                 j = mdb_midl_search(spill_pgs, pn);
                                 if j as usize <= spill_pgs.len() && spill_pgs[j as usize] == pn {
-                                    (*dp).mp_flags |= PageFlags::P_KEEP.bits();
+                                    (*dp).mp_flags |= PageFlags::P_KEEP;
                                     break;
                                 }
                             }
@@ -1838,8 +1835,7 @@ unsafe extern "C" fn mdb_page_unspill(
                         }
                     }
                     mdb_page_dirty(txn, np);
-                    (*np).mp_flags =
-                        ((*np).mp_flags as std::ffi::c_int | 0x10 as std::ffi::c_int) as uint16_t;
+                    (*np).mp_flags |= PageFlags::P_DIRTY;
                     *ret = np;
                     break;
                 }
@@ -2048,8 +2044,7 @@ unsafe extern "C" fn mdb_page_touch(mut mc: *mut MDB_cursor) -> i32 {
         if current_block == 13131896068329595644 {
             mdb_page_copy(np, mp, (*(*txn).mt_env).me_psize);
             (*np).mp_p.p_pgno = pgno;
-            (*np).mp_flags =
-                ((*np).mp_flags as std::ffi::c_int | 0x10 as std::ffi::c_int) as uint16_t;
+            (*np).mp_flags |= PageFlags::P_DIRTY;
         }
         (*mc).mc_pg[(*mc).mc_top as usize] = np;
         m2 = *((*txn).mt_cursors).offset((*mc).mc_dbi as isize);
@@ -3302,19 +3297,12 @@ unsafe extern "C" fn mdb_page_flush(
                     break;
                 }
                 dp = (*dl.offset(i as isize)).mptr as *mut MDB_page;
-                if (*dp).mp_flags as std::ffi::c_int
-                    & (0x4000 as std::ffi::c_int | 0x8000 as std::ffi::c_int)
-                    != 0
-                {
-                    (*dp).mp_flags = ((*dp).mp_flags as std::ffi::c_int
-                        & !(0x8000 as std::ffi::c_int))
-                        as uint16_t;
+                if (*dp).mp_flags.intersects(PageFlags::P_LOOSE | PageFlags::P_KEEP) {
+                    (*dp).mp_flags.remove(PageFlags::P_KEEP);
                     j = j.wrapping_add(1);
                     *dl.offset(j as isize) = *dl.offset(i as isize);
                 } else {
-                    (*dp).mp_flags = ((*dp).mp_flags as std::ffi::c_int
-                        & !(0x10 as std::ffi::c_int))
-                        as uint16_t;
+                    (*dp).mp_flags.remove(PageFlags::P_DIRTY);
                 }
             }
         } else {
@@ -3322,20 +3310,13 @@ unsafe extern "C" fn mdb_page_flush(
                 i += 1;
                 if i <= pagecount {
                     dp = (*dl.offset(i as isize)).mptr as *mut MDB_page;
-                    if (*dp).mp_flags as std::ffi::c_int
-                        & (0x4000 as std::ffi::c_int | 0x8000 as std::ffi::c_int)
-                        != 0
-                    {
-                        (*dp).mp_flags = ((*dp).mp_flags as std::ffi::c_int
-                            & !(0x8000 as std::ffi::c_int))
-                            as uint16_t;
-                        (*dl.offset(i as isize)).mid = 0 as std::ffi::c_int as MDB_ID;
+                    if (*dp).mp_flags.intersects(PageFlags::P_LOOSE | PageFlags::P_KEEP) {
+                        (*dp).mp_flags.remove(PageFlags::P_KEEP);
+                        (*dl.offset(i as isize)).mid = 0;
                         continue;
                     } else {
                         pgno = (*dl.offset(i as isize)).mid;
-                        (*dp).mp_flags = ((*dp).mp_flags as std::ffi::c_int
-                            & !(0x10 as std::ffi::c_int))
-                            as uint16_t;
+                        (*dp).mp_flags.remove(PageFlags::P_DIRTY);
                         pos = (pgno * psize as pgno_t) as off_t;
                         size = psize as size_t;
                         if (*(dp as *mut std::ffi::c_void as *mut MDB_page2)).mp2_flags
@@ -3847,7 +3828,7 @@ unsafe extern "C" fn mdb_env_read_header(
             mb_page: MDB_page {
                 mp_p: C2RustUnnamed_1 { p_pgno: 0 },
                 mp_pad: 0,
-                mp_flags: 0,
+                mp_flags: PageFlags::empty(),
                 mp_pb: C2RustUnnamed { pb: C2RustUnnamed_0 { pb_lower: 0, pb_upper: 0 } },
                 mp_ptrs: [0; 0],
             },
@@ -3867,23 +3848,17 @@ unsafe extern "C" fn mdb_env_read_header(
                 off as off_t,
             ) as std::ffi::c_int;
             if rc != Size as std::ffi::c_int {
-                if rc == 0 as std::ffi::c_int && off == 0 as std::ffi::c_int {
-                    return 2 as std::ffi::c_int;
+                if rc == 0 && off == 0 {
+                    return 2;
                 }
-                rc = if rc < 0 as std::ffi::c_int {
-                    *__error()
-                } else {
-                    -(30793 as std::ffi::c_int)
-                };
+                rc = if rc < 0 { *__error() } else { -(30793 as std::ffi::c_int) };
                 return rc;
             }
             p = &mut pbuf as *mut MDB_metabuf as *mut MDB_page;
-            if (*p).mp_flags as std::ffi::c_int & 0x8 as std::ffi::c_int != 0x8 as std::ffi::c_int {
+            if !(*p).mp_flags.contains(PageFlags::P_META) {
                 return -(30793 as std::ffi::c_int);
             }
-            m = (p as *mut std::ffi::c_char)
-                .offset(16 as std::ffi::c_ulong as std::ffi::c_uint as isize)
-                as *mut std::ffi::c_void as *mut MDB_meta;
+            m = (p as *mut std::ffi::c_char).offset(16) as *mut std::ffi::c_void as *mut MDB_meta;
             if (*m).mm_magic != 0xbeefc0de as std::ffi::c_uint {
                 return -(30793 as std::ffi::c_int);
             }
@@ -3950,12 +3925,12 @@ unsafe extern "C" fn mdb_env_init_meta(
             return 12 as std::ffi::c_int;
         }
         (*p).mp_p.p_pgno = 0 as std::ffi::c_int as pgno_t;
-        (*p).mp_flags = 0x8 as std::ffi::c_int as uint16_t;
+        (*p).mp_flags = PageFlags::P_META;
         *((p as *mut std::ffi::c_char).offset(16 as std::ffi::c_ulong as std::ffi::c_uint as isize)
             as *mut std::ffi::c_void as *mut MDB_meta) = *meta;
         q = (p as *mut std::ffi::c_char).offset(psize as isize) as *mut MDB_page;
         (*q).mp_p.p_pgno = 1 as std::ffi::c_int as pgno_t;
-        (*q).mp_flags = 0x8 as std::ffi::c_int as uint16_t;
+        (*q).mp_flags = PageFlags::P_META;
         *((q as *mut std::ffi::c_char).offset(16 as std::ffi::c_ulong as std::ffi::c_uint as isize)
             as *mut std::ffi::c_void as *mut MDB_meta) = *meta;
         loop {
@@ -6083,7 +6058,7 @@ unsafe extern "C" fn mdb_ovpage_free(
         // range in ancestor txns' dirty and spilled lists.
         if let Some(pg_head) = ((*env).me_pgstate.mf_pghead).as_mut()
             && ((*txn).mt_parent).is_null()
-            && ((*mp).mp_flags & PageFlags::P_DIRTY.bits() != 0
+            && ((*mp).mp_flags.intersects(PageFlags::P_DIRTY)
                 || (sl.as_mut().map_or(false, |sl| {
                     x = mdb_midl_search(sl, pn);
                     x as MDB_ID <= sl.len()
@@ -6101,7 +6076,7 @@ unsafe extern "C" fn mdb_ovpage_free(
             if rc != 0 {
                 return rc;
             }
-            if (*mp).mp_flags & PageFlags::P_DIRTY.bits() == 0
+            if !(*mp).mp_flags.intersects(PageFlags::P_DIRTY)
                 && let Some(sl) = sl.as_mut()
             {
                 /* This page is no longer spilled */
@@ -8091,8 +8066,7 @@ unsafe extern "C" fn _mdb_cursor_put(
         }
         if rc == -(30779 as std::ffi::c_int) + 10 as std::ffi::c_int {
             let mut np: *mut MDB_page = std::ptr::null_mut::<MDB_page>();
-            rc2 =
-                mdb_page_new(mc, 0x2 as std::ffi::c_int as uint32_t, 1 as std::ffi::c_int, &mut np);
+            rc2 = mdb_page_new(mc, PageFlags::P_LEAF, 1 as std::ffi::c_int, &mut np);
             if rc2 != 0 {
                 return rc2;
             }
@@ -8535,8 +8509,7 @@ unsafe extern "C" fn _mdb_cursor_put(
                                 }
                                 ovpages = (*omp).mp_pb.pb_pages as std::ffi::c_int;
                                 if ovpages >= dpages {
-                                    if (*omp).mp_flags as std::ffi::c_int & 0x10 as std::ffi::c_int
-                                        == 0
+                                    if !(*omp).mp_flags.intersects(PageFlags::P_DIRTY)
                                         && (level != 0
                                             || (*env).me_flags
                                                 & 0x80000 as std::ffi::c_int as uint32_t
@@ -8548,9 +8521,7 @@ unsafe extern "C" fn _mdb_cursor_put(
                                         }
                                         level = 0 as std::ffi::c_int;
                                     }
-                                    if (*omp).mp_flags as std::ffi::c_int & 0x10 as std::ffi::c_int
-                                        != 0
-                                    {
+                                    if (*omp).mp_flags.intersects(PageFlags::P_DIRTY) {
                                         if level > 1 as std::ffi::c_int {
                                             let mut sz: size_t =
                                                 (*env).me_psize as size_t * ovpages as size_t;
@@ -9470,7 +9441,7 @@ pub unsafe extern "C" fn mdb_cursor_del(
 }
 unsafe extern "C" fn mdb_page_new(
     mut mc: *mut MDB_cursor,
-    mut flags: uint32_t,
+    mut flags: PageFlags,
     mut num: std::ffi::c_int,
     mut mp: *mut *mut MDB_page,
 ) -> std::ffi::c_int {
@@ -9481,7 +9452,7 @@ unsafe extern "C" fn mdb_page_new(
         if rc != 0 {
             return rc;
         }
-        (*np).mp_flags = (flags | 0x10 as std::ffi::c_int as uint32_t) as uint16_t;
+        (*np).mp_flags = flags | PageFlags::P_DIRTY;
         (*np).mp_pb.pb.pb_lower = (16 as std::ffi::c_ulong as std::ffi::c_uint).wrapping_sub(
             if 0 as std::ffi::c_int != 0 {
                 16 as std::ffi::c_ulong as std::ffi::c_uint
@@ -9678,7 +9649,7 @@ unsafe extern "C" fn mdb_node_add(
                 if node_size as ssize_t > room {
                     current_block = 15594603006322722090;
                 } else {
-                    rc = mdb_page_new(mc, 0x4 as std::ffi::c_int as uint32_t, ovpages, &mut ofp);
+                    rc = mdb_page_new(mc, PageFlags::P_OVERFLOW, ovpages, &mut ofp);
                     if rc != 0 {
                         return rc;
                     }
@@ -12589,23 +12560,16 @@ unsafe extern "C" fn mdb_page_split(
         };
         mp = (*mc).mc_pg[(*mc).mc_top as usize];
         newindx = (*mc).mc_ki[(*mc).mc_top as usize];
-        nkeys = (((*(mp as *mut std::ffi::c_void as *mut MDB_page2)).mp2_lower as std::ffi::c_uint)
-            .wrapping_sub((16 as std::ffi::c_ulong as std::ffi::c_uint).wrapping_sub(
-                if 0 as std::ffi::c_int != 0 {
-                    16 as std::ffi::c_ulong as std::ffi::c_uint
-                } else {
-                    0 as std::ffi::c_int as std::ffi::c_uint
-                },
-            ))
+        nkeys = (((*(mp as *mut MDB_page2)).mp2_lower as std::ffi::c_uint)
+            .wrapping_sub((16 as std::ffi::c_uint).wrapping_sub(if 0 != 0 { 16 } else { 0 }))
             >> 1 as std::ffi::c_int) as std::ffi::c_int;
-        rc = mdb_page_new(mc, (*mp).mp_flags as uint32_t, 1 as std::ffi::c_int, &mut rp);
+        rc = mdb_page_new(mc, (*mp).mp_flags, 1 as std::ffi::c_int, &mut rp);
         if rc != 0 {
             return rc;
         }
         (*rp).mp_pad = (*mp).mp_pad;
         if ((*mc).mc_top as std::ffi::c_int) < 1 as std::ffi::c_int {
-            rc =
-                mdb_page_new(mc, 0x1 as std::ffi::c_int as uint32_t, 1 as std::ffi::c_int, &mut pp);
+            rc = mdb_page_new(mc, PageFlags::P_BRANCH, 1 as std::ffi::c_int, &mut pp);
             if rc != 0 {
                 current_block = 4951901818287548553;
             } else {
@@ -14308,7 +14272,7 @@ unsafe extern "C" fn mdb_env_copyfd1(
                                 as std::ffi::c_ulong,
                         );
                         (*mp).mp_p.p_pgno = 0 as std::ffi::c_int as pgno_t;
-                        (*mp).mp_flags = 0x8 as std::ffi::c_int as uint16_t;
+                        (*mp).mp_flags = PageFlags::P_META;
                         mm = (mp as *mut std::ffi::c_char)
                             .offset(16 as std::ffi::c_ulong as std::ffi::c_uint as isize)
                             as *mut std::ffi::c_void as *mut MDB_meta;
@@ -14319,7 +14283,7 @@ unsafe extern "C" fn mdb_env_copyfd1(
                             .offset((*env).me_psize as isize)
                             as *mut MDB_page;
                         (*mp).mp_p.p_pgno = 1 as std::ffi::c_int as pgno_t;
-                        (*mp).mp_flags = 0x8 as std::ffi::c_int as uint16_t;
+                        (*mp).mp_flags = PageFlags::P_META;
                         *((mp as *mut std::ffi::c_char)
                             .offset(16 as std::ffi::c_ulong as std::ffi::c_uint as isize)
                             as *mut std::ffi::c_void as *mut MDB_meta) = *mm;
