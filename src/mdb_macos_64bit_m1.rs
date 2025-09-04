@@ -496,7 +496,7 @@ pub struct MDB_cursor {
     pub mc_dbflag: *mut std::ffi::c_uchar,
     pub mc_snum: std::ffi::c_ushort,
     pub mc_top: std::ffi::c_ushort,
-    pub mc_flags: std::ffi::c_uint,
+    pub mc_flags: CursorFlags,
     pub mc_pg: [*mut MDB_page; 32],
     pub mc_ki: [indx_t; 32],
 }
@@ -625,7 +625,8 @@ const P_INVALID: pgno_t = !(0 as pgno_t);
 bitflags! {
     /// Flags for the page headers.
     #[derive(Debug, Clone, Copy)]
-    struct PageFlags: u16 {
+    #[repr(C)]
+    pub struct PageFlags: u16 {
         /// branch page
         const P_BRANCH   = 0x01;
         /// leaf page
@@ -650,7 +651,7 @@ bitflags! {
 bitflags! {
     /// Cursor state flags.
     #[derive(Debug, Clone, Copy)]
-    struct CursorFlags: u32 {
+    pub struct CursorFlags: u32 {
         /// cursor has been initialized and is valid
         const C_INITIALIZED     = 0x01;
         /// No more data
@@ -1138,8 +1139,7 @@ unsafe extern "C" fn mdb_page_loose(
                         && (*dl.offset(x as isize)).mid == pgno
                     {
                         if mp != (*dl.offset(x as isize)).mptr as *mut MDB_page {
-                            (*mc).mc_flags &= !(0x1 as std::ffi::c_int | 0x2 as std::ffi::c_int)
-                                as std::ffi::c_uint;
+                            (*mc).mc_flags &= !(CursorFlags::C_INITIALIZED | CursorFlags::C_EOF);
                             (*txn).mt_flags |= 0x2 as std::ffi::c_int as std::ffi::c_uint;
                             return -(30779 as std::ffi::c_int);
                         }
@@ -1196,7 +1196,7 @@ unsafe extern "C" fn mdb_pages_xkeep(
         // Mark pages seen by cursors: First m0, then tracked cursors
         i = (*txn).mt_numdbs;
         'outer: loop {
-            if (*mc).mc_flags & CursorFlags::C_INITIALIZED.bits() as u32 != 0 {
+            if (*mc).mc_flags.intersects(CursorFlags::C_INITIALIZED) {
                 m3 = mc;
                 loop {
                     mp = std::ptr::null_mut::<MDB_page>();
@@ -1211,7 +1211,7 @@ unsafe extern "C" fn mdb_pages_xkeep(
                     mx = (*m3).mc_xcursor;
                     // Proceed to mx if it is at a sub-database
                     if !(!mx.is_null()
-                        && (*mx).mx_cursor.mc_flags & CursorFlags::C_INITIALIZED.bits() as u32 != 0)
+                        && (*mx).mx_cursor.mc_flags.intersects(CursorFlags::C_INITIALIZED))
                     {
                         break;
                     }
@@ -1284,7 +1284,7 @@ unsafe extern "C" fn mdb_page_spill(
         let mut j: std::ffi::c_uint = 0;
         let mut need: std::ffi::c_uint = 0;
         let mut rc: std::ffi::c_int = 0;
-        if (*m0).mc_flags & 0x4 as std::ffi::c_int as std::ffi::c_uint != 0 {
+        if (*m0).mc_flags.intersects(CursorFlags::C_SUB) {
             return 0 as std::ffi::c_int;
         }
         i = (*(*m0).mc_db).md_depth as std::ffi::c_uint;
@@ -1507,7 +1507,7 @@ unsafe extern "C" fn mdb_page_alloc(
             mc_dbflag: std::ptr::null_mut::<std::ffi::c_uchar>(),
             mc_snum: 0,
             mc_top: 0,
-            mc_flags: 0,
+            mc_flags: CursorFlags::empty(),
             mc_pg: [std::ptr::null_mut::<MDB_page>(); 32],
             mc_ki: [0; 32],
         };
@@ -1992,8 +1992,7 @@ unsafe extern "C" fn mdb_page_touch(mut mc: *mut MDB_cursor) -> i32 {
                         && (*dl.offset(x as isize)).mid == pgno
                     {
                         if mp != (*dl.offset(x as isize)).mptr as *mut MDB_page {
-                            (*mc).mc_flags &= !(0x1 as std::ffi::c_int | 0x2 as std::ffi::c_int)
-                                as std::ffi::c_uint;
+                            (*mc).mc_flags &= !(CursorFlags::C_INITIALIZED | CursorFlags::C_EOF);
                             (*txn).mt_flags |= 0x2 as std::ffi::c_int as std::ffi::c_uint;
                             return -(30779 as std::ffi::c_int);
                         }
@@ -2048,7 +2047,7 @@ unsafe extern "C" fn mdb_page_touch(mut mc: *mut MDB_cursor) -> i32 {
         }
         (*mc).mc_pg[(*mc).mc_top as usize] = np;
         m2 = *((*txn).mt_cursors).offset((*mc).mc_dbi as isize);
-        if (*mc).mc_flags & 0x4 as std::ffi::c_int as std::ffi::c_uint != 0 {
+        if (*mc).mc_flags.intersects(CursorFlags::C_SUB) {
             while !m2.is_null() {
                 m3 = &mut (*(*m2).mc_xcursor).mx_cursor;
                 if (((*m3).mc_snum as std::ffi::c_int) >= (*mc).mc_snum as std::ffi::c_int)
@@ -2073,9 +2072,10 @@ unsafe extern "C" fn mdb_page_touch(mut mc: *mut MDB_cursor) -> i32 {
                         let mut xr_pg: *mut MDB_page = np;
                         let mut xr_node: *mut MDB_node = std::ptr::null_mut::<MDB_node>();
                         if !(!(!((*m2).mc_xcursor).is_null()
-                            && (*(*m2).mc_xcursor).mx_cursor.mc_flags
-                                & 0x1 as std::ffi::c_int as std::ffi::c_uint
-                                != 0)
+                            && (*(*m2).mc_xcursor)
+                                .mx_cursor
+                                .mc_flags
+                                .intersects(CursorFlags::C_INITIALIZED))
                             || (*m2).mc_ki[(*mc).mc_top as usize] as std::ffi::c_uint
                                 >= ((*(xr_pg as *mut std::ffi::c_void as *mut MDB_page2)).mp2_lower
                                     as std::ffi::c_uint)
@@ -2897,7 +2897,7 @@ unsafe extern "C" fn mdb_freelist_save(mut txn: *mut MDB_txn) -> std::ffi::c_int
             mc_dbflag: std::ptr::null_mut::<std::ffi::c_uchar>(),
             mc_snum: 0,
             mc_top: 0,
-            mc_flags: 0,
+            mc_flags: CursorFlags::empty(),
             mc_pg: [std::ptr::null_mut::<MDB_page>(); 32],
             mc_ki: [0; 32],
         };
@@ -3676,7 +3676,7 @@ unsafe extern "C" fn _mdb_txn_commit(mut txn: *mut MDB_txn) -> std::ffi::c_int {
                             mc_dbflag: std::ptr::null_mut::<std::ffi::c_uchar>(),
                             mc_snum: 0,
                             mc_top: 0,
-                            mc_flags: 0,
+                            mc_flags: CursorFlags::empty(),
                             mc_pg: [std::ptr::null_mut::<MDB_page>(); 32],
                             mc_ki: [0; 32],
                         };
@@ -5557,7 +5557,7 @@ unsafe extern "C" fn mdb_cursor_pop(mut mc: *mut MDB_cursor) {
                 (*mc).mc_top = ((*mc).mc_top).wrapping_sub(1);
                 (*mc).mc_top;
             } else {
-                (*mc).mc_flags &= !(0x1 as std::ffi::c_int) as std::ffi::c_uint;
+                (*mc).mc_flags &= !CursorFlags::C_INITIALIZED;
             }
         }
     }
@@ -5590,10 +5590,7 @@ unsafe extern "C" fn mdb_page_get(
         let mut txn: *mut MDB_txn = (*mc).mc_txn;
         let mut p: *mut MDB_page = std::ptr::null_mut::<MDB_page>();
         let mut level: std::ffi::c_int = 0;
-        if (*mc).mc_flags
-            & (0x20000 as std::ffi::c_int | 0x80000 as std::ffi::c_int) as std::ffi::c_uint
-            == 0
-        {
+        if !((*mc).mc_flags.intersects(CursorFlags::C_WRITEMAP | CursorFlags::C_ORIG_RDONLY)) {
             let mut tx2: *mut MDB_txn = txn;
             level = 1 as std::ffi::c_int;
             loop {
@@ -5702,7 +5699,7 @@ unsafe extern "C" fn mdb_page_search_root(
                         >> 1 as std::ffi::c_int)
                         .wrapping_sub(1 as std::ffi::c_int as std::ffi::c_uint)
                         as indx_t;
-                    if (*mc).mc_flags & 0x1 as std::ffi::c_int as std::ffi::c_uint != 0 {
+                    if (*mc).mc_flags.intersects(CursorFlags::C_INITIALIZED) {
                         if (*mc).mc_ki[(*mc).mc_top as usize] as std::ffi::c_int
                             == i as std::ffi::c_int
                         {
@@ -5845,8 +5842,8 @@ unsafe extern "C" fn mdb_page_search_root(
             (*(*mc).mc_txn).mt_flags |= 0x2 as std::ffi::c_int as std::ffi::c_uint;
             return -(30796 as std::ffi::c_int);
         }
-        (*mc).mc_flags |= 0x1 as std::ffi::c_int as std::ffi::c_uint;
-        (*mc).mc_flags &= !(0x2 as std::ffi::c_int) as std::ffi::c_uint;
+        (*mc).mc_flags |= CursorFlags::C_INITIALIZED;
+        (*mc).mc_flags &= !CursorFlags::C_EOF;
         0 as std::ffi::c_int
     }
 }
@@ -5932,7 +5929,7 @@ unsafe extern "C" fn mdb_page_search(
                     mc_dbflag: std::ptr::null_mut::<std::ffi::c_uchar>(),
                     mc_snum: 0,
                     mc_top: 0,
-                    mc_flags: 0,
+                    mc_flags: CursorFlags::empty(),
                     mc_pg: [std::ptr::null_mut::<MDB_page>(); 32],
                     mc_ki: [0; 32],
                 };
@@ -6220,7 +6217,7 @@ pub unsafe extern "C" fn mdb_get(
             mc_dbflag: std::ptr::null_mut::<std::ffi::c_uchar>(),
             mc_snum: 0,
             mc_top: 0,
-            mc_flags: 0,
+            mc_flags: CursorFlags::empty(),
             mc_pg: [std::ptr::null_mut::<MDB_page>(); 32],
             mc_ki: [0; 32],
         };
@@ -6236,7 +6233,7 @@ pub unsafe extern "C" fn mdb_get(
                 mc_dbflag: std::ptr::null_mut::<std::ffi::c_uchar>(),
                 mc_snum: 0,
                 mc_top: 0,
-                mc_flags: 0,
+                mc_flags: CursorFlags::empty(),
                 mc_pg: [std::ptr::null_mut::<MDB_page>(); 32],
                 mc_ki: [0; 32],
             },
@@ -6391,8 +6388,7 @@ unsafe extern "C" fn mdb_cursor_sibling(
             std::ptr::null_mut::<std::ffi::c_int>(),
         );
         if rc != 0 as std::ffi::c_int {
-            (*mc).mc_flags &=
-                !(0x1 as std::ffi::c_int | 0x2 as std::ffi::c_int) as std::ffi::c_uint;
+            (*mc).mc_flags.remove(CursorFlags::C_INITIALIZED | CursorFlags::C_EOF);
             return rc;
         }
         mdb_cursor_push(mc, mp);
@@ -6423,16 +6419,16 @@ unsafe extern "C" fn mdb_cursor_next(
         let mut mp: *mut MDB_page = std::ptr::null_mut::<MDB_page>();
         let mut leaf: *mut MDB_node = std::ptr::null_mut::<MDB_node>();
         let mut rc: std::ffi::c_int = 0;
-        if (*mc).mc_flags & 0x8 as std::ffi::c_int as std::ffi::c_uint != 0
+        if (*mc).mc_flags.intersects(CursorFlags::C_DEL)
             && op as std::ffi::c_uint == MDB_NEXT_DUP as std::ffi::c_int as std::ffi::c_uint
         {
             return -(30798 as std::ffi::c_int);
         }
-        if (*mc).mc_flags & 0x1 as std::ffi::c_int as std::ffi::c_uint == 0 {
+        if !(*mc).mc_flags.intersects(CursorFlags::C_INITIALIZED) {
             return mdb_cursor_first(mc, key, data);
         }
         mp = (*mc).mc_pg[(*mc).mc_top as usize];
-        if (*mc).mc_flags & 0x2 as std::ffi::c_int as std::ffi::c_uint != 0 {
+        if (*mc).mc_flags.intersects(CursorFlags::C_EOF) {
             if (*mc).mc_ki[(*mc).mc_top as usize] as std::ffi::c_uint
                 >= (((*(mp as *mut std::ffi::c_void as *mut MDB_page2)).mp2_lower
                     as std::ffi::c_uint)
@@ -6448,7 +6444,7 @@ unsafe extern "C" fn mdb_cursor_next(
             {
                 return -(30798 as std::ffi::c_int);
             }
-            (*mc).mc_flags ^= 0x2 as std::ffi::c_int as std::ffi::c_uint;
+            (*mc).mc_flags.toggle(CursorFlags::C_EOF);
         }
         if (*(*mc).mc_db).md_flags as std::ffi::c_int & 0x4 as std::ffi::c_int != 0 {
             leaf = (mp as *mut std::ffi::c_char)
@@ -6492,15 +6488,17 @@ unsafe extern "C" fn mdb_cursor_next(
                     }
                 }
             } else {
-                (*(*mc).mc_xcursor).mx_cursor.mc_flags &=
-                    !(0x1 as std::ffi::c_int | 0x2 as std::ffi::c_int) as std::ffi::c_uint;
+                (*(*mc).mc_xcursor)
+                    .mx_cursor
+                    .mc_flags
+                    .remove(CursorFlags::C_INITIALIZED | CursorFlags::C_EOF);
                 if op as std::ffi::c_uint == MDB_NEXT_DUP as std::ffi::c_int as std::ffi::c_uint {
                     return -(30798 as std::ffi::c_int);
                 }
             }
         }
-        if (*mc).mc_flags & 0x8 as std::ffi::c_int as std::ffi::c_uint != 0 {
-            (*mc).mc_flags ^= 0x8 as std::ffi::c_int as std::ffi::c_uint;
+        if (*mc).mc_flags.intersects(CursorFlags::C_DEL) {
+            (*mc).mc_flags.toggle(CursorFlags::C_DEL);
         } else if ((*mc).mc_ki[(*mc).mc_top as usize] as std::ffi::c_uint)
             .wrapping_add(1 as std::ffi::c_uint)
             >= (std::ptr::read_unaligned(
@@ -6515,9 +6513,9 @@ unsafe extern "C" fn mdb_cursor_next(
                 ))
                 >> 1 as std::ffi::c_int
         {
-            rc = mdb_cursor_sibling(mc, 1 as std::ffi::c_int);
-            if rc != 0 as std::ffi::c_int {
-                (*mc).mc_flags |= 0x2 as std::ffi::c_int as std::ffi::c_uint;
+            rc = mdb_cursor_sibling(mc, 1);
+            if rc != 0 {
+                (*mc).mc_flags.insert(CursorFlags::C_EOF);
                 return rc;
             }
             mp = (*mc).mc_pg[(*mc).mc_top as usize];
@@ -6609,7 +6607,7 @@ unsafe extern "C" fn mdb_cursor_prev(
         let mut mp: *mut MDB_page = std::ptr::null_mut::<MDB_page>();
         let mut leaf: *mut MDB_node = std::ptr::null_mut::<MDB_node>();
         let mut rc: std::ffi::c_int = 0;
-        if (*mc).mc_flags & 0x1 as std::ffi::c_int as std::ffi::c_uint == 0 {
+        if !(*mc).mc_flags.intersects(CursorFlags::C_INITIALIZED) {
             rc = mdb_cursor_last(mc, key, data);
             if rc != 0 {
                 return rc;
@@ -6670,20 +6668,22 @@ unsafe extern "C" fn mdb_cursor_prev(
                                 (*key).mv_data =
                                     ((*leaf).mn_data).as_mut_ptr() as *mut std::ffi::c_void;
                             }
-                            (*mc).mc_flags &= !(0x2 as std::ffi::c_int) as std::ffi::c_uint;
+                            (*mc).mc_flags.remove(CursorFlags::C_EOF);
                         }
                         return rc;
                     }
                 }
             } else {
-                (*(*mc).mc_xcursor).mx_cursor.mc_flags &=
-                    !(0x1 as std::ffi::c_int | 0x2 as std::ffi::c_int) as std::ffi::c_uint;
+                (*(*mc).mc_xcursor)
+                    .mx_cursor
+                    .mc_flags
+                    .remove(CursorFlags::C_INITIALIZED | CursorFlags::C_EOF);
                 if op as std::ffi::c_uint == MDB_PREV_DUP as std::ffi::c_int as std::ffi::c_uint {
                     return -(30798 as std::ffi::c_int);
                 }
             }
         }
-        (*mc).mc_flags &= !(0x2 as std::ffi::c_int | 0x8 as std::ffi::c_int) as std::ffi::c_uint;
+        (*mc).mc_flags.remove(CursorFlags::C_EOF | CursorFlags::C_DEL);
         if (*mc).mc_ki[(*mc).mc_top as usize] as std::ffi::c_int == 0 as std::ffi::c_int {
             rc = mdb_cursor_sibling(mc, 0 as std::ffi::c_int);
             if rc != 0 as std::ffi::c_int {
@@ -6780,10 +6780,12 @@ unsafe extern "C" fn mdb_cursor_set(
             return -(30781 as std::ffi::c_int);
         }
         if !((*mc).mc_xcursor).is_null() {
-            (*(*mc).mc_xcursor).mx_cursor.mc_flags &=
-                !(0x1 as std::ffi::c_int | 0x2 as std::ffi::c_int) as std::ffi::c_uint;
+            (*(*mc).mc_xcursor)
+                .mx_cursor
+                .mc_flags
+                .remove(CursorFlags::C_INITIALIZED | CursorFlags::C_DEL);
         }
-        if (*mc).mc_flags & 0x1 as std::ffi::c_int as std::ffi::c_uint != 0 {
+        if (*mc).mc_flags.intersects(CursorFlags::C_INITIALIZED) {
             let mut nodekey: MDB_val =
                 MDB_val { mv_size: 0, mv_data: std::ptr::null_mut::<std::ffi::c_void>() };
             mp = (*mc).mc_pg[(*mc).mc_top as usize];
@@ -6983,7 +6985,7 @@ unsafe extern "C" fn mdb_cursor_set(
                                 6408777650154919156 => {}
                                 _ => {
                                     rc = 0 as std::ffi::c_int;
-                                    (*mc).mc_flags &= !(0x2 as std::ffi::c_int) as std::ffi::c_uint;
+                                    (*mc).mc_flags.remove(CursorFlags::C_EOF);
                                     current_block = 4280090506452962206;
                                 }
                             }
@@ -7086,7 +7088,7 @@ unsafe extern "C" fn mdb_cursor_set(
             if leaf.is_null() {
                 rc = mdb_cursor_sibling(mc, 1 as std::ffi::c_int);
                 if rc != 0 as std::ffi::c_int {
-                    (*mc).mc_flags |= 0x2 as std::ffi::c_int as std::ffi::c_uint;
+                    (*mc).mc_flags.insert(CursorFlags::C_EOF);
                     return rc;
                 }
                 mp = (*mc).mc_pg[(*mc).mc_top as usize];
@@ -7121,8 +7123,8 @@ unsafe extern "C" fn mdb_cursor_set(
                     ) as *mut MDB_node;
             }
         }
-        (*mc).mc_flags |= 0x1 as std::ffi::c_int as std::ffi::c_uint;
-        (*mc).mc_flags &= !(0x2 as std::ffi::c_int) as std::ffi::c_uint;
+        (*mc).mc_flags.insert(CursorFlags::C_INITIALIZED);
+        (*mc).mc_flags.remove(CursorFlags::C_EOF);
         if (*(mp as *mut std::ffi::c_void as *mut MDB_page2)).mp2_flags as std::ffi::c_int
             & 0x20 as std::ffi::c_int
             == 0x20 as std::ffi::c_int
@@ -7202,8 +7204,10 @@ unsafe extern "C" fn mdb_cursor_set(
                 *data = olddata;
             } else {
                 if !((*mc).mc_xcursor).is_null() {
-                    (*(*mc).mc_xcursor).mx_cursor.mc_flags &=
-                        !(0x1 as std::ffi::c_int | 0x2 as std::ffi::c_int) as std::ffi::c_uint;
+                    (*(*mc).mc_xcursor)
+                        .mx_cursor
+                        .mc_flags
+                        .remove(CursorFlags::C_INITIALIZED | CursorFlags::C_EOF);
                 }
                 rc = mdb_node_read(mc, leaf, data);
                 if rc != 0 as std::ffi::c_int {
@@ -7232,10 +7236,12 @@ unsafe extern "C" fn mdb_cursor_first(
         let mut rc: std::ffi::c_int = 0;
         let mut leaf: *mut MDB_node = std::ptr::null_mut::<MDB_node>();
         if !((*mc).mc_xcursor).is_null() {
-            (*(*mc).mc_xcursor).mx_cursor.mc_flags &=
-                !(0x1 as std::ffi::c_int | 0x2 as std::ffi::c_int) as std::ffi::c_uint;
+            (*(*mc).mc_xcursor)
+                .mx_cursor
+                .mc_flags
+                .remove(CursorFlags::C_INITIALIZED | CursorFlags::C_EOF);
         }
-        if (*mc).mc_flags & 0x1 as std::ffi::c_int as std::ffi::c_uint == 0
+        if !(*mc).mc_flags.intersects(CursorFlags::C_INITIALIZED)
             || (*mc).mc_top as std::ffi::c_int != 0
         {
             rc = mdb_page_search(mc, std::ptr::null_mut::<MDB_val>(), 4 as std::ffi::c_int);
@@ -7275,8 +7281,8 @@ unsafe extern "C" fn mdb_cursor_first(
                     0 as std::ffi::c_int as std::ffi::c_uint
                 }) as isize,
             ) as *mut MDB_node;
-        (*mc).mc_flags |= 0x1 as std::ffi::c_int as std::ffi::c_uint;
-        (*mc).mc_flags &= !(0x2 as std::ffi::c_int) as std::ffi::c_uint;
+        (*mc).mc_flags.insert(CursorFlags::C_INITIALIZED);
+        (*mc).mc_flags.remove(CursorFlags::C_EOF);
         (*mc).mc_ki[(*mc).mc_top as usize] = 0 as std::ffi::c_int as indx_t;
         if std::ptr::read_unaligned(
             ((*mc).mc_pg[(*mc).mc_top as usize] as *mut u8)
@@ -7333,10 +7339,12 @@ unsafe extern "C" fn mdb_cursor_last(
         let mut rc: std::ffi::c_int = 0;
         let mut leaf: *mut MDB_node = std::ptr::null_mut::<MDB_node>();
         if !((*mc).mc_xcursor).is_null() {
-            (*(*mc).mc_xcursor).mx_cursor.mc_flags &=
-                !(0x1 as std::ffi::c_int | 0x2 as std::ffi::c_int) as std::ffi::c_uint;
+            (*(*mc).mc_xcursor)
+                .mx_cursor
+                .mc_flags
+                .remove(CursorFlags::C_INITIALIZED | CursorFlags::C_EOF);
         }
-        if (*mc).mc_flags & 0x1 as std::ffi::c_int as std::ffi::c_uint == 0
+        if !(*mc).mc_flags.intersects(CursorFlags::C_INITIALIZED)
             || (*mc).mc_top as std::ffi::c_int != 0
         {
             rc = mdb_page_search(mc, std::ptr::null_mut::<MDB_val>(), 8 as std::ffi::c_int);
@@ -7373,7 +7381,7 @@ unsafe extern "C" fn mdb_cursor_last(
                 ))
                 >> 1 as std::ffi::c_int)
                 .wrapping_sub(1 as std::ffi::c_int as std::ffi::c_uint) as indx_t;
-        (*mc).mc_flags |= (0x1 as std::ffi::c_int | 0x2 as std::ffi::c_int) as std::ffi::c_uint;
+        (*mc).mc_flags.insert(CursorFlags::C_INITIALIZED | CursorFlags::C_EOF);
         leaf = ((*mc).mc_pg[(*mc).mc_top as usize] as *mut std::ffi::c_char)
             .offset(
                 *((*((*mc).mc_pg[(*mc).mc_top as usize] as *mut std::ffi::c_void
@@ -7457,7 +7465,7 @@ pub unsafe extern "C" fn mdb_cursor_get(
         }
         match op as std::ffi::c_uint {
             4 => {
-                if (*mc).mc_flags & 0x1 as std::ffi::c_int as std::ffi::c_uint == 0 {
+                if !(*mc).mc_flags.intersects(CursorFlags::C_INITIALIZED) {
                     rc = 22 as std::ffi::c_int;
                 } else {
                     let mut mp: *mut MDB_page = (*mc).mc_pg[(*mc).mc_top as usize];
@@ -7553,9 +7561,7 @@ pub unsafe extern "C" fn mdb_cursor_get(
                 current_block = 15086062982616303049;
             }
             5 => {
-                if data.is_null()
-                    || (*mc).mc_flags & 0x1 as std::ffi::c_int as std::ffi::c_uint == 0
-                {
+                if data.is_null() || !(*mc).mc_flags.intersects(CursorFlags::C_INITIALIZED) {
                     rc = 22 as std::ffi::c_int;
                     current_block = 1765866445182206997;
                 } else if (*(*mc).mc_db).md_flags as std::ffi::c_int & 0x10 as std::ffi::c_int == 0
@@ -7564,12 +7570,11 @@ pub unsafe extern "C" fn mdb_cursor_get(
                     current_block = 1765866445182206997;
                 } else {
                     rc = 0 as std::ffi::c_int;
-                    if (*(*mc).mc_xcursor).mx_cursor.mc_flags
-                        & 0x1 as std::ffi::c_int as std::ffi::c_uint
-                        == 0
-                        || (*(*mc).mc_xcursor).mx_cursor.mc_flags
-                            & 0x2 as std::ffi::c_int as std::ffi::c_uint
-                            != 0
+                    if !(*(*mc).mc_xcursor)
+                        .mx_cursor
+                        .mc_flags
+                        .intersects(CursorFlags::C_INITIALIZED)
+                        || (*(*mc).mc_xcursor).mx_cursor.mc_flags.intersects(CursorFlags::C_EOF)
                     {
                         current_block = 1765866445182206997;
                     } else {
@@ -7588,9 +7593,10 @@ pub unsafe extern "C" fn mdb_cursor_get(
                 } else {
                     rc = mdb_cursor_next(mc, key, data, MDB_NEXT_DUP);
                     if rc == 0 as std::ffi::c_int {
-                        if (*(*mc).mc_xcursor).mx_cursor.mc_flags
-                            & 0x1 as std::ffi::c_int as std::ffi::c_uint
-                            != 0
+                        if (*(*mc).mc_xcursor)
+                            .mx_cursor
+                            .mc_flags
+                            .intersects(CursorFlags::C_INITIALIZED)
                         {
                             mx = std::ptr::null_mut::<MDB_cursor>();
                             current_block = 6189203605807418917;
@@ -7612,14 +7618,14 @@ pub unsafe extern "C" fn mdb_cursor_get(
                     rc = -(30784 as std::ffi::c_int);
                     current_block = 1765866445182206997;
                 } else {
-                    if (*mc).mc_flags & 0x1 as std::ffi::c_int as std::ffi::c_uint == 0 {
+                    if !(*mc).mc_flags.intersects(CursorFlags::C_INITIALIZED) {
                         rc = mdb_cursor_last(mc, key, data);
                     } else {
                         rc = 0 as std::ffi::c_int;
                     }
                     if rc == 0 as std::ffi::c_int {
                         let mut mx_0: *mut MDB_cursor = &mut (*(*mc).mc_xcursor).mx_cursor;
-                        if (*mx_0).mc_flags & 0x1 as std::ffi::c_int as std::ffi::c_uint != 0 {
+                        if (*mx_0).mc_flags.intersects(CursorFlags::C_INITIALIZED) {
                             rc = mdb_cursor_sibling(mx_0, 0 as std::ffi::c_int);
                             if rc == 0 as std::ffi::c_int {
                                 current_block = 6189203605807418917;
@@ -7680,9 +7686,7 @@ pub unsafe extern "C" fn mdb_cursor_get(
         }
         match current_block {
             18048101459110804040 => {
-                if data.is_null()
-                    || (*mc).mc_flags & 0x1 as std::ffi::c_int as std::ffi::c_uint == 0
-                {
+                if data.is_null() || !(*mc).mc_flags.intersects(CursorFlags::C_INITIALIZED) {
                     rc = 22 as std::ffi::c_int;
                 } else if ((*mc).mc_xcursor).is_null() {
                     rc = -(30784 as std::ffi::c_int);
@@ -7715,7 +7719,7 @@ pub unsafe extern "C" fn mdb_cursor_get(
                         as indx_t;
                     rc = -(30798 as std::ffi::c_int);
                 } else {
-                    (*mc).mc_flags &= !(0x2 as std::ffi::c_int) as std::ffi::c_uint;
+                    (*mc).mc_flags.remove(CursorFlags::C_EOF);
                     let mut leaf_0: *mut MDB_node = ((*mc).mc_pg[(*mc).mc_top as usize]
                         as *mut std::ffi::c_char)
                         .offset(
@@ -7742,9 +7746,10 @@ pub unsafe extern "C" fn mdb_cursor_get(
                                 ((*leaf_0).mn_data).as_mut_ptr() as *mut std::ffi::c_void;
                         }
                         rc = mdb_node_read(mc, leaf_0, data);
-                    } else if (*(*mc).mc_xcursor).mx_cursor.mc_flags
-                        & 0x1 as std::ffi::c_int as std::ffi::c_uint
-                        == 0
+                    } else if !(*(*mc).mc_xcursor)
+                        .mx_cursor
+                        .mc_flags
+                        .intersects(CursorFlags::C_INITIALIZED)
                     {
                         rc = 22 as std::ffi::c_int;
                     } else {
@@ -7810,8 +7815,8 @@ pub unsafe extern "C" fn mdb_cursor_get(
             }
             _ => {}
         }
-        if (*mc).mc_flags & 0x8 as std::ffi::c_int as std::ffi::c_uint != 0 {
-            (*mc).mc_flags ^= 0x8 as std::ffi::c_int as std::ffi::c_uint;
+        if (*mc).mc_flags.intersects(CursorFlags::C_DEL) {
+            (*mc).mc_flags.toggle(CursorFlags::C_DEL);
         }
         rc
     }
@@ -7835,7 +7840,7 @@ unsafe extern "C" fn mdb_cursor_touch(mut mc: *mut MDB_cursor) -> std::ffi::c_in
                 mc_dbflag: std::ptr::null_mut::<std::ffi::c_uchar>(),
                 mc_snum: 0,
                 mc_top: 0,
-                mc_flags: 0,
+                mc_flags: CursorFlags::empty(),
                 mc_pg: [std::ptr::null_mut::<MDB_page>(); 32],
                 mc_ki: [0; 32],
             };
@@ -7851,7 +7856,7 @@ unsafe extern "C" fn mdb_cursor_touch(mut mc: *mut MDB_cursor) -> std::ffi::c_in
                     mc_dbflag: std::ptr::null_mut::<std::ffi::c_uchar>(),
                     mc_snum: 0,
                     mc_top: 0,
-                    mc_flags: 0,
+                    mc_flags: CursorFlags::empty(),
                     mc_pg: [std::ptr::null_mut::<MDB_page>(); 32],
                     mc_ki: [0; 32],
                 },
@@ -8008,14 +8013,14 @@ unsafe extern "C" fn _mdb_cursor_put(
         }
         dkey.mv_size = 0 as std::ffi::c_int as size_t;
         if flags & 0x40 as std::ffi::c_int as std::ffi::c_uint != 0 {
-            if (*mc).mc_flags & 0x1 as std::ffi::c_int as std::ffi::c_uint == 0 {
+            if !(*mc).mc_flags.intersects(CursorFlags::C_INITIALIZED) {
                 return 22 as std::ffi::c_int;
             }
             rc = 0 as std::ffi::c_int;
         } else if (*(*mc).mc_db).md_root == !(0 as std::ffi::c_int as pgno_t) {
             (*mc).mc_snum = 0 as std::ffi::c_int as std::ffi::c_ushort;
             (*mc).mc_top = 0 as std::ffi::c_int as std::ffi::c_ushort;
-            (*mc).mc_flags &= !(0x1 as std::ffi::c_int) as std::ffi::c_uint;
+            (*mc).mc_flags.remove(CursorFlags::C_INITIALIZED);
             rc = -(30779 as std::ffi::c_int) + 10 as std::ffi::c_int;
         } else {
             let mut exact: std::ffi::c_int = 0 as std::ffi::c_int;
@@ -8049,8 +8054,8 @@ unsafe extern "C" fn _mdb_cursor_put(
                 return rc;
             }
         }
-        if (*mc).mc_flags & 0x8 as std::ffi::c_int as std::ffi::c_uint != 0 {
-            (*mc).mc_flags ^= 0x8 as std::ffi::c_int as std::ffi::c_uint;
+        if (*mc).mc_flags.intersects(CursorFlags::C_DEL) {
+            (*mc).mc_flags.toggle(CursorFlags::C_DEL);
         }
         if nospill == 0 {
             if flags & 0x80000 as std::ffi::c_int as std::ffi::c_uint != 0 {
@@ -8083,7 +8088,7 @@ unsafe extern "C" fn _mdb_cursor_put(
                 let fresh30 = &mut (*(np as *mut std::ffi::c_void as *mut MDB_page2)).mp2_flags;
                 *fresh30 = (*fresh30 as std::ffi::c_int | 0x20 as std::ffi::c_int) as uint16_t;
             }
-            (*mc).mc_flags |= 0x1 as std::ffi::c_int as std::ffi::c_uint;
+            (*mc).mc_flags.insert(CursorFlags::C_INITIALIZED);
         } else {
             rc2 = mdb_cursor_touch(mc);
             if rc2 != 0 {
@@ -8631,10 +8636,7 @@ unsafe extern "C" fn _mdb_cursor_put(
                                     (*data).mv_data = olddata.mv_data;
                                     current_block = 10257223768985283691;
                                     break;
-                                } else if (*mc).mc_flags
-                                    & 0x4 as std::ffi::c_int as std::ffi::c_uint
-                                    == 0
-                                {
+                                } else if !(*mc).mc_flags.intersects(CursorFlags::C_SUB) {
                                     memcpy(olddata.mv_data, (*data).mv_data, (*data).mv_size);
                                     current_block = 10257223768985283691;
                                     break;
@@ -8857,7 +8859,7 @@ unsafe extern "C" fn _mdb_cursor_put(
                         let mut mp_0: *mut MDB_page = (*mc).mc_pg[i_0 as usize];
                         m2 = *((*(*mc).mc_txn).mt_cursors).offset(dbi as isize);
                         while !m2.is_null() {
-                            if (*mc).mc_flags & 0x4 as std::ffi::c_int as std::ffi::c_uint != 0 {
+                            if (*mc).mc_flags.intersects(CursorFlags::C_SUB) {
                                 m3 = &mut (*(*m2).mc_xcursor).mx_cursor;
                             } else {
                                 m3 = m2;
@@ -8878,9 +8880,10 @@ unsafe extern "C" fn _mdb_cursor_put(
                                 let mut xr_pg: *mut MDB_page = mp_0;
                                 let mut xr_node: *mut MDB_node = std::ptr::null_mut::<MDB_node>();
                                 if !(!(!((*m3).mc_xcursor).is_null()
-                                    && (*(*m3).mc_xcursor).mx_cursor.mc_flags
-                                        & 0x1 as std::ffi::c_int as std::ffi::c_uint
-                                        != 0)
+                                    && (*(*m3).mc_xcursor)
+                                        .mx_cursor
+                                        .mc_flags
+                                        .intersects(CursorFlags::C_INITIALIZED))
                                     || (*m3).mc_ki[i_0 as usize] as std::ffi::c_uint
                                         >= ((*(xr_pg as *mut std::ffi::c_void as *mut MDB_page2))
                                             .mp2_lower
@@ -9004,7 +9007,7 @@ unsafe extern "C" fn _mdb_cursor_put(
                         if !(m2_0 == mc
                             || ((*m2_0).mc_snum as std::ffi::c_int)
                                 < (*mc).mc_snum as std::ffi::c_int)
-                            && ((*m2_0).mc_flags & 0x1 as std::ffi::c_int as std::ffi::c_uint != 0)
+                            && (*m2_0).mc_flags.intersects(CursorFlags::C_INITIALIZED)
                             && (*m2_0).mc_pg[i_1 as usize] == mp_1
                         {
                             if (*m2_0).mc_ki[i_1 as usize] as std::ffi::c_int
@@ -9015,9 +9018,10 @@ unsafe extern "C" fn _mdb_cursor_put(
                                 let mut xr_pg_0: *mut MDB_page = mp_1;
                                 let mut xr_node_0: *mut MDB_node = std::ptr::null_mut::<MDB_node>();
                                 if !(!(!((*m2_0).mc_xcursor).is_null()
-                                    && (*(*m2_0).mc_xcursor).mx_cursor.mc_flags
-                                        & 0x1 as std::ffi::c_int as std::ffi::c_uint
-                                        != 0)
+                                    && (*(*m2_0).mc_xcursor)
+                                        .mx_cursor
+                                        .mc_flags
+                                        .intersects(CursorFlags::C_INITIALIZED))
                                     || (*m2_0).mc_ki[i_1 as usize] as std::ffi::c_uint
                                         >= ((*(xr_pg_0 as *mut std::ffi::c_void as *mut MDB_page2))
                                             .mp2_lower
@@ -9101,7 +9105,7 @@ unsafe extern "C" fn _mdb_cursor_put(
                     current_block = 3910923109603533376;
                     break;
                 }
-                (*mc).mc_flags |= 0x1 as std::ffi::c_int as std::ffi::c_uint;
+                (*mc).mc_flags.insert(CursorFlags::C_INITIALIZED);
             }
             if flags & 0x80000 as std::ffi::c_int as std::ffi::c_uint == 0 {
                 current_block = 5726862278832168375;
@@ -9174,7 +9178,7 @@ unsafe extern "C" fn _mdb_cursor_del(
                 -(30782 as std::ffi::c_int)
             };
         }
-        if (*mc).mc_flags & 0x1 as std::ffi::c_int as std::ffi::c_uint == 0 {
+        if !(*mc).mc_flags.intersects(CursorFlags::C_INITIALIZED) {
             return 22 as std::ffi::c_int;
         }
         if (*mc).mc_ki[(*mc).mc_top as usize] as std::ffi::c_uint
@@ -9238,8 +9242,7 @@ unsafe extern "C" fn _mdb_cursor_del(
                         ((*(*mc).mc_xcursor).mx_db.md_entries)
                             .wrapping_sub(1 as std::ffi::c_int as mdb_size_t),
                     );
-                    (*(*mc).mc_xcursor).mx_cursor.mc_flags &=
-                        !(0x1 as std::ffi::c_int) as std::ffi::c_uint;
+                    (*(*mc).mc_xcursor).mx_cursor.mc_flags.remove(CursorFlags::C_INITIALIZED);
                 } else {
                     if (*leaf).mn_flags as std::ffi::c_int & 0x2 as std::ffi::c_int
                         != 0x2 as std::ffi::c_int
@@ -9299,17 +9302,17 @@ unsafe extern "C" fn _mdb_cursor_del(
                                 if !(m2 == mc
                                     || ((*m2).mc_snum as std::ffi::c_int)
                                         < (*mc).mc_snum as std::ffi::c_int)
-                                    && ((*m2).mc_flags & 0x1 as std::ffi::c_int as std::ffi::c_uint
-                                        != 0)
+                                    && ((*m2).mc_flags.intersects(CursorFlags::C_INITIALIZED))
                                     && (*m2).mc_pg[(*mc).mc_top as usize] == mp
                                 {
                                     let mut xr_pg: *mut MDB_page = mp;
                                     let mut xr_node: *mut MDB_node =
                                         std::ptr::null_mut::<MDB_node>();
                                     if !(!(!((*m2).mc_xcursor).is_null()
-                                        && (*(*m2).mc_xcursor).mx_cursor.mc_flags
-                                            & 0x1 as std::ffi::c_int as std::ffi::c_uint
-                                            != 0)
+                                        && (*(*m2).mc_xcursor)
+                                            .mx_cursor
+                                            .mc_flags
+                                            .intersects(CursorFlags::C_INITIALIZED))
                                         || (*m2).mc_ki[(*mc).mc_top as usize] as std::ffi::c_uint
                                             >= ((*(xr_pg as *mut std::ffi::c_void
                                                 as *mut MDB_page2))
@@ -9371,8 +9374,7 @@ unsafe extern "C" fn _mdb_cursor_del(
                         (*(*mc).mc_db).md_entries;
                         return rc;
                     } else {
-                        (*(*mc).mc_xcursor).mx_cursor.mc_flags &=
-                            !(0x1 as std::ffi::c_int) as std::ffi::c_uint;
+                        (*(*mc).mc_xcursor).mx_cursor.mc_flags.remove(CursorFlags::C_INITIALIZED);
                     }
                 }
                 if (*leaf).mn_flags as std::ffi::c_int & 0x2 as std::ffi::c_int != 0 {
@@ -10151,9 +10153,8 @@ unsafe extern "C" fn mdb_xcursor_init0(mut mc: *mut MDB_cursor) {
         (*mx).mx_cursor.mc_dbflag = &mut (*mx).mx_dbflag;
         (*mx).mx_cursor.mc_snum = 0 as std::ffi::c_int as std::ffi::c_ushort;
         (*mx).mx_cursor.mc_top = 0 as std::ffi::c_int as std::ffi::c_ushort;
-        (*mx).mx_cursor.mc_flags = 0x4 as std::ffi::c_int as std::ffi::c_uint
-            | (*mc).mc_flags
-                & (0x20000 as std::ffi::c_int | 0x80000 as std::ffi::c_int) as std::ffi::c_uint;
+        (*mx).mx_cursor.mc_flags = CursorFlags::C_SUB
+            | (*mc).mc_flags.intersection(CursorFlags::C_ORIG_RDONLY | CursorFlags::C_WRITEMAP);
         (*mx).mx_dbx.md_name.mv_size = 0 as std::ffi::c_int as size_t;
         (*mx).mx_dbx.md_name.mv_data = std::ptr::null_mut::<std::ffi::c_void>();
         (*mx).mx_dbx.md_cmp = (*(*mc).mc_dbx).md_dcmp;
@@ -10165,9 +10166,9 @@ unsafe extern "C" fn mdb_xcursor_init1(mut mc: *mut MDB_cursor, mut node: *mut M
     #[allow(unpredictable_function_pointer_comparisons)]
     unsafe {
         let mut mx: *mut MDB_xcursor = (*mc).mc_xcursor;
-        (*mx).mx_cursor.mc_flags &= (0x4 as std::ffi::c_int
-            | 0x20000 as std::ffi::c_int
-            | 0x80000 as std::ffi::c_int) as std::ffi::c_uint;
+        (*mx).mx_cursor.mc_flags = (*mx).mx_cursor.mc_flags.intersection(
+            CursorFlags::C_SUB | CursorFlags::C_ORIG_RDONLY | CursorFlags::C_WRITEMAP,
+        );
         if (*node).mn_flags as std::ffi::c_int & 0x2 as std::ffi::c_int != 0 {
             memcpy(
                 &mut (*mx).mx_db as *mut MDB_db as *mut std::ffi::c_void,
@@ -10226,7 +10227,7 @@ unsafe extern "C" fn mdb_xcursor_init1(mut mc: *mut MDB_cursor, mut node: *mut M
             *d = *s;
             (*mx).mx_cursor.mc_snum = 1 as std::ffi::c_int as std::ffi::c_ushort;
             (*mx).mx_cursor.mc_top = 0 as std::ffi::c_int as std::ffi::c_ushort;
-            (*mx).mx_cursor.mc_flags |= 0x1 as std::ffi::c_int as std::ffi::c_uint;
+            (*mx).mx_cursor.mc_flags.insert(CursorFlags::C_INITIALIZED);
             (*mx).mx_cursor.mc_pg[0 as std::ffi::c_int as usize] = fp;
             (*mx).mx_cursor.mc_ki[0 as std::ffi::c_int as usize] = 0 as std::ffi::c_int as indx_t;
             if (*(*mc).mc_db).md_flags as std::ffi::c_int & 0x10 as std::ffi::c_int != 0 {
@@ -10262,13 +10263,13 @@ unsafe extern "C" fn mdb_xcursor_init2(
         if new_dupdata != 0 {
             (*mx).mx_cursor.mc_snum = 1 as std::ffi::c_int as std::ffi::c_ushort;
             (*mx).mx_cursor.mc_top = 0 as std::ffi::c_int as std::ffi::c_ushort;
-            (*mx).mx_cursor.mc_flags |= 0x1 as std::ffi::c_int as std::ffi::c_uint;
+            (*mx).mx_cursor.mc_flags.insert(CursorFlags::C_INITIALIZED);
             (*mx).mx_cursor.mc_ki[0 as std::ffi::c_int as usize] = 0 as std::ffi::c_int as indx_t;
             (*mx).mx_dbflag = (0x8 as std::ffi::c_int
                 | 0x10 as std::ffi::c_int
                 | 0x20 as std::ffi::c_int) as std::ffi::c_uchar;
             (*mx).mx_dbx.md_cmp = (*src_mx).mx_dbx.md_cmp;
-        } else if (*mx).mx_cursor.mc_flags & 0x1 as std::ffi::c_int as std::ffi::c_uint == 0 {
+        } else if !(*mx).mx_cursor.mc_flags.intersects(CursorFlags::C_INITIALIZED) {
             return;
         }
         (*mx).mx_db = (*src_mx).mx_db;
@@ -10294,8 +10295,10 @@ unsafe extern "C" fn mdb_cursor_init(
         (*mc).mc_top = 0 as std::ffi::c_int as std::ffi::c_ushort;
         (*mc).mc_pg[0 as std::ffi::c_int as usize] = std::ptr::null_mut::<MDB_page>();
         (*mc).mc_ki[0 as std::ffi::c_int as usize] = 0 as std::ffi::c_int as indx_t;
-        (*mc).mc_flags = (*txn).mt_flags
-            & (0x20000 as std::ffi::c_int | 0x80000 as std::ffi::c_int) as std::ffi::c_uint;
+        (*mc).mc_flags = CursorFlags::from_bits(
+            (*txn).mt_flags & (CursorFlags::C_ORIG_RDONLY | CursorFlags::C_WRITEMAP).bits(),
+        )
+        .expect("Failed to create CursorFlags");
         if (*((*txn).mt_dbs).offset(dbi as isize)).md_flags as std::ffi::c_int
             & 0x4 as std::ffi::c_int
             != 0
@@ -10374,7 +10377,7 @@ pub unsafe extern "C" fn mdb_cursor_open(
                 (*mc).mc_next = *((*txn).mt_cursors).offset(dbi as isize);
                 let fresh63 = &mut (*((*txn).mt_cursors).offset(dbi as isize));
                 *fresh63 = mc;
-                (*mc).mc_flags |= 0x40 as std::ffi::c_int as std::ffi::c_uint;
+                (*mc).mc_flags.insert(CursorFlags::C_UNTRACK);
             }
         } else {
             return 12 as std::ffi::c_int;
@@ -10398,9 +10401,7 @@ pub unsafe extern "C" fn mdb_cursor_renew(
         {
             return 22 as std::ffi::c_int;
         }
-        if (*mc).mc_flags & 0x40 as std::ffi::c_int as std::ffi::c_uint != 0
-            || !((*txn).mt_cursors).is_null()
-        {
+        if (*mc).mc_flags.intersects(CursorFlags::C_UNTRACK) || !((*txn).mt_cursors).is_null() {
             return 22 as std::ffi::c_int;
         }
         if (*txn).mt_flags
@@ -10434,13 +10435,13 @@ pub unsafe extern "C" fn mdb_cursor_count(
         {
             return -(30782 as std::ffi::c_int);
         }
-        if (*mc).mc_flags & 0x1 as std::ffi::c_int as std::ffi::c_uint == 0 {
+        if !(*mc).mc_flags.intersects(CursorFlags::C_INITIALIZED) {
             return 22 as std::ffi::c_int;
         }
         if (*mc).mc_snum == 0 {
             return -(30798 as std::ffi::c_int);
         }
-        if (*mc).mc_flags & 0x2 as std::ffi::c_int as std::ffi::c_uint != 0 {
+        if (*mc).mc_flags.intersects(CursorFlags::C_EOF) {
             if (*mc).mc_ki[(*mc).mc_top as usize] as std::ffi::c_uint
                 >= ((*((*mc).mc_pg[(*mc).mc_top as usize] as *mut std::ffi::c_void
                     as *mut MDB_page2))
@@ -10456,7 +10457,7 @@ pub unsafe extern "C" fn mdb_cursor_count(
             {
                 return -(30798 as std::ffi::c_int);
             }
-            (*mc).mc_flags ^= 0x2 as std::ffi::c_int as std::ffi::c_uint;
+            (*mc).mc_flags.toggle(CursorFlags::C_EOF);
         }
         leaf = ((*mc).mc_pg[(*mc).mc_top as usize] as *mut std::ffi::c_char)
             .offset(
@@ -10477,9 +10478,7 @@ pub unsafe extern "C" fn mdb_cursor_count(
         if (*leaf).mn_flags as std::ffi::c_int & 0x4 as std::ffi::c_int != 0x4 as std::ffi::c_int {
             *countp = 1 as std::ffi::c_int as mdb_size_t;
         } else {
-            if (*(*mc).mc_xcursor).mx_cursor.mc_flags & 0x1 as std::ffi::c_int as std::ffi::c_uint
-                == 0
-            {
+            if !(*(*mc).mc_xcursor).mx_cursor.mc_flags.intersects(CursorFlags::C_INITIALIZED) {
                 return 22 as std::ffi::c_int;
             }
             *countp = (*(*mc).mc_xcursor).mx_db.md_entries;
@@ -10492,7 +10491,7 @@ pub unsafe extern "C" fn mdb_cursor_close(mut mc: *mut MDB_cursor) {
     unsafe {
         mc.is_null();
         if !mc.is_null() && ((*mc).mc_backup).is_null() {
-            if (*mc).mc_flags & 0x40 as std::ffi::c_int as std::ffi::c_uint != 0
+            if (*mc).mc_flags.intersects(CursorFlags::C_UNTRACK)
                 && !((*(*mc).mc_txn).mt_cursors).is_null()
             {
                 let mut prev: *mut *mut MDB_cursor = &mut *((*(*mc).mc_txn).mt_cursors)
@@ -10687,7 +10686,7 @@ unsafe extern "C" fn mdb_node_move(
             mc_dbflag: std::ptr::null_mut::<std::ffi::c_uchar>(),
             mc_snum: 0,
             mc_top: 0,
-            mc_flags: 0,
+            mc_flags: CursorFlags::empty(),
             mc_pg: [std::ptr::null_mut::<MDB_page>(); 32],
             mc_ki: [0; 32],
         };
@@ -10904,12 +10903,12 @@ unsafe extern "C" fn mdb_node_move(
             mpd = (*cdst).mc_pg[(*csrc).mc_top as usize];
             m2 = *((*(*csrc).mc_txn).mt_cursors).offset(dbi as isize);
             while !m2.is_null() {
-                if (*csrc).mc_flags & 0x4 as std::ffi::c_int as std::ffi::c_uint != 0 {
+                if (*csrc).mc_flags.intersects(CursorFlags::C_SUB) {
                     m3 = &mut (*(*m2).mc_xcursor).mx_cursor;
                 } else {
                     m3 = m2;
                 }
-                if !((*m3).mc_flags & 0x1 as std::ffi::c_int as std::ffi::c_uint == 0
+                if !(!(*m3).mc_flags.intersects(CursorFlags::C_INITIALIZED)
                     || ((*m3).mc_top as std::ffi::c_int) < (*csrc).mc_top as std::ffi::c_int)
                 {
                     if m3 != cdst
@@ -10946,9 +10945,10 @@ unsafe extern "C" fn mdb_node_move(
                         let mut xr_pg: *mut MDB_page = (*m3).mc_pg[(*csrc).mc_top as usize];
                         let mut xr_node: *mut MDB_node = std::ptr::null_mut::<MDB_node>();
                         if !(!(!((*m3).mc_xcursor).is_null()
-                            && (*(*m3).mc_xcursor).mx_cursor.mc_flags
-                                & 0x1 as std::ffi::c_int as std::ffi::c_uint
-                                != 0)
+                            && (*(*m3).mc_xcursor)
+                                .mx_cursor
+                                .mc_flags
+                                .intersects(CursorFlags::C_INITIALIZED))
                             || (*m3).mc_ki[(*csrc).mc_top as usize] as std::ffi::c_uint
                                 >= ((*(xr_pg as *mut std::ffi::c_void as *mut MDB_page2)).mp2_lower
                                     as std::ffi::c_uint)
@@ -10998,13 +10998,13 @@ unsafe extern "C" fn mdb_node_move(
         } else {
             m2 = *((*(*csrc).mc_txn).mt_cursors).offset(dbi as isize);
             while !m2.is_null() {
-                if (*csrc).mc_flags & 0x4 as std::ffi::c_int as std::ffi::c_uint != 0 {
+                if (*csrc).mc_flags.intersects(CursorFlags::C_SUB) {
                     m3 = &mut (*(*m2).mc_xcursor).mx_cursor;
                 } else {
                     m3 = m2;
                 }
                 if (m3 != csrc)
-                    && !((*m3).mc_flags & 0x1 as std::ffi::c_int as std::ffi::c_uint == 0
+                    && !(!(*m3).mc_flags.intersects(CursorFlags::C_INITIALIZED)
                         || ((*m3).mc_top as std::ffi::c_int) < (*csrc).mc_top as std::ffi::c_int)
                     && (*m3).mc_pg[(*csrc).mc_top as usize] == mps
                 {
@@ -11033,9 +11033,10 @@ unsafe extern "C" fn mdb_node_move(
                         let mut xr_pg_0: *mut MDB_page = (*m3).mc_pg[(*csrc).mc_top as usize];
                         let mut xr_node_0: *mut MDB_node = std::ptr::null_mut::<MDB_node>();
                         if !(!(!((*m3).mc_xcursor).is_null()
-                            && (*(*m3).mc_xcursor).mx_cursor.mc_flags
-                                & 0x1 as std::ffi::c_int as std::ffi::c_uint
-                                != 0)
+                            && (*(*m3).mc_xcursor)
+                                .mx_cursor
+                                .mc_flags
+                                .intersects(CursorFlags::C_INITIALIZED))
                             || (*m3).mc_ki[(*csrc).mc_top as usize] as std::ffi::c_uint
                                 >= ((*(xr_pg_0 as *mut std::ffi::c_void as *mut MDB_page2))
                                     .mp2_lower
@@ -11135,7 +11136,7 @@ unsafe extern "C" fn mdb_node_move(
                     mc_dbflag: std::ptr::null_mut::<std::ffi::c_uchar>(),
                     mc_snum: 0,
                     mc_top: 0,
-                    mc_flags: 0,
+                    mc_flags: CursorFlags::empty(),
                     mc_pg: [std::ptr::null_mut::<MDB_page>(); 32],
                     mc_ki: [0; 32],
                 };
@@ -11143,8 +11144,8 @@ unsafe extern "C" fn mdb_node_move(
                 let mut tp: *mut *mut MDB_cursor = &mut *((*mn.mc_txn).mt_cursors)
                     .offset(mn.mc_dbi as isize)
                     as *mut *mut MDB_cursor;
-                if mn.mc_flags & 0x4 as std::ffi::c_int as std::ffi::c_uint != 0 {
-                    dummy.mc_flags = 0x1 as std::ffi::c_int as std::ffi::c_uint;
+                if mn.mc_flags.intersects(CursorFlags::C_SUB) {
+                    dummy.mc_flags = CursorFlags::C_INITIALIZED;
                     dummy.mc_xcursor = &mut mn as *mut MDB_cursor as *mut MDB_xcursor;
                     tracked = &mut dummy;
                 } else {
@@ -11237,7 +11238,7 @@ unsafe extern "C" fn mdb_node_move(
                     mc_dbflag: std::ptr::null_mut::<std::ffi::c_uchar>(),
                     mc_snum: 0,
                     mc_top: 0,
-                    mc_flags: 0,
+                    mc_flags: CursorFlags::empty(),
                     mc_pg: [std::ptr::null_mut::<MDB_page>(); 32],
                     mc_ki: [0; 32],
                 };
@@ -11245,8 +11246,8 @@ unsafe extern "C" fn mdb_node_move(
                 let mut tp_0: *mut *mut MDB_cursor = &mut *((*mn.mc_txn).mt_cursors)
                     .offset(mn.mc_dbi as isize)
                     as *mut *mut MDB_cursor;
-                if mn.mc_flags & 0x4 as std::ffi::c_int as std::ffi::c_uint != 0 {
-                    dummy_0.mc_flags = 0x1 as std::ffi::c_int as std::ffi::c_uint;
+                if mn.mc_flags.intersects(CursorFlags::C_SUB) {
+                    dummy_0.mc_flags = CursorFlags::C_INITIALIZED;
                     dummy_0.mc_xcursor = &mut mn as *mut MDB_cursor as *mut MDB_xcursor;
                     tracked_0 = &mut dummy_0;
                 } else {
@@ -11432,7 +11433,7 @@ unsafe extern "C" fn mdb_page_merge(
                         mc_dbflag: std::ptr::null_mut::<std::ffi::c_uchar>(),
                         mc_snum: 0,
                         mc_top: 0,
-                        mc_flags: 0,
+                        mc_flags: CursorFlags::empty(),
                         mc_pg: [std::ptr::null_mut::<MDB_page>(); 32],
                         mc_ki: [0; 32],
                     };
@@ -11554,7 +11555,7 @@ unsafe extern "C" fn mdb_page_merge(
         let mut top: std::ffi::c_uint = (*csrc).mc_top as std::ffi::c_uint;
         m2 = *((*(*csrc).mc_txn).mt_cursors).offset(dbi as isize);
         while !m2.is_null() {
-            if (*csrc).mc_flags & 0x4 as std::ffi::c_int as std::ffi::c_uint != 0 {
+            if (*csrc).mc_flags.intersects(CursorFlags::C_SUB) {
                 m3 = &mut (*(*m2).mc_xcursor).mx_cursor;
             } else {
                 m3 = m2;
@@ -11597,9 +11598,10 @@ unsafe extern "C" fn mdb_page_merge(
                     let mut xr_pg: *mut MDB_page = (*m3).mc_pg[top as usize];
                     let mut xr_node: *mut MDB_node = std::ptr::null_mut::<MDB_node>();
                     if !(!(!((*m3).mc_xcursor).is_null()
-                        && (*(*m3).mc_xcursor).mx_cursor.mc_flags
-                            & 0x1 as std::ffi::c_int as std::ffi::c_uint
-                            != 0)
+                        && (*(*m3).mc_xcursor)
+                            .mx_cursor
+                            .mc_flags
+                            .intersects(CursorFlags::C_INITIALIZED))
                         || (*m3).mc_ki[top as usize] as std::ffi::c_uint
                             >= ((*(xr_pg as *mut std::ffi::c_void as *mut MDB_page2)).mp2_lower
                                 as std::ffi::c_uint)
@@ -11697,7 +11699,7 @@ unsafe extern "C" fn mdb_rebalance(mut mc: *mut MDB_cursor) -> std::ffi::c_int {
             mc_dbflag: std::ptr::null_mut::<std::ffi::c_uchar>(),
             mc_snum: 0,
             mc_top: 0,
-            mc_flags: 0,
+            mc_flags: CursorFlags::empty(),
             mc_pg: [std::ptr::null_mut::<MDB_page>(); 32],
             mc_ki: [0; 32],
         };
@@ -11771,24 +11773,24 @@ unsafe extern "C" fn mdb_rebalance(mut mc: *mut MDB_cursor) -> std::ffi::c_int {
                 }
                 (*mc).mc_snum = 0 as std::ffi::c_int as std::ffi::c_ushort;
                 (*mc).mc_top = 0 as std::ffi::c_int as std::ffi::c_ushort;
-                (*mc).mc_flags &= !(0x1 as std::ffi::c_int) as std::ffi::c_uint;
+                (*mc).mc_flags.remove(CursorFlags::C_INITIALIZED);
                 let mut m2: *mut MDB_cursor = std::ptr::null_mut::<MDB_cursor>();
                 let mut m3: *mut MDB_cursor = std::ptr::null_mut::<MDB_cursor>();
                 let mut dbi: MDB_dbi = (*mc).mc_dbi;
                 m2 = *((*(*mc).mc_txn).mt_cursors).offset(dbi as isize);
                 while !m2.is_null() {
-                    if (*mc).mc_flags & 0x4 as std::ffi::c_int as std::ffi::c_uint != 0 {
+                    if (*mc).mc_flags.intersects(CursorFlags::C_SUB) {
                         m3 = &mut (*(*m2).mc_xcursor).mx_cursor;
                     } else {
                         m3 = m2;
                     }
-                    if !((*m3).mc_flags & 0x1 as std::ffi::c_int as std::ffi::c_uint == 0
+                    if !(!(*m3).mc_flags.intersects(CursorFlags::C_INITIALIZED)
                         || ((*m3).mc_snum as std::ffi::c_int) < (*mc).mc_snum as std::ffi::c_int)
                         && (*m3).mc_pg[0 as std::ffi::c_int as usize] == mp
                     {
                         (*m3).mc_snum = 0 as std::ffi::c_int as std::ffi::c_ushort;
                         (*m3).mc_top = 0 as std::ffi::c_int as std::ffi::c_ushort;
-                        (*m3).mc_flags &= !(0x1 as std::ffi::c_int) as std::ffi::c_uint;
+                        (*m3).mc_flags.remove(CursorFlags::C_INITIALIZED);
                     }
                     m2 = (*m2).mc_next;
                 }
@@ -11902,13 +11904,13 @@ unsafe extern "C" fn mdb_rebalance(mut mc: *mut MDB_cursor) -> std::ffi::c_int {
                 let mut dbi_0: MDB_dbi = (*mc).mc_dbi;
                 m2_0 = *((*(*mc).mc_txn).mt_cursors).offset(dbi_0 as isize);
                 while !m2_0.is_null() {
-                    if (*mc).mc_flags & 0x4 as std::ffi::c_int as std::ffi::c_uint != 0 {
+                    if (*mc).mc_flags.intersects(CursorFlags::C_SUB) {
                         m3_0 = &mut (*(*m2_0).mc_xcursor).mx_cursor;
                     } else {
                         m3_0 = m2_0;
                     }
                     if (m3_0 != mc)
-                        && ((*m3_0).mc_flags & 0x1 as std::ffi::c_int as std::ffi::c_uint != 0)
+                        && ((*m3_0).mc_flags.intersects(CursorFlags::C_INITIALIZED))
                         && (*m3_0).mc_pg[0 as std::ffi::c_int as usize] == mp
                     {
                         i = 0 as std::ffi::c_int;
@@ -12140,7 +12142,7 @@ unsafe extern "C" fn mdb_rebalance(mut mc: *mut MDB_cursor) -> std::ffi::c_int {
                     mc_dbflag: std::ptr::null_mut::<std::ffi::c_uchar>(),
                     mc_snum: 0,
                     mc_top: 0,
-                    mc_flags: 0,
+                    mc_flags: CursorFlags::empty(),
                     mc_pg: [std::ptr::null_mut::<MDB_page>(); 32],
                     mc_ki: [0; 32],
                 };
@@ -12148,8 +12150,8 @@ unsafe extern "C" fn mdb_rebalance(mut mc: *mut MDB_cursor) -> std::ffi::c_int {
                 let mut tp: *mut *mut MDB_cursor = &mut *((*mn.mc_txn).mt_cursors)
                     .offset(mn.mc_dbi as isize)
                     as *mut *mut MDB_cursor;
-                if mn.mc_flags & 0x4 as std::ffi::c_int as std::ffi::c_uint != 0 {
-                    dummy.mc_flags = 0x1 as std::ffi::c_int as std::ffi::c_uint;
+                if mn.mc_flags.intersects(CursorFlags::C_SUB) {
+                    dummy.mc_flags = CursorFlags::C_INITIALIZED;
                     dummy.mc_xcursor = &mut mn as *mut MDB_cursor as *mut MDB_xcursor;
                     tracked = &mut dummy;
                 } else {
@@ -12161,7 +12163,7 @@ unsafe extern "C" fn mdb_rebalance(mut mc: *mut MDB_cursor) -> std::ffi::c_int {
                 *tp = (*tracked).mc_next;
                 mdb_cursor_copy(&mut mn, mc);
             }
-            (*mc).mc_flags &= !(0x2 as std::ffi::c_int) as std::ffi::c_uint;
+            (*mc).mc_flags.remove(CursorFlags::C_EOF);
         }
         (*mc).mc_ki[(*mc).mc_top as usize] = oldki;
         rc
@@ -12184,21 +12186,23 @@ unsafe extern "C" fn mdb_cursor_del0(mut mc: *mut MDB_cursor) -> std::ffi::c_int
         (*(*mc).mc_db).md_entries;
         m2 = *((*(*mc).mc_txn).mt_cursors).offset(dbi as isize);
         while !m2.is_null() {
-            m3 = if (*mc).mc_flags & 0x4 as std::ffi::c_int as std::ffi::c_uint != 0 {
+            m3 = if (*mc).mc_flags.intersects(CursorFlags::C_SUB) {
                 &mut (*(*m2).mc_xcursor).mx_cursor
             } else {
                 m2
             };
-            if ((*m2).mc_flags & (*m3).mc_flags & 0x1 as std::ffi::c_int as std::ffi::c_uint != 0)
+            if ((*m2).mc_flags.intersects((*m3).mc_flags & CursorFlags::C_INITIALIZED))
                 && !(m3 == mc
                     || ((*m3).mc_snum as std::ffi::c_int) < (*mc).mc_snum as std::ffi::c_int)
                 && (*m3).mc_pg[(*mc).mc_top as usize] == mp
             {
                 if (*m3).mc_ki[(*mc).mc_top as usize] as std::ffi::c_int == ki as std::ffi::c_int {
-                    (*m3).mc_flags |= 0x8 as std::ffi::c_int as std::ffi::c_uint;
+                    (*m3).mc_flags.insert(CursorFlags::C_DEL);
                     if (*(*mc).mc_db).md_flags as std::ffi::c_int & 0x4 as std::ffi::c_int != 0 {
-                        (*(*m3).mc_xcursor).mx_cursor.mc_flags &=
-                            !(0x1 as std::ffi::c_int | 0x2 as std::ffi::c_int) as std::ffi::c_uint;
+                        (*(*m3).mc_xcursor)
+                            .mx_cursor
+                            .mc_flags
+                            .remove(CursorFlags::C_INITIALIZED | CursorFlags::C_EOF);
                     }
                 } else {
                     if (*m3).mc_ki[(*mc).mc_top as usize] as std::ffi::c_int > ki as std::ffi::c_int
@@ -12210,9 +12214,10 @@ unsafe extern "C" fn mdb_cursor_del0(mut mc: *mut MDB_cursor) -> std::ffi::c_int
                     let mut xr_pg: *mut MDB_page = mp;
                     let mut xr_node: *mut MDB_node = std::ptr::null_mut::<MDB_node>();
                     if !(!(!((*m3).mc_xcursor).is_null()
-                        && (*(*m3).mc_xcursor).mx_cursor.mc_flags
-                            & 0x1 as std::ffi::c_int as std::ffi::c_uint
-                            != 0)
+                        && (*(*m3).mc_xcursor)
+                            .mx_cursor
+                            .mc_flags
+                            .intersects(CursorFlags::C_INITIALIZED))
                         || (*m3).mc_ki[(*mc).mc_top as usize] as std::ffi::c_uint
                             >= ((*(xr_pg as *mut std::ffi::c_void as *mut MDB_page2)).mp2_lower
                                 as std::ffi::c_uint)
@@ -12260,7 +12265,7 @@ unsafe extern "C" fn mdb_cursor_del0(mut mc: *mut MDB_cursor) -> std::ffi::c_int
         rc = mdb_rebalance(mc);
         if rc == 0 {
             if (*mc).mc_snum == 0 {
-                (*mc).mc_flags |= 0x2 as std::ffi::c_int as std::ffi::c_uint;
+                (*mc).mc_flags.insert(CursorFlags::C_EOF);
                 return rc;
             }
             mp = (*mc).mc_pg[(*mc).mc_top as usize];
@@ -12280,13 +12285,12 @@ unsafe extern "C" fn mdb_cursor_del0(mut mc: *mut MDB_cursor) -> std::ffi::c_int
                     current_block = 13281731871476506071;
                     break;
                 }
-                m3 = if (*mc).mc_flags & 0x4 as std::ffi::c_int as std::ffi::c_uint != 0 {
+                m3 = if (*mc).mc_flags.intersects(CursorFlags::C_SUB) {
                     &mut (*(*m2).mc_xcursor).mx_cursor
                 } else {
                     m2
                 };
-                if ((*m2).mc_flags & (*m3).mc_flags & 0x1 as std::ffi::c_int as std::ffi::c_uint
-                    != 0)
+                if ((*m2).mc_flags.intersects((*m3).mc_flags & CursorFlags::C_INITIALIZED))
                     && (((*m3).mc_snum as std::ffi::c_int) >= (*mc).mc_snum as std::ffi::c_int)
                     && (*m3).mc_pg[(*mc).mc_top as usize] == mp
                     && (*m3).mc_ki[(*mc).mc_top as usize] as std::ffi::c_int
@@ -12295,7 +12299,7 @@ unsafe extern "C" fn mdb_cursor_del0(mut mc: *mut MDB_cursor) -> std::ffi::c_int
                     if (*m3).mc_ki[(*mc).mc_top as usize] as std::ffi::c_uint >= nkeys {
                         rc = mdb_cursor_sibling(m3, 1 as std::ffi::c_int);
                         if rc == -(30798 as std::ffi::c_int) {
-                            (*m3).mc_flags |= 0x2 as std::ffi::c_int as std::ffi::c_uint;
+                            (*m3).mc_flags.insert(CursorFlags::C_EOF);
                             rc = 0 as std::ffi::c_int;
                             current_block = 2569451025026770673;
                         } else {
@@ -12312,7 +12316,7 @@ unsafe extern "C" fn mdb_cursor_del0(mut mc: *mut MDB_cursor) -> std::ffi::c_int
                         2569451025026770673 => {}
                         _ => {
                             if !((*m3).mc_xcursor).is_null()
-                                && (*m3).mc_flags & 0x2 as std::ffi::c_int as std::ffi::c_uint == 0
+                                && !(*m3).mc_flags.intersects(CursorFlags::C_EOF)
                             {
                                 let mut node: *mut MDB_node =
                                     ((*m3).mc_pg[(*m3).mc_top as usize] as *mut std::ffi::c_char)
@@ -12335,9 +12339,10 @@ unsafe extern "C" fn mdb_cursor_del0(mut mc: *mut MDB_cursor) -> std::ffi::c_int
                                         ) as *mut MDB_node;
                                 if (*node).mn_flags as std::ffi::c_int & 0x4 as std::ffi::c_int != 0
                                 {
-                                    if (*(*m3).mc_xcursor).mx_cursor.mc_flags
-                                        & 0x1 as std::ffi::c_int as std::ffi::c_uint
-                                        != 0
+                                    if (*(*m3).mc_xcursor)
+                                        .mx_cursor
+                                        .mc_flags
+                                        .intersects(CursorFlags::C_INITIALIZED)
                                     {
                                         if (*node).mn_flags as std::ffi::c_int
                                             & 0x2 as std::ffi::c_int
@@ -12364,8 +12369,7 @@ unsafe extern "C" fn mdb_cursor_del0(mut mc: *mut MDB_cursor) -> std::ffi::c_int
                                         }
                                     }
                                 }
-                                (*(*m3).mc_xcursor).mx_cursor.mc_flags |=
-                                    0x8 as std::ffi::c_int as std::ffi::c_uint;
+                                (*(*m3).mc_xcursor).mx_cursor.mc_flags.insert(CursorFlags::C_DEL);
                             }
                         }
                     }
@@ -12375,7 +12379,7 @@ unsafe extern "C" fn mdb_cursor_del0(mut mc: *mut MDB_cursor) -> std::ffi::c_int
             match current_block {
                 5357753983577566164 => {}
                 _ => {
-                    (*mc).mc_flags |= 0x8 as std::ffi::c_int as std::ffi::c_uint;
+                    (*mc).mc_flags.insert(CursorFlags::C_DEL);
                 }
             }
         }
@@ -12442,7 +12446,7 @@ unsafe extern "C" fn mdb_del0(
             mc_dbflag: std::ptr::null_mut::<std::ffi::c_uchar>(),
             mc_snum: 0,
             mc_top: 0,
-            mc_flags: 0,
+            mc_flags: CursorFlags::empty(),
             mc_pg: [std::ptr::null_mut::<MDB_page>(); 32],
             mc_ki: [0; 32],
         };
@@ -12458,7 +12462,7 @@ unsafe extern "C" fn mdb_del0(
                 mc_dbflag: std::ptr::null_mut::<std::ffi::c_uchar>(),
                 mc_snum: 0,
                 mc_top: 0,
-                mc_flags: 0,
+                mc_flags: CursorFlags::empty(),
                 mc_pg: [std::ptr::null_mut::<MDB_page>(); 32],
                 mc_ki: [0; 32],
             },
@@ -12554,7 +12558,7 @@ unsafe extern "C" fn mdb_page_split(
             mc_dbflag: std::ptr::null_mut::<std::ffi::c_uchar>(),
             mc_snum: 0,
             mc_top: 0,
-            mc_flags: 0,
+            mc_flags: CursorFlags::empty(),
             mc_pg: [std::ptr::null_mut::<MDB_page>(); 32],
             mc_ki: [0; 32],
         };
@@ -12933,7 +12937,7 @@ unsafe extern "C" fn mdb_page_split(
                             mc_dbflag: std::ptr::null_mut::<std::ffi::c_uchar>(),
                             mc_snum: 0,
                             mc_top: 0,
-                            mc_flags: 0,
+                            mc_flags: CursorFlags::empty(),
                             mc_pg: [std::ptr::null_mut::<MDB_page>(); 32],
                             mc_ki: [0; 32],
                         };
@@ -12941,8 +12945,8 @@ unsafe extern "C" fn mdb_page_split(
                         let mut tp: *mut *mut MDB_cursor = &mut *((*mn.mc_txn).mt_cursors)
                             .offset(mn.mc_dbi as isize)
                             as *mut *mut MDB_cursor;
-                        if mn.mc_flags & 0x4 as std::ffi::c_int as std::ffi::c_uint != 0 {
-                            dummy.mc_flags = 0x1 as std::ffi::c_int as std::ffi::c_uint;
+                        if mn.mc_flags.intersects(CursorFlags::C_SUB) {
+                            dummy.mc_flags = CursorFlags::C_INITIALIZED;
                             dummy.mc_xcursor = &mut mn as *mut MDB_cursor as *mut MDB_xcursor;
                             tracked = &mut dummy;
                         } else {
@@ -13408,19 +13412,15 @@ unsafe extern "C" fn mdb_page_split(
                                         let mut current_block_285: u64;
                                         m2 = *((*(*mc).mc_txn).mt_cursors).offset(dbi as isize);
                                         while !m2.is_null() {
-                                            if (*mc).mc_flags
-                                                & 0x4 as std::ffi::c_int as std::ffi::c_uint
-                                                != 0
-                                            {
+                                            if (*mc).mc_flags.intersects(CursorFlags::C_SUB) {
                                                 m3 = &mut (*(*m2).mc_xcursor).mx_cursor;
                                             } else {
                                                 m3 = m2;
                                             }
                                             if (m3 != mc)
-                                                && ((*m2).mc_flags
-                                                    & (*m3).mc_flags
-                                                    & 0x1 as std::ffi::c_int as std::ffi::c_uint
-                                                    != 0)
+                                                && ((*m2).mc_flags.intersects(
+                                                    (*m3).mc_flags & CursorFlags::C_INITIALIZED,
+                                                ))
                                             {
                                                 if new_root != 0 {
                                                     let mut k_0: std::ffi::c_int = 0;
@@ -13542,8 +13542,7 @@ unsafe extern "C" fn mdb_page_split(
                                                             let mut xr_node: *mut MDB_node =
                                                                 std::ptr::null_mut::<MDB_node>();
                                                             if !(!(!((*m3).mc_xcursor).is_null()
-                                                                && (*(*m3).mc_xcursor).mx_cursor.mc_flags
-                                                                    & 0x1 as std::ffi::c_int as std::ffi::c_uint != 0)
+                                                                && (*(*m3).mc_xcursor).mx_cursor.mc_flags.intersects(CursorFlags::C_INITIALIZED))
                                                                 || (*m3).mc_ki[(*mc).mc_top as usize] as std::ffi::c_uint
                                                                     >= ((*(xr_pg as *mut std::ffi::c_void as *mut MDB_page2))
                                                                         .mp2_lower as std::ffi::c_uint)
@@ -13629,7 +13628,7 @@ pub unsafe extern "C" fn mdb_put(
             mc_dbflag: std::ptr::null_mut::<std::ffi::c_uchar>(),
             mc_snum: 0,
             mc_top: 0,
-            mc_flags: 0,
+            mc_flags: CursorFlags::empty(),
             mc_pg: [std::ptr::null_mut::<MDB_page>(); 32],
             mc_ki: [0; 32],
         };
@@ -13645,7 +13644,7 @@ pub unsafe extern "C" fn mdb_put(
                 mc_dbflag: std::ptr::null_mut::<std::ffi::c_uchar>(),
                 mc_snum: 0,
                 mc_top: 0,
-                mc_flags: 0,
+                mc_flags: CursorFlags::empty(),
                 mc_pg: [std::ptr::null_mut::<MDB_page>(); 32],
                 mc_ki: [0; 32],
             },
@@ -13820,7 +13819,7 @@ unsafe extern "C" fn mdb_env_cwalk(
                 mc_dbflag: std::ptr::null_mut::<std::ffi::c_uchar>(),
                 mc_snum: 0,
                 mc_top: 0,
-                mc_flags: 0,
+                mc_flags: CursorFlags::empty(),
                 mc_pg: [std::ptr::null_mut::<MDB_page>(); 32],
                 mc_ki: [0; 32],
             }
@@ -13839,8 +13838,11 @@ unsafe extern "C" fn mdb_env_cwalk(
         }
         mc.mc_snum = 1 as std::ffi::c_int as std::ffi::c_ushort;
         mc.mc_txn = (*my).mc_txn;
-        mc.mc_flags = (*(*my).mc_txn).mt_flags
-            & (0x20000 as std::ffi::c_int | 0x80000 as std::ffi::c_int) as std::ffi::c_uint;
+        mc.mc_flags = CursorFlags::from_bits(
+            (*(*my).mc_txn).mt_flags
+                & (CursorFlags::C_ORIG_RDONLY | CursorFlags::C_WRITEMAP).bits(),
+        )
+        .expect("Invalid cursor flags");
         rc = mdb_page_get(
             &mut mc,
             *pg,
@@ -14305,7 +14307,7 @@ unsafe extern "C" fn mdb_env_copyfd1(
                                 mc_dbflag: std::ptr::null_mut::<std::ffi::c_uchar>(),
                                 mc_snum: 0,
                                 mc_top: 0,
-                                mc_flags: 0,
+                                mc_flags: CursorFlags::empty(),
                                 mc_pg: [std::ptr::null_mut::<MDB_page>(); 32],
                                 mc_ki: [0; 32],
                             };
@@ -14824,7 +14826,7 @@ pub unsafe extern "C" fn mdb_dbi_open(
             mc_dbflag: std::ptr::null_mut::<std::ffi::c_uchar>(),
             mc_snum: 0,
             mc_top: 0,
-            mc_flags: 0,
+            mc_flags: CursorFlags::empty(),
             mc_pg: [std::ptr::null_mut::<MDB_page>(); 32],
             mc_ki: [0; 32],
         };
@@ -14996,15 +14998,15 @@ pub unsafe extern "C" fn mdb_dbi_open(
                 mc_dbflag: std::ptr::null_mut::<std::ffi::c_uchar>(),
                 mc_snum: 0,
                 mc_top: 0,
-                mc_flags: 0,
+                mc_flags: CursorFlags::empty(),
                 mc_pg: [std::ptr::null_mut::<MDB_page>(); 32],
                 mc_ki: [0; 32],
             };
             let mut tracked: *mut MDB_cursor = std::ptr::null_mut::<MDB_cursor>();
             let mut tp: *mut *mut MDB_cursor =
                 &mut *((*mc.mc_txn).mt_cursors).offset(mc.mc_dbi as isize) as *mut *mut MDB_cursor;
-            if mc.mc_flags & 0x4 as std::ffi::c_int as std::ffi::c_uint != 0 {
-                dummy_0.mc_flags = 0x1 as std::ffi::c_int as std::ffi::c_uint;
+            if mc.mc_flags.intersects(CursorFlags::C_SUB) {
+                dummy_0.mc_flags = CursorFlags::C_INITIALIZED;
                 dummy_0.mc_xcursor = &mut mc as *mut MDB_cursor as *mut MDB_xcursor;
                 tracked = &mut dummy_0;
             } else {
@@ -15088,7 +15090,7 @@ pub unsafe extern "C" fn mdb_stat(
                 mc_dbflag: std::ptr::null_mut::<std::ffi::c_uchar>(),
                 mc_snum: 0,
                 mc_top: 0,
-                mc_flags: 0,
+                mc_flags: CursorFlags::empty(),
                 mc_pg: [std::ptr::null_mut::<MDB_page>(); 32],
                 mc_ki: [0; 32],
             };
@@ -15104,7 +15106,7 @@ pub unsafe extern "C" fn mdb_stat(
                     mc_dbflag: std::ptr::null_mut::<std::ffi::c_uchar>(),
                     mc_snum: 0,
                     mc_top: 0,
-                    mc_flags: 0,
+                    mc_flags: CursorFlags::empty(),
                     mc_pg: [std::ptr::null_mut::<MDB_page>(); 32],
                     mc_ki: [0; 32],
                 },
@@ -15198,12 +15200,12 @@ unsafe extern "C" fn mdb_drop0(
                 mc_dbflag: std::ptr::null_mut::<std::ffi::c_uchar>(),
                 mc_snum: 0,
                 mc_top: 0,
-                mc_flags: 0,
+                mc_flags: CursorFlags::empty(),
                 mc_pg: [std::ptr::null_mut::<MDB_page>(); 32],
                 mc_ki: [0; 32],
             };
             let mut i: std::ffi::c_uint = 0;
-            if (*mc).mc_flags & 0x4 as std::ffi::c_int as std::ffi::c_uint != 0
+            if (*mc).mc_flags.intersects(CursorFlags::C_SUB)
                 || subs == 0 && (*(*mc).mc_db).md_overflow_pages == 0
             {
                 mdb_cursor_pop(mc);
@@ -15397,7 +15399,7 @@ unsafe extern "C" fn mdb_drop0(
         } else if rc == -(30798 as std::ffi::c_int) {
             rc = 0 as std::ffi::c_int;
         }
-        (*mc).mc_flags &= !(0x1 as std::ffi::c_int) as std::ffi::c_uint;
+        (*mc).mc_flags.remove(CursorFlags::C_INITIALIZED);
         rc
     }
 }
@@ -15437,8 +15439,7 @@ pub unsafe extern "C" fn mdb_drop(
         rc = mdb_drop0(mc, (*(*mc).mc_db).md_flags as std::ffi::c_int & 0x4 as std::ffi::c_int);
         m2 = *((*txn).mt_cursors).offset(dbi as isize);
         while !m2.is_null() {
-            (*m2).mc_flags &=
-                !(0x1 as std::ffi::c_int | 0x2 as std::ffi::c_int) as std::ffi::c_uint;
+            (*m2).mc_flags.remove(CursorFlags::C_INITIALIZED | CursorFlags::C_EOF);
             m2 = (*m2).mc_next;
         }
         if rc == 0 {
