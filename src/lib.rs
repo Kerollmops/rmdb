@@ -54,23 +54,48 @@ pub const MDB_PREVSNAPSHOT: u32 = EnvironmentFlags::MDB_PREVSNAPSHOT.bits();
 
 bitflags! {
     /// mdb_dbi_open: Database Flags
+    #[derive(Copy, Clone, PartialEq, Eq)]
+    #[repr(C)]
     pub struct DatabaseFlags: u32 {
-        /// use reverse string keys */
+        /// use reverse string keys
         const MDB_REVERSEKEY = 0x02;
-        /// use sorted duplicates */
+        /// use sorted duplicates
         const MDB_DUPSORT = 0x04;
         /// numeric keys in native byte order, either unsigned int or #mdb_size_t.
-        // (lmdb expects 32-bit int <= size_t <= 32/64-bit mdb_size_t.)
-        /// The keys must all be of the same size. */
+        /// (lmdb expects 32-bit int <= size_t <= 32/64-bit mdb_size_t.)
+        /// The keys must all be of the same size.
         const MDB_INTEGERKEY = 0x08;
-        /// with #MDB_DUPSORT, sorted dup items have fixed size */
+        /// with #MDB_DUPSORT, sorted dup items have fixed size
         const MDB_DUPFIXED = 0x10;
-        /// with #MDB_DUPSORT, dups are #MDB_INTEGERKEY-style integers */
+        /// with #MDB_DUPSORT, dups are #MDB_INTEGERKEY-style integers
         const MDB_INTEGERDUP = 0x20;
-        /// with #MDB_DUPSORT, use reverse string dups */
+        /// with #MDB_DUPSORT, use reverse string dups
         const MDB_REVERSEDUP = 0x40;
-        /// create DB if not already existing */
+        /// create DB if not already existing
         const MDB_CREATE = 0x40000;
+
+        // Note: Can we hide them somehow when we will expose
+        //       DatabaseFlags as an actual, idiomatic Rust bitflags?
+        /// DB handle is valid, for me_dbflags
+        const MDB_VALID = 0x8000;
+        /// An internal flag to make sure we do not keep flags ouside of a given range internally.
+        /// It seems that it is only relevant to the MDB_CREATE flag.
+        const PERSISTENT_FLAGS = 0xffff & !DatabaseFlags::MDB_VALID.bits();
+    }
+}
+
+impl DatabaseFlags {
+    pub fn is_valid(&self) -> bool {
+        self.bits()
+            & !(DatabaseFlags::MDB_REVERSEKEY
+                | DatabaseFlags::MDB_DUPSORT
+                | DatabaseFlags::MDB_INTEGERKEY
+                | DatabaseFlags::MDB_DUPFIXED
+                | DatabaseFlags::MDB_INTEGERDUP
+                | DatabaseFlags::MDB_REVERSEDUP
+                | DatabaseFlags::MDB_CREATE)
+                .bits()
+            == 0
     }
 }
 
