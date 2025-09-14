@@ -132,7 +132,8 @@ use libc::{EINVAL, ENOMEM};
 use crate::MDB_cursor_op::*;
 use crate::midl::*;
 use crate::{
-    DatabaseFlags, MDB_CURRENT, MDB_NOTFOUND, MDB_RESERVE, MDB_SUCCESS, MDB_WRITEMAP, MDB_cursor_op,
+    DatabaseFlags, InternalDatabaseFlags, MDB_CURRENT, MDB_NOTFOUND, MDB_RESERVE, MDB_SUCCESS,
+    MDB_WRITEMAP, MDB_cursor_op,
 };
 
 pub type __uint16_t = std::ffi::c_ushort;
@@ -380,7 +381,7 @@ pub struct MDB_env {
     pub me_size: off_t,
     pub me_maxpg: pgno_t,
     pub me_dbxs: *mut MDB_dbx,
-    pub me_dbflags: *mut DatabaseFlags,
+    pub me_dbflags: *mut InternalDatabaseFlags,
     pub me_dbiseqs: *mut std::ffi::c_uint,
     pub me_txkey: pthread_key_t,
     pub me_pgoldest: txnid_t,
@@ -506,7 +507,7 @@ pub struct MDB_cursor {
 #[repr(C)]
 pub struct MDB_db {
     pub md_pad: uint32_t,
-    pub md_flags: DatabaseFlags,
+    pub md_flags: InternalDatabaseFlags,
     pub md_depth: uint16_t,
     pub md_branch_pages: pgno_t,
     pub md_leaf_pages: pgno_t,
@@ -2468,8 +2469,9 @@ unsafe extern "C" fn mdb_txn_renew0(mut txn: *mut MDB_txn) -> std::ffi::c_int {
         i = 2;
         while i < (*txn).mt_numdbs as isize {
             let x = *((*env).me_dbflags).offset(i);
-            (*((*txn).mt_dbs).offset(i)).md_flags = x & DatabaseFlags::PERSISTENT_FLAGS;
-            *((*txn).mt_dbflags).offset(i) = if x.intersects(DatabaseFlags::MDB_VALID) {
+            // Note: to review
+            (*((*txn).mt_dbs).offset(i)).md_flags = x;
+            *((*txn).mt_dbflags).offset(i) = if x.intersects(InternalDatabaseFlags::MDB_VALID) {
                 TransactionDbFlags::DB_VALID
                     | TransactionDbFlags::DB_USRVALID
                     | TransactionDbFlags::DB_STALE
@@ -2686,7 +2688,7 @@ unsafe extern "C" fn mdb_dbis_update(mut txn: *mut MDB_txn, mut keep: std::ffi::
             if (*tdbflags.offset(i)).intersects(TransactionDbFlags::DB_NEW) {
                 if keep != 0 {
                     *((*env).me_dbflags).offset(i) =
-                        (*((*txn).mt_dbs).offset(i)).md_flags | DatabaseFlags::MDB_VALID;
+                        (*((*txn).mt_dbs).offset(i)).md_flags | InternalDatabaseFlags::MDB_VALID;
                 } else {
                     let mut ptr: *mut std::ffi::c_char =
                         (*((*env).me_dbxs).offset(i)).md_name.mv_data as *mut std::ffi::c_char;
@@ -2694,7 +2696,7 @@ unsafe extern "C" fn mdb_dbis_update(mut txn: *mut MDB_txn, mut keep: std::ffi::
                         let fresh5 = &mut (*((*env).me_dbxs).offset(i)).md_name.mv_data;
                         *fresh5 = std::ptr::null_mut::<std::ffi::c_void>();
                         (*((*env).me_dbxs).offset(i)).md_name.mv_size = 0 as size_t;
-                        *((*env).me_dbflags).offset(i) = DatabaseFlags::empty();
+                        *((*env).me_dbflags).offset(i) = InternalDatabaseFlags::empty();
                         let fresh6 = &mut (*((*env).me_dbiseqs).offset(i));
                         *fresh6 = (*fresh6).wrapping_add(1);
                         free(ptr as *mut std::ffi::c_void);
@@ -3788,8 +3790,8 @@ unsafe extern "C" fn mdb_env_init_meta0(mut env: *mut MDB_env, mut meta: *mut MD
         (*meta).mm_dbs[0 as usize].md_pad = (*env).me_psize;
         (*meta).mm_last_pg = (2 as std::ffi::c_int - 1 as std::ffi::c_int) as pgno_t;
         (*meta).mm_dbs[0 as usize].md_flags =
-            DatabaseFlags::from_bits((*env).me_flags & 0xffff).unwrap();
-        (*meta).mm_dbs[0 as usize].md_flags.insert(DatabaseFlags::MDB_INTEGERKEY); /* this is mm_dbs[FREE_DBI].md_flags */
+            InternalDatabaseFlags::from_bits_truncate((*env).me_flags as u16);
+        (*meta).mm_dbs[0 as usize].md_flags.insert(InternalDatabaseFlags::MDB_INTEGERKEY); /* this is mm_dbs[FREE_DBI].md_flags */
         (*meta).mm_dbs[0 as usize].md_root = !(0 as pgno_t);
         (*meta).mm_dbs[1 as usize].md_root = !(0 as pgno_t);
     }
@@ -3852,7 +3854,7 @@ unsafe extern "C" fn mdb_env_write_meta(mut txn: *mut MDB_txn) -> std::ffi::c_in
             mm_mapsize: 0,
             mm_dbs: [MDB_db {
                 md_pad: 0,
-                md_flags: DatabaseFlags::empty(),
+                md_flags: InternalDatabaseFlags::empty(),
                 md_depth: 0,
                 md_branch_pages: 0,
                 md_leaf_pages: 0,
@@ -3870,7 +3872,7 @@ unsafe extern "C" fn mdb_env_write_meta(mut txn: *mut MDB_txn) -> std::ffi::c_in
             mm_mapsize: 0,
             mm_dbs: [MDB_db {
                 md_pad: 0,
-                md_flags: DatabaseFlags::empty(),
+                md_flags: InternalDatabaseFlags::empty(),
                 md_depth: 0,
                 md_branch_pages: 0,
                 md_leaf_pages: 0,
@@ -4281,7 +4283,7 @@ unsafe extern "C" fn mdb_env_open2(
             mm_mapsize: 0,
             mm_dbs: [MDB_db {
                 md_pad: 0,
-                md_flags: DatabaseFlags::empty(),
+                md_flags: InternalDatabaseFlags::empty(),
                 md_depth: 0,
                 md_branch_pages: 0,
                 md_leaf_pages: 0,
@@ -4816,8 +4818,8 @@ pub unsafe extern "C" fn mdb_env_open(
             ) as *mut MDB_dbx;
             (*env).me_dbflags = calloc(
                 (*env).me_maxdbs as std::ffi::c_ulong,
-                ::core::mem::size_of::<DatabaseFlags>() as std::ffi::c_ulong,
-            ) as *mut DatabaseFlags;
+                ::core::mem::size_of::<InternalDatabaseFlags>() as std::ffi::c_ulong,
+            ) as *mut InternalDatabaseFlags;
             (*env).me_dbiseqs = calloc(
                 (*env).me_maxdbs as std::ffi::c_ulong,
                 ::core::mem::size_of::<std::ffi::c_uint>() as std::ffi::c_ulong,
@@ -5735,7 +5737,10 @@ unsafe extern "C" fn mdb_page_search(
                 );
                 // Note: We shouldn't panic here but rather return an error
                 let flags_0 = DatabaseFlags::from_bits(flags_0.try_into().unwrap()).unwrap();
-                if (*(*mc).mc_db).md_flags & DatabaseFlags::PERSISTENT_FLAGS != flags_0 {
+                // Note: Ugly. Must be rewritten.
+                if (*(*mc).mc_db).md_flags.bits() as u32 & DatabaseFlags::PERSISTENT_FLAGS.bits()
+                    != flags_0.bits()
+                {
                     return -(30784 as std::ffi::c_int);
                 }
                 memcpy(
@@ -5992,7 +5997,7 @@ pub unsafe extern "C" fn mdb_get(
             },
             mx_db: MDB_db {
                 md_pad: 0,
-                md_flags: DatabaseFlags::empty(),
+                md_flags: InternalDatabaseFlags::empty(),
                 md_depth: 0,
                 md_branch_pages: 0,
                 md_leaf_pages: 0,
@@ -6182,7 +6187,7 @@ unsafe extern "C" fn mdb_cursor_next(
             }
             (*mc).mc_flags.toggle(CursorFlags::C_EOF);
         }
-        if (*(*mc).mc_db).md_flags.intersects(DatabaseFlags::MDB_DUPSORT) {
+        if (*(*mc).mc_db).md_flags.intersects(InternalDatabaseFlags::MDB_DUPSORT) {
             leaf = (mp as *mut std::ffi::c_char)
                 .offset(
                     *((*(mp as *mut MDB_page2)).mp2_ptrs)
@@ -6351,7 +6356,7 @@ unsafe extern "C" fn mdb_cursor_prev(
             (*mc).mc_ki[(*mc).mc_top as usize];
         }
         mp = (*mc).mc_pg[(*mc).mc_top as usize];
-        if (*(*mc).mc_db).md_flags.intersects(DatabaseFlags::MDB_DUPSORT)
+        if (*(*mc).mc_db).md_flags.intersects(InternalDatabaseFlags::MDB_DUPSORT)
             && ((*mc).mc_ki[(*mc).mc_top as usize] as std::ffi::c_uint)
                 < ((*(mp as *mut MDB_page2)).mp2_lower as std::ffi::c_uint).wrapping_sub(
                     (16 as std::ffi::c_uint).wrapping_sub(if 0 as std::ffi::c_int != 0 {
@@ -7230,7 +7235,7 @@ pub unsafe extern "C" fn mdb_cursor_get(
                 if data.is_null() || !(*mc).mc_flags.intersects(CursorFlags::C_INITIALIZED) {
                     rc = 22 as std::ffi::c_int;
                     current_block = 1765866445182206997;
-                } else if !(*(*mc).mc_db).md_flags.intersects(DatabaseFlags::MDB_DUPFIXED) {
+                } else if !(*(*mc).mc_db).md_flags.intersects(InternalDatabaseFlags::MDB_DUPFIXED) {
                     rc = -(30784 as std::ffi::c_int);
                     current_block = 1765866445182206997;
                 } else {
@@ -7251,7 +7256,7 @@ pub unsafe extern "C" fn mdb_cursor_get(
                 if data.is_null() {
                     rc = 22 as std::ffi::c_int;
                     current_block = 1765866445182206997;
-                } else if !(*(*mc).mc_db).md_flags.intersects(DatabaseFlags::MDB_DUPFIXED) {
+                } else if !(*(*mc).mc_db).md_flags.intersects(InternalDatabaseFlags::MDB_DUPFIXED) {
                     rc = -(30784 as std::ffi::c_int);
                     current_block = 1765866445182206997;
                 } else {
@@ -7277,7 +7282,7 @@ pub unsafe extern "C" fn mdb_cursor_get(
                 if data.is_null() {
                     rc = 22 as std::ffi::c_int;
                     current_block = 1765866445182206997;
-                } else if !(*(*mc).mc_db).md_flags.intersects(DatabaseFlags::MDB_DUPFIXED) {
+                } else if !(*(*mc).mc_db).md_flags.intersects(InternalDatabaseFlags::MDB_DUPFIXED) {
                     rc = -(30784 as std::ffi::c_int);
                     current_block = 1765866445182206997;
                 } else {
@@ -7518,7 +7523,7 @@ unsafe extern "C" fn mdb_cursor_touch(mut mc: *mut MDB_cursor) -> std::ffi::c_in
                 },
                 mx_db: MDB_db {
                     md_pad: 0,
-                    md_flags: DatabaseFlags::empty(),
+                    md_flags: InternalDatabaseFlags::empty(),
                     md_depth: 0,
                     md_branch_pages: 0,
                     md_leaf_pages: 0,
@@ -7598,7 +7603,7 @@ unsafe extern "C" fn _mdb_cursor_put(
             MDB_val { mv_size: 0, mv_data: std::ptr::null_mut::<std::ffi::c_void>() };
         let mut dummy: MDB_db = MDB_db {
             md_pad: 0,
-            md_flags: DatabaseFlags::empty(),
+            md_flags: InternalDatabaseFlags::empty(),
             md_depth: 0,
             md_branch_pages: 0,
             md_leaf_pages: 0,
@@ -7623,7 +7628,7 @@ unsafe extern "C" fn _mdb_cursor_put(
         if flags & 0x80000 as std::ffi::c_uint != 0 {
             dcount = (*data.offset(1)).mv_size as std::ffi::c_uint;
             (*data.offset(1)).mv_size = 0 as size_t;
-            if !((*(*mc).mc_db).md_flags).contains(DatabaseFlags::MDB_DUPFIXED) {
+            if !((*(*mc).mc_db).md_flags).contains(InternalDatabaseFlags::MDB_DUPFIXED) {
                 return -(30784 as std::ffi::c_int);
             }
         }
@@ -7649,7 +7654,7 @@ unsafe extern "C" fn _mdb_cursor_put(
             return -(30781 as std::ffi::c_int);
         }
         if (*data).mv_size
-            > (if (*(*mc).mc_db).md_flags.intersects(DatabaseFlags::MDB_DUPSORT) {
+            > (if (*(*mc).mc_db).md_flags.intersects(InternalDatabaseFlags::MDB_DUPSORT) {
                 if 0 as std::ffi::c_int != 0 { 0 } else { 511 }
             } else {
                 0xffffffff
@@ -7724,8 +7729,9 @@ unsafe extern "C" fn _mdb_cursor_put(
             (*(*mc).mc_db).md_depth = ((*(*mc).mc_db).md_depth).wrapping_add(1);
             (*(*mc).mc_db).md_depth;
             (*(*mc).mc_dbflag).insert(TransactionDbFlags::DB_DIRTY);
-            if (*(*mc).mc_db).md_flags & (DatabaseFlags::MDB_DUPSORT | DatabaseFlags::MDB_DUPFIXED)
-                == DatabaseFlags::MDB_DUPFIXED
+            if (*(*mc).mc_db).md_flags
+                & (InternalDatabaseFlags::MDB_DUPSORT | InternalDatabaseFlags::MDB_DUPFIXED)
+                == InternalDatabaseFlags::MDB_DUPFIXED
             {
                 (*(np as *mut MDB_page2)).mp2_flags.insert(PageFlags::P_LEAF2);
             }
@@ -7739,7 +7745,7 @@ unsafe extern "C" fn _mdb_cursor_put(
         insert_data = rc;
         insert_key = insert_data;
         if insert_key != 0 {
-            if (*(*mc).mc_db).md_flags.intersects(DatabaseFlags::MDB_DUPSORT)
+            if (*(*mc).mc_db).md_flags.intersects(InternalDatabaseFlags::MDB_DUPSORT)
                 && (8_u64).wrapping_add((*key).mv_size).wrapping_add((*data).mv_size)
                     > (*env).me_nodemax as std::ffi::c_ulong
             {
@@ -7783,16 +7789,17 @@ unsafe extern "C" fn _mdb_cursor_put(
                     current_block = 11041480184543863428;
                 }
                 13191470234520143498 => {
-                    if (*(*mc).mc_db).md_flags.intersects(DatabaseFlags::MDB_DUPFIXED) {
+                    if (*(*mc).mc_db).md_flags.intersects(InternalDatabaseFlags::MDB_DUPFIXED) {
                         fp_flags.insert(PageFlags::P_LEAF2);
                         dummy.md_pad = (*fp).mp_pad as uint32_t;
-                        dummy.md_flags = DatabaseFlags::MDB_DUPFIXED;
-                        if (*(*mc).mc_db).md_flags.intersects(DatabaseFlags::MDB_INTEGERDUP) {
-                            dummy.md_flags.insert(DatabaseFlags::MDB_INTEGERKEY);
+                        dummy.md_flags = InternalDatabaseFlags::MDB_DUPFIXED;
+                        if (*(*mc).mc_db).md_flags.intersects(InternalDatabaseFlags::MDB_INTEGERDUP)
+                        {
+                            dummy.md_flags.insert(InternalDatabaseFlags::MDB_INTEGERKEY);
                         }
                     } else {
                         dummy.md_pad = 0 as uint32_t;
-                        dummy.md_flags = DatabaseFlags::empty();
+                        dummy.md_flags = InternalDatabaseFlags::empty();
                     }
                     dummy.md_depth = 1 as uint16_t;
                     dummy.md_branch_pages = 0 as pgno_t;
@@ -7869,7 +7876,7 @@ unsafe extern "C" fn _mdb_cursor_put(
                     olddata.mv_data =
                         ((*leaf).mn_data).as_mut_ptr().offset((*leaf).mn_ksize as isize)
                             as *mut std::ffi::c_void;
-                    if (*(*mc).mc_db).md_flags.contains(DatabaseFlags::MDB_DUPSORT) {
+                    if (*(*mc).mc_db).md_flags.contains(InternalDatabaseFlags::MDB_DUPSORT) {
                         i = 0;
                         offset = 0 as std::ffi::c_uint;
                         xdata.mv_data = (*env).me_pbuf;
@@ -7924,7 +7931,7 @@ unsafe extern "C" fn _mdb_cursor_put(
                                         .wrapping_add((*data).mv_size);
                                     if (*(*mc).mc_db)
                                         .md_flags
-                                        .intersects(DatabaseFlags::MDB_DUPFIXED)
+                                        .intersects(InternalDatabaseFlags::MDB_DUPFIXED)
                                     {
                                         (*(fp as *mut MDB_page2))
                                             .mp2_flags
@@ -7973,7 +7980,7 @@ unsafe extern "C" fn _mdb_cursor_put(
                                 _ => {
                                     if !(*(*mc).mc_db)
                                         .md_flags
-                                        .intersects(DatabaseFlags::MDB_DUPFIXED)
+                                        .intersects(InternalDatabaseFlags::MDB_DUPFIXED)
                                     {
                                         offset = ((8 as std::ffi::c_ulong)
                                             .wrapping_add(::core::mem::size_of::<indx_t>()
@@ -9621,7 +9628,7 @@ unsafe extern "C" fn mdb_xcursor_init1(mut mc: *mut MDB_cursor, mut node: *mut M
             let mut fp: *mut MDB_page =
                 ((*node).mn_data).as_mut_ptr().offset((*node).mn_ksize as isize) as *mut MDB_page;
             (*mx).mx_db.md_pad = 0 as uint32_t;
-            (*mx).mx_db.md_flags = DatabaseFlags::empty();
+            (*mx).mx_db.md_flags = InternalDatabaseFlags::empty();
             (*mx).mx_db.md_depth = 1 as uint16_t;
             (*mx).mx_db.md_branch_pages = 0 as pgno_t;
             (*mx).mx_db.md_leaf_pages = 1 as pgno_t;
@@ -9663,11 +9670,11 @@ unsafe extern "C" fn mdb_xcursor_init1(mut mc: *mut MDB_cursor, mut node: *mut M
             (*mx).mx_cursor.mc_flags.insert(CursorFlags::C_INITIALIZED);
             (*mx).mx_cursor.mc_pg[0 as usize] = fp;
             (*mx).mx_cursor.mc_ki[0 as usize] = 0 as indx_t;
-            if (*(*mc).mc_db).md_flags.intersects(DatabaseFlags::MDB_DUPFIXED) {
-                (*mx).mx_db.md_flags = DatabaseFlags::MDB_DUPFIXED;
+            if (*(*mc).mc_db).md_flags.intersects(InternalDatabaseFlags::MDB_DUPFIXED) {
+                (*mx).mx_db.md_flags = InternalDatabaseFlags::MDB_DUPFIXED;
                 (*mx).mx_db.md_pad = (*fp).mp_pad as uint32_t;
-                if (*(*mc).mc_db).md_flags.intersects(DatabaseFlags::MDB_INTEGERDUP) {
-                    (*mx).mx_db.md_flags.insert(DatabaseFlags::MDB_INTEGERKEY);
+                if (*(*mc).mc_db).md_flags.intersects(InternalDatabaseFlags::MDB_INTEGERDUP) {
+                    (*mx).mx_db.md_flags.insert(InternalDatabaseFlags::MDB_INTEGERKEY);
                 }
             }
         }
@@ -9728,7 +9735,10 @@ unsafe extern "C" fn mdb_cursor_init(
             (*txn).mt_flags.bits() & (CursorFlags::C_ORIG_RDONLY | CursorFlags::C_WRITEMAP).bits(),
         )
         .expect("Failed to create CursorFlags");
-        if (*((*txn).mt_dbs).offset(dbi as isize)).md_flags.intersects(DatabaseFlags::MDB_DUPSORT) {
+        if (*((*txn).mt_dbs).offset(dbi as isize))
+            .md_flags
+            .intersects(InternalDatabaseFlags::MDB_DUPSORT)
+        {
             if !mx.is_null() {
             } else {
                 mdb_assert_fail(
@@ -9775,7 +9785,10 @@ pub unsafe extern "C" fn mdb_cursor_open(
         if dbi == 0 as MDB_dbi && !(*txn).mt_flags.contains(TransactionFlags::MDB_TXN_RDONLY) {
             return 22 as std::ffi::c_int;
         }
-        if (*((*txn).mt_dbs).offset(dbi as isize)).md_flags.intersects(DatabaseFlags::MDB_DUPSORT) {
+        if (*((*txn).mt_dbs).offset(dbi as isize))
+            .md_flags
+            .intersects(InternalDatabaseFlags::MDB_DUPSORT)
+        {
             size = (size as std::ffi::c_ulong)
                 .wrapping_add(::core::mem::size_of::<MDB_xcursor>() as std::ffi::c_ulong)
                 as size_t;
@@ -11446,7 +11459,7 @@ unsafe extern "C" fn mdb_cursor_del0(mut mc: *mut MDB_cursor) -> std::ffi::c_int
             {
                 if (*m3).mc_ki[(*mc).mc_top as usize] as std::ffi::c_int == ki as std::ffi::c_int {
                     (*m3).mc_flags.insert(CursorFlags::C_DEL);
-                    if (*(*mc).mc_db).md_flags.intersects(DatabaseFlags::MDB_DUPSORT) {
+                    if (*(*mc).mc_db).md_flags.intersects(InternalDatabaseFlags::MDB_DUPSORT) {
                         (*(*m3).mc_xcursor)
                             .mx_cursor
                             .mc_flags
@@ -11655,7 +11668,10 @@ pub unsafe extern "C" fn mdb_del(
                 -(30782 as std::ffi::c_int)
             };
         }
-        if !(*((*txn).mt_dbs).offset(dbi as isize)).md_flags.contains(DatabaseFlags::MDB_DUPSORT) {
+        if !(*((*txn).mt_dbs).offset(dbi as isize))
+            .md_flags
+            .contains(InternalDatabaseFlags::MDB_DUPSORT)
+        {
             data = std::ptr::null_mut::<MDB_val>();
         }
         mdb_del0(txn, dbi, key, data, 0 as std::ffi::c_uint)
@@ -11702,7 +11718,7 @@ unsafe extern "C" fn mdb_del0(
             },
             mx_db: MDB_db {
                 md_pad: 0,
-                md_flags: DatabaseFlags::empty(),
+                md_flags: InternalDatabaseFlags::empty(),
                 md_depth: 0,
                 md_branch_pages: 0,
                 md_leaf_pages: 0,
@@ -12839,7 +12855,7 @@ pub unsafe extern "C" fn mdb_put(
             },
             mx_db: MDB_db {
                 md_pad: 0,
-                md_flags: DatabaseFlags::empty(),
+                md_flags: InternalDatabaseFlags::empty(),
                 md_depth: 0,
                 md_branch_pages: 0,
                 md_leaf_pages: 0,
@@ -13168,7 +13184,7 @@ unsafe extern "C" fn mdb_env_cwalk(
                         } else if (*ni).mn_flags as std::ffi::c_int & 0x2 as std::ffi::c_int != 0 {
                             let mut db: MDB_db = MDB_db {
                                 md_pad: 0,
-                                md_flags: DatabaseFlags::empty(),
+                                md_flags: InternalDatabaseFlags::empty(),
                                 md_depth: 0,
                                 md_branch_pages: 0,
                                 md_leaf_pages: 0,
@@ -13898,23 +13914,23 @@ unsafe extern "C" fn mdb_default_cmp(mut txn: *mut MDB_txn, mut dbi: MDB_dbi) {
     unsafe {
         let mut f = (*((*txn).mt_dbs).offset(dbi as isize)).md_flags;
         let fresh75 = &mut (*((*txn).mt_dbxs).offset(dbi as isize)).md_cmp;
-        *fresh75 = if f.intersects(DatabaseFlags::MDB_REVERSEKEY) {
+        *fresh75 = if f.intersects(InternalDatabaseFlags::MDB_REVERSEKEY) {
             Some(mdb_cmp_memnr as MDB_cmp_func)
-        } else if f.intersects(DatabaseFlags::MDB_INTEGERKEY) {
+        } else if f.intersects(InternalDatabaseFlags::MDB_INTEGERKEY) {
             Some(mdb_cmp_cint as MDB_cmp_func)
         } else {
             Some(mdb_cmp_memn as MDB_cmp_func)
         };
         let fresh76 = &mut (*((*txn).mt_dbxs).offset(dbi as isize)).md_dcmp;
-        *fresh76 = if !f.intersects(DatabaseFlags::MDB_DUPSORT) {
+        *fresh76 = if !f.intersects(InternalDatabaseFlags::MDB_DUPSORT) {
             None
-        } else if f.intersects(DatabaseFlags::MDB_INTEGERDUP) {
-            if f.intersects(DatabaseFlags::MDB_DUPFIXED) {
+        } else if f.intersects(InternalDatabaseFlags::MDB_INTEGERDUP) {
+            if f.intersects(InternalDatabaseFlags::MDB_DUPFIXED) {
                 Some(mdb_cmp_int as MDB_cmp_func)
             } else {
                 Some(mdb_cmp_cint as MDB_cmp_func)
             }
-        } else if f.intersects(DatabaseFlags::MDB_REVERSEDUP) {
+        } else if f.intersects(InternalDatabaseFlags::MDB_REVERSEDUP) {
             Some(mdb_cmp_memnr as MDB_cmp_func)
         } else {
             Some(mdb_cmp_memn as MDB_cmp_func)
@@ -13951,7 +13967,7 @@ pub unsafe extern "C" fn mdb_dbi_open(
         };
         let mut dummy: MDB_db = MDB_db {
             md_pad: 0,
-            md_flags: DatabaseFlags::empty(),
+            md_flags: InternalDatabaseFlags::empty(),
             md_depth: 0,
             md_branch_pages: 0,
             md_leaf_pages: 0,
@@ -13979,7 +13995,8 @@ pub unsafe extern "C" fn mdb_dbi_open(
         if name.is_null() {
             *dbi = 1 as MDB_dbi;
             if flags.intersects(DatabaseFlags::PERSISTENT_FLAGS) {
-                let mut f2 = flags & DatabaseFlags::PERSISTENT_FLAGS;
+                // Note: review this
+                let mut f2 = InternalDatabaseFlags::from_bits_truncate(flags.bits() as u16);
                 if (*((*txn).mt_dbs).offset(1)).md_flags | f2
                     != (*((*txn).mt_dbs).offset(1)).md_flags
                 {
@@ -14018,7 +14035,7 @@ pub unsafe extern "C" fn mdb_dbi_open(
         }
         if (*((*txn).mt_dbs).offset(1))
             .md_flags
-            .intersects(DatabaseFlags::MDB_DUPSORT | DatabaseFlags::MDB_INTEGERKEY)
+            .intersects(InternalDatabaseFlags::MDB_DUPSORT | InternalDatabaseFlags::MDB_INTEGERKEY)
         {
             return if flags.intersects(DatabaseFlags::MDB_CREATE) {
                 -(30784 as std::ffi::c_int)
@@ -14075,7 +14092,8 @@ pub unsafe extern "C" fn mdb_dbi_open(
                 ::core::mem::size_of::<MDB_db>() as std::ffi::c_ulong,
             );
             dummy.md_root = !(0 as pgno_t);
-            dummy.md_flags = flags & DatabaseFlags::PERSISTENT_FLAGS;
+            // Note: to review
+            dummy.md_flags = InternalDatabaseFlags::from_bits_truncate(flags.bits() as u16);
             let mut dummy_0: MDB_cursor = MDB_cursor {
                 mc_next: std::ptr::null_mut::<MDB_cursor>(),
                 mc_backup: std::ptr::null_mut::<MDB_cursor>(),
@@ -14189,7 +14207,7 @@ pub unsafe extern "C" fn mdb_stat(
                 },
                 mx_db: MDB_db {
                     md_pad: 0,
-                    md_flags: DatabaseFlags::empty(),
+                    md_flags: InternalDatabaseFlags::empty(),
                     md_depth: 0,
                     md_branch_pages: 0,
                     md_leaf_pages: 0,
@@ -14226,7 +14244,7 @@ pub unsafe extern "C" fn mdb_dbi_close(mut env: *mut MDB_env, mut dbi: MDB_dbi) 
             let fresh81 = &mut (*((*env).me_dbxs).offset(dbi as isize)).md_name.mv_data;
             *fresh81 = std::ptr::null_mut::<std::ffi::c_void>();
             (*((*env).me_dbxs).offset(dbi as isize)).md_name.mv_size = 0 as size_t;
-            *((*env).me_dbflags).offset(dbi as isize) = DatabaseFlags::empty();
+            *((*env).me_dbflags).offset(dbi as isize) = InternalDatabaseFlags::empty();
             let fresh82 = &mut (*((*env).me_dbiseqs).offset(dbi as isize));
             *fresh82 = (*fresh82).wrapping_add(1);
             free(ptr as *mut std::ffi::c_void);
@@ -14256,9 +14274,8 @@ pub unsafe extern "C" fn mdb_dbi_flags(
             return EINVAL;
         }
 
-        *flags = ((*((*txn).mt_dbs).offset(dbi as isize)).md_flags
-            & DatabaseFlags::PERSISTENT_FLAGS)
-            .bits() as u32;
+        *flags = ((*((*txn).mt_dbs).offset(dbi as isize)).md_flags.bits() as u32)
+            & DatabaseFlags::PERSISTENT_FLAGS.bits();
 
         return MDB_SUCCESS;
     }
@@ -14503,7 +14520,10 @@ pub unsafe extern "C" fn mdb_drop(
         if rc != 0 {
             return rc;
         }
-        rc = mdb_drop0(mc, ((*(*mc).mc_db).md_flags & DatabaseFlags::MDB_DUPSORT).bits() as i32);
+        rc = mdb_drop0(
+            mc,
+            ((*(*mc).mc_db).md_flags & InternalDatabaseFlags::MDB_DUPSORT).bits() as i32,
+        );
         m2 = *((*txn).mt_cursors).offset(dbi as isize);
         while !m2.is_null() {
             (*m2).mc_flags.remove(CursorFlags::C_INITIALIZED | CursorFlags::C_EOF);

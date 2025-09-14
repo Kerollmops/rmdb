@@ -78,8 +78,9 @@ bitflags! {
         //       DatabaseFlags as an actual, idiomatic Rust bitflags?
         /// DB handle is valid, for me_dbflags
         const MDB_VALID = 0x8000;
-        /// An internal flag to make sure we do not keep flags ouside of a given range internally.
-        /// It seems that it is only relevant to the MDB_CREATE flag.
+        /// An internal flag to make sure we do not keep flags outside
+        /// of a given range internally. It seems that it is only relevant
+        /// to the MDB_CREATE flag.
         const PERSISTENT_FLAGS = 0xffff & !DatabaseFlags::MDB_VALID.bits();
     }
 }
@@ -96,6 +97,33 @@ impl DatabaseFlags {
                 | DatabaseFlags::MDB_CREATE)
                 .bits()
             == 0
+    }
+}
+
+bitflags! {
+    /// mdb_dbi_open: Database Flags
+    #[derive(Copy, Clone, PartialEq, Eq)]
+    #[repr(C)]
+    pub struct InternalDatabaseFlags: u16 {
+        /// use reverse string keys
+        const MDB_REVERSEKEY = DatabaseFlags::MDB_REVERSEKEY.bits() as u16;
+        /// use sorted duplicates
+        const MDB_DUPSORT = DatabaseFlags::MDB_DUPSORT.bits() as u16;
+        /// numeric keys in native byte order, either unsigned int or #mdb_size_t.
+        /// (lmdb expects 32-bit int <= size_t <= 32/64-bit mdb_size_t.)
+        /// The keys must all be of the same size.
+        const MDB_INTEGERKEY = DatabaseFlags::MDB_INTEGERKEY.bits() as u16;
+        /// with #MDB_DUPSORT, sorted dup items have fixed size
+        const MDB_DUPFIXED = DatabaseFlags::MDB_DUPFIXED.bits() as u16;
+        /// with #MDB_DUPSORT, dups are #MDB_INTEGERKEY-style integers
+        const MDB_INTEGERDUP = DatabaseFlags::MDB_INTEGERDUP.bits() as u16;
+        /// with #MDB_DUPSORT, use reverse string dups
+        const MDB_REVERSEDUP = DatabaseFlags::MDB_REVERSEDUP.bits() as u16;
+
+        // Note: Can we hide them somehow when we will expose
+        //       DatabaseFlags as an actual, idiomatic Rust bitflags?
+        /// DB handle is valid, for me_dbflags
+        const MDB_VALID = 0x8000;
     }
 }
 
