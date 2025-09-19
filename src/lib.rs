@@ -250,84 +250,81 @@ pub const MDB_SET_KEY: MDB_cursor_op = MDB_cursor_op::MDB_SET_KEY;
 pub const MDB_SET_RANGE: MDB_cursor_op = MDB_cursor_op::MDB_SET_RANGE;
 pub const MDB_PREV_MULTIPLE: MDB_cursor_op = MDB_cursor_op::MDB_PREV_MULTIPLE;
 
-bitflags! {
-    /// errors: Return Codes
-    ///
-    /// BerkeleyDB uses -30800 to -30999, we'll go under them
-    pub struct ReturnCodes: i32 {
-        /// Successful result.
-        const MDB_SUCCESS = 0;
-        /// key/data pair already exists.
-        const MDB_KEYEXIST = (-30799);
-        /// key/data pair not found (EOF).
-        const MDB_NOTFOUND = (-30798);
-        /// Requested page not found - this usually indicates corruption.
-        const MDB_PAGE_NOTFOUND = (-30797);
-        /// Located page was wrong type.
-        const MDB_CORRUPTED = (-30796);
-        /// Update of meta page failed or environment had fatal error.
-        const MDB_PANIC = (-30795);
-        /// Environment version mismatch.
-        const MDB_VERSION_MISMATCH = (-30794);
-        /// File is not a valid LMDB file.
-        const MDB_INVALID = (-30793);
-        /// Environment mapsize reached.
-        const MDB_MAP_FULL = (-30792);
-        /// Environment maxdbs reached.
-        const MDB_DBS_FULL = (-30791);
-        /// Environment maxreaders reached.
-        const MDB_READERS_FULL = (-30790);
-        /// Too many TLS keys in use - Windows only.
-        const MDB_TLS_FULL = (-30789);
-        /// Txn has too many dirty pages.
-        const MDB_TXN_FULL = (-30788);
-        /// Cursor stack too deep - internal error.
-        const MDB_CURSOR_FULL = (-30787);
-        /// Page has not enough space - internal error.
-        const MDB_PAGE_FULL = (-30786);
-        /// Database contents grew beyond environment mapsize.
-        const MDB_MAP_RESIZED = (-30785);
-        /// Operation and DB incompatible, or DB type changed. This can mean:
-        /// - The operation expects an #MDB_DUPSORT / #MDB_DUPFIXED database.
-        /// - Opening a named DB when the unnamed DB has #MDB_DUPSORT / #MDB_INTEGERKEY.
-        /// - Accessing a data record as a database, or vice versa.
-        /// - The database was dropped and recreated with different flags.
-        const MDB_INCOMPATIBLE = (-30784);
-        /// Invalid reuse of reader locktable slot
-        const MDB_BAD_RSLOT = (-30783);
-        /// Transaction must abort, has a child, or is invalid
-        const MDB_BAD_TXN = (-30782);
-        /// Unsupported size of key/DB name/data, or wrong DUPFIXED size
-        const MDB_BAD_VALSIZE = (-30781);
-        /// The specified DBI was changed unexpectedly
-        const MDB_BAD_DBI = (-30780);
-        /// Unexpected problem - txn should abort
-        const MDB_PROBLEM = (-30779);
-        /// The last defined error code
-        const MDB_LAST_ERRCODE = ReturnCodes::MDB_PROBLEM.bits();
-    }
+/// errors: Return Codes
+///
+/// BerkeleyDB uses -30800 to -30999, we'll go under them
+#[repr(i32)]
+pub enum ReturnCode {
+    /// Successful result.
+    MdbSuccess = 0,
+    /// key/data pair already exists.
+    MdbKeyexist = -30799,
+    /// key/data pair not found (EOF).
+    MdbNotfound = -30798,
+    /// Requested page not found - this usually indicates corruption.
+    MdbPageNotfound = -30797,
+    /// Located page was wrong type.
+    MdbCorrupted = -30796,
+    /// Update of meta page failed or environment had fatal error.
+    MdbPanic = -30795,
+    /// Environment version mismatch.
+    MdbVersionMismatch = -30794,
+    /// File is not a valid LMDB file.
+    MdbInvalid = -30793,
+    /// Environment mapsize reached.
+    MdbMapFull = -30792,
+    /// Environment maxdbs reached.
+    MdbDbsFull = -30791,
+    /// Environment maxreaders reached.
+    MdbReadersFull = -30790,
+    /// Too many TLS keys in use - Windows only.
+    MdbTlsFull = -30789,
+    /// Txn has too many dirty pages.
+    MdbTxnFull = -30788,
+    /// Cursor stack too deep - internal error.
+    MdbCursorFull = -30787,
+    /// Page has not enough space - internal error.
+    MdbPageFull = -30786,
+    /// Database contents grew beyond environment mapsize.
+    MdbMapResized = -30785,
+    /// Operation and DB incompatible, or DB type changed. This can mean:
+    /// - The operation expects an #MDB_DUPSORT / #MDB_DUPFIXED database.
+    /// - Opening a named DB when the unnamed DB has #MDB_DUPSORT / #MDB_INTEGERKEY.
+    /// - Accessing a data record as a database, or vice versa.
+    /// - The database was dropped and recreated with different flags.
+    MdbIncompatible = -30784,
+    /// Invalid reuse of reader locktable slot
+    MdbBadRslot = -30783,
+    /// Transaction must abort, has a child, or is invalid
+    MdbBadTxn = -30782,
+    /// Unsupported size of key/DB name/data, or wrong DUPFIXED size
+    MdbBadValsize = -30781,
+    /// The specified DBI was changed unexpectedly
+    MdbBadDbi = -30780,
+    /// Unexpected problem - txn should abort
+    MdbProblem = -30779,
 }
 
-pub const MDB_SUCCESS: i32 = ReturnCodes::MDB_SUCCESS.bits();
-pub const MDB_KEYEXIST: i32 = ReturnCodes::MDB_KEYEXIST.bits();
-pub const MDB_NOTFOUND: i32 = ReturnCodes::MDB_NOTFOUND.bits();
-pub const MDB_PAGE_NOTFOUND: i32 = ReturnCodes::MDB_PAGE_NOTFOUND.bits();
-pub const MDB_CORRUPTED: i32 = ReturnCodes::MDB_CORRUPTED.bits();
-pub const MDB_PANIC: i32 = ReturnCodes::MDB_PANIC.bits();
-pub const MDB_VERSION_MISMATCH: i32 = ReturnCodes::MDB_VERSION_MISMATCH.bits();
-pub const MDB_INVALID: i32 = ReturnCodes::MDB_INVALID.bits();
-pub const MDB_MAP_FULL: i32 = ReturnCodes::MDB_MAP_FULL.bits();
-pub const MDB_DBS_FULL: i32 = ReturnCodes::MDB_DBS_FULL.bits();
-pub const MDB_READERS_FULL: i32 = ReturnCodes::MDB_READERS_FULL.bits();
-pub const MDB_TLS_FULL: i32 = ReturnCodes::MDB_TLS_FULL.bits();
-pub const MDB_TXN_FULL: i32 = ReturnCodes::MDB_TXN_FULL.bits();
-pub const MDB_CURSOR_FULL: i32 = ReturnCodes::MDB_CURSOR_FULL.bits();
-pub const MDB_PAGE_FULL: i32 = ReturnCodes::MDB_PAGE_FULL.bits();
-pub const MDB_MAP_RESIZED: i32 = ReturnCodes::MDB_MAP_RESIZED.bits();
-pub const MDB_INCOMPATIBLE: i32 = ReturnCodes::MDB_INCOMPATIBLE.bits();
-pub const MDB_BAD_RSLOT: i32 = ReturnCodes::MDB_BAD_RSLOT.bits();
-pub const MDB_BAD_TXN: i32 = ReturnCodes::MDB_BAD_TXN.bits();
-pub const MDB_BAD_VALSIZE: i32 = ReturnCodes::MDB_BAD_VALSIZE.bits();
-pub const MDB_BAD_DBI: i32 = ReturnCodes::MDB_BAD_DBI.bits();
-pub const MDB_PROBLEM: i32 = ReturnCodes::MDB_PROBLEM.bits();
-pub const MDB_LAST_ERRCODE: i32 = ReturnCodes::MDB_LAST_ERRCODE.bits();
+pub const MDB_SUCCESS: i32 = ReturnCode::MdbSuccess as i32;
+pub const MDB_KEYEXIST: i32 = ReturnCode::MdbKeyexist as i32;
+pub const MDB_NOTFOUND: i32 = ReturnCode::MdbNotfound as i32;
+pub const MDB_PAGE_NOTFOUND: i32 = ReturnCode::MdbPageNotfound as i32;
+pub const MDB_CORRUPTED: i32 = ReturnCode::MdbCorrupted as i32;
+pub const MDB_PANIC: i32 = ReturnCode::MdbPanic as i32;
+pub const MDB_VERSION_MISMATCH: i32 = ReturnCode::MdbVersionMismatch as i32;
+pub const MDB_INVALID: i32 = ReturnCode::MdbInvalid as i32;
+pub const MDB_MAP_FULL: i32 = ReturnCode::MdbMapFull as i32;
+pub const MDB_DBS_FULL: i32 = ReturnCode::MdbDbsFull as i32;
+pub const MDB_READERS_FULL: i32 = ReturnCode::MdbReadersFull as i32;
+pub const MDB_TLS_FULL: i32 = ReturnCode::MdbTlsFull as i32;
+pub const MDB_TXN_FULL: i32 = ReturnCode::MdbTxnFull as i32;
+pub const MDB_CURSOR_FULL: i32 = ReturnCode::MdbCursorFull as i32;
+pub const MDB_PAGE_FULL: i32 = ReturnCode::MdbPageFull as i32;
+pub const MDB_MAP_RESIZED: i32 = ReturnCode::MdbMapResized as i32;
+pub const MDB_INCOMPATIBLE: i32 = ReturnCode::MdbIncompatible as i32;
+pub const MDB_BAD_RSLOT: i32 = ReturnCode::MdbBadRslot as i32;
+pub const MDB_BAD_TXN: i32 = ReturnCode::MdbBadTxn as i32;
+pub const MDB_BAD_VALSIZE: i32 = ReturnCode::MdbBadValsize as i32;
+pub const MDB_BAD_DBI: i32 = ReturnCode::MdbBadDbi as i32;
+pub const MDB_PROBLEM: i32 = ReturnCode::MdbProblem as i32;
+pub const MDB_LAST_ERRCODE: i32 = ReturnCode::MdbProblem as i32;

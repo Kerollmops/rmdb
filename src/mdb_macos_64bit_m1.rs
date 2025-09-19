@@ -132,8 +132,11 @@ use libc::{EINVAL, ENOMEM};
 use crate::MDB_cursor_op::*;
 use crate::midl::*;
 use crate::{
-    DatabaseFlags, InternalDatabaseFlags, MDB_CURRENT, MDB_NOTFOUND, MDB_RESERVE, MDB_SUCCESS,
-    MDB_WRITEMAP, MDB_cursor_op,
+    DatabaseFlags, InternalDatabaseFlags, MDB_BAD_DBI, MDB_BAD_RSLOT, MDB_BAD_TXN, MDB_BAD_VALSIZE,
+    MDB_CORRUPTED, MDB_CURRENT, MDB_CURSOR_FULL, MDB_DBS_FULL, MDB_INCOMPATIBLE, MDB_INVALID,
+    MDB_KEYEXIST, MDB_MAP_FULL, MDB_MAP_RESIZED, MDB_NOTFOUND, MDB_PAGE_FULL, MDB_PAGE_NOTFOUND,
+    MDB_PANIC, MDB_PROBLEM, MDB_READERS_FULL, MDB_RESERVE, MDB_SUCCESS, MDB_TXN_FULL,
+    MDB_VERSION_MISMATCH, MDB_cursor_op,
 };
 
 pub type __uint16_t = std::ffi::c_ushort;
@@ -1068,8 +1071,8 @@ pub unsafe extern "C" fn mdb_strerror(mut err: std::ffi::c_int) -> *mut std::ffi
             return b"Successful return: 0\0" as *const u8 as *const std::ffi::c_char
                 as *mut std::ffi::c_char;
         }
-        if err >= -(30799 as std::ffi::c_int) && err <= -(30779 as std::ffi::c_int) {
-            i = err - -(30799 as std::ffi::c_int);
+        if err >= MDB_KEYEXIST && err <= -(30779 as std::ffi::c_int) {
+            i = err - MDB_KEYEXIST;
             return mdb_errstr[i as usize];
         }
         if err < 0 as std::ffi::c_int {
@@ -1368,7 +1371,7 @@ unsafe extern "C" fn mdb_page_spill(
         let mut need: std::ffi::c_uint = 0;
         let mut rc: std::ffi::c_int = 0;
         if (*m0).mc_flags.intersects(CursorFlags::C_SUB) {
-            return 0 as std::ffi::c_int;
+            return MDB_SUCCESS;
         }
         i = (*(*m0).mc_db).md_depth as std::ffi::c_uint;
         if (*m0).mc_dbi >= 2 as MDB_dbi {
@@ -1386,7 +1389,7 @@ unsafe extern "C" fn mdb_page_spill(
         i = i.wrapping_add(i);
         need = i;
         if (*txn).mt_dirty_room > i {
-            return 0 as std::ffi::c_int;
+            return MDB_SUCCESS;
         }
         match (*txn).mt_spill_pgs.as_mut() {
             None => {
@@ -1595,16 +1598,17 @@ unsafe extern "C" fn mdb_page_alloc(
             mc_ki: [0; 32],
         };
         let mut found_old: std::ffi::c_int = 0 as std::ffi::c_int;
+
         if num == 1 as std::ffi::c_int && !((*txn).mt_loose_pgs).is_null() {
             np = (*txn).mt_loose_pgs;
             (*txn).mt_loose_pgs = *(np.offset(2) as *mut *mut MDB_page);
             (*txn).mt_loose_count -= 1;
             *mp = np;
-            return 0 as std::ffi::c_int;
+            return MDB_SUCCESS;
         }
         *mp = std::ptr::null_mut::<MDB_page>();
         if (*txn).mt_dirty_room == 0 as std::ffi::c_uint {
-            rc = -(30788 as std::ffi::c_int);
+            rc = MDB_TXN_FULL;
         } else {
             op = MDB_FIRST;
             's_69: loop {
@@ -1672,7 +1676,7 @@ unsafe extern "C" fn mdb_page_alloc(
                 }
                 rc = mdb_cursor_get(&mut m2, &mut key, std::ptr::null_mut::<MDB_val>(), op);
                 if rc != 0 {
-                    if rc == -(30798 as std::ffi::c_int) {
+                    if rc == MDB_NOTFOUND {
                         current_block = 6721012065216013753;
                         break;
                     } else {
@@ -1747,7 +1751,7 @@ unsafe extern "C" fn mdb_page_alloc(
                         i = 0 as std::ffi::c_uint;
                         pgno = (*txn).mt_next_pgno;
                         if pgno.wrapping_add(num as pgno_t) >= (*env).me_maxpg {
-                            rc = -(30792 as std::ffi::c_int);
+                            rc = MDB_MAP_FULL;
                             current_block = 11154531721185249356;
                         } else {
                             current_block = 11643083498027723715;
@@ -1872,7 +1876,7 @@ unsafe extern "C" fn mdb_page_unspill(
                     let mut np: *mut MDB_page = std::ptr::null_mut::<MDB_page>();
                     let mut num: std::ffi::c_int = 0;
                     if (*txn).mt_dirty_room == 0 as std::ffi::c_uint {
-                        return -(30788 as std::ffi::c_int);
+                        return MDB_TXN_FULL;
                     }
                     if (*(mp as *mut MDB_page2)).mp2_flags.contains(PageFlags::P_OVERFLOW) {
                         num = (*mp).mp_pb.pb_pages as std::ffi::c_int;
@@ -2055,9 +2059,9 @@ unsafe extern "C" fn mdb_page_touch(mut mc: *mut MDB_cursor) -> i32 {
                         if mp != (*dl.offset(x as isize)).mptr as *mut MDB_page {
                             (*mc).mc_flags &= !(CursorFlags::C_INITIALIZED | CursorFlags::C_EOF);
                             (*txn).mt_flags.insert(TransactionFlags::MDB_TXN_ERROR);
-                            return -(30779 as std::ffi::c_int);
+                            return MDB_PROBLEM;
                         }
-                        return 0 as std::ffi::c_int;
+                        return 0;
                     }
                 }
                 if (*dl.offset(0)).mid
@@ -2097,7 +2101,7 @@ unsafe extern "C" fn mdb_page_touch(mut mc: *mut MDB_cursor) -> i32 {
                     );
                 };
             } else {
-                return 0 as std::ffi::c_int;
+                return 0;
             }
             current_block = 13131896068329595644;
         }
@@ -2393,7 +2397,7 @@ unsafe extern "C" fn mdb_txn_renew0(mut txn: *mut MDB_txn) -> std::ffi::c_int {
                     if (*r).mru.mrx.mrb_pid != (*env).me_pid
                         || (*r).mru.mrx.mrb_txnid != -(1 as std::ffi::c_int) as txnid_t
                     {
-                        return -(30783 as std::ffi::c_int);
+                        return MDB_BAD_RSLOT;
                     }
                 } else {
                     let mut pid: pid_t = (*env).me_pid;
@@ -2434,7 +2438,7 @@ unsafe extern "C" fn mdb_txn_renew0(mut txn: *mut MDB_txn) -> std::ffi::c_int {
                         sb.sem_num = (*rmutex).semnum as std::ffi::c_ushort;
                         *(*rmutex).locked = 0 as std::ffi::c_int;
                         semop((*rmutex).semid, &mut sb, 1 as size_t);
-                        return -(30790 as std::ffi::c_int);
+                        return MDB_READERS_FULL;
                     }
                     r = &mut *((*ti).mti_readers).as_mut_ptr().offset(i) as *mut MDB_reader;
                     ::core::ptr::write_volatile(
@@ -2569,11 +2573,11 @@ unsafe extern "C" fn mdb_txn_renew0(mut txn: *mut MDB_txn) -> std::ffi::c_int {
             TransactionDbFlags::DB_VALID | TransactionDbFlags::DB_USRVALID;
         *((*txn).mt_dbflags).offset(0) = TransactionDbFlags::DB_VALID;
         if (*env).me_flags.intersects(InternalEnvFlags::MDB_FATAL_ERROR) {
-            rc = -(30795 as std::ffi::c_int);
+            rc = MDB_PANIC;
         } else if (*env).me_maxpg < (*txn).mt_next_pgno {
-            rc = -(30785 as std::ffi::c_int);
+            rc = MDB_MAP_RESIZED;
         } else {
-            return 0 as std::ffi::c_int;
+            return MDB_SUCCESS;
         }
         mdb_txn_end(txn, (new_notls | MDB_END_FAIL_BEGIN as std::ffi::c_int) as std::ffi::c_uint);
         rc
@@ -2620,7 +2624,7 @@ pub unsafe extern "C" fn mdb_txn_begin(
                 return if (*parent).mt_flags.intersects(TransactionFlags::MDB_TXN_RDONLY) {
                     22 as std::ffi::c_int
                 } else {
-                    -(30782 as std::ffi::c_int)
+                    MDB_BAD_TXN
                 };
             }
             size = ((*env).me_maxdbs as std::ffi::c_ulong).wrapping_mul(
@@ -3097,7 +3101,7 @@ unsafe extern "C" fn mdb_freelist_save(mut txn: *mut MDB_txn) -> std::ffi::c_int
                         std::ptr::null_mut::<MDB_val>(),
                         8 as std::ffi::c_int | 1 as std::ffi::c_int,
                     );
-                    if rc != 0 && rc != -(30798 as std::ffi::c_int) {
+                    if rc != 0 && rc != MDB_NOTFOUND {
                         return rc;
                     }
                 }
@@ -3456,7 +3460,7 @@ unsafe extern "C" fn _mdb_txn_commit(mut txn: *mut MDB_txn) -> std::ffi::c_int {
                 if !((*txn).mt_parent).is_null() {
                     (*(*txn).mt_parent).mt_flags.insert(TransactionFlags::MDB_TXN_ERROR);
                 }
-                rc = -(30782 as std::ffi::c_int);
+                rc = MDB_BAD_TXN;
                 current_block = 9928889463419475167;
             } else if !((*txn).mt_parent).is_null() {
                 let mut parent: *mut MDB_txn = (*txn).mt_parent;
@@ -3689,7 +3693,7 @@ unsafe extern "C" fn _mdb_txn_commit(mut txn: *mut MDB_txn) -> std::ffi::c_int {
                                 if *((*txn).mt_dbiseqs).offset(i_0 as isize)
                                     != *((*(*txn).mt_env).me_dbiseqs).offset(i_0 as isize)
                                 {
-                                    rc = -(30780 as std::ffi::c_int);
+                                    rc = MDB_BAD_DBI;
                                     current_block = 9928889463419475167;
                                     break;
                                 } else {
@@ -3790,7 +3794,7 @@ unsafe extern "C" fn _mdb_txn_commit(mut txn: *mut MDB_txn) -> std::ffi::c_int {
                 9928889463419475167 => {}
                 _ => {
                     mdb_txn_end(txn, end_mode);
-                    return 0 as std::ffi::c_int;
+                    return MDB_SUCCESS;
                 }
             }
         }
@@ -3836,16 +3840,16 @@ unsafe extern "C" fn mdb_env_read_header(
                 if rc == 0 && off == 0 {
                     return 2;
                 }
-                rc = if rc < 0 { *__error() } else { -(30793 as std::ffi::c_int) };
+                rc = if rc < 0 { *__error() } else { MDB_INVALID };
                 return rc;
             }
             p = &mut pbuf as *mut MDB_metabuf as *mut MDB_page;
             if !(*p).mp_flags.contains(PageFlags::P_META) {
-                return -(30793 as std::ffi::c_int);
+                return MDB_INVALID;
             }
             m = (p as *mut std::ffi::c_char).offset(16) as *mut MDB_meta;
             if (*m).mm_magic != 0xbeefc0de as std::ffi::c_uint {
-                return -(30793 as std::ffi::c_int);
+                return MDB_INVALID;
             }
             if (*m).mm_version
                 != (if 0 as std::ffi::c_int != 0 {
@@ -3854,7 +3858,7 @@ unsafe extern "C" fn mdb_env_read_header(
                     1 as std::ffi::c_int
                 }) as uint32_t
             {
-                return -(30794 as std::ffi::c_int);
+                return MDB_VERSION_MISMATCH;
             }
             if off == 0 as std::ffi::c_int
                 || (if prev {
@@ -4591,7 +4595,7 @@ unsafe extern "C" fn mdb_env_setup_locks(
             if rc == 30 as std::ffi::c_int
                 && (*env).me_flags.intersects(InternalEnvFlags::MDB_RDONLY)
             {
-                return 0 as std::ffi::c_int;
+                return MDB_SUCCESS;
             }
         } else {
             if !(*env).me_flags.intersects(InternalEnvFlags::MDB_NOTLS) {
@@ -4754,7 +4758,7 @@ unsafe extern "C" fn mdb_env_setup_locks(
                                             if (*(*env).me_txns).mt1.mtb.mtb_magic
                                                 != 0xbeefc0de as std::ffi::c_uint
                                             {
-                                                rc = -(30793 as std::ffi::c_int);
+                                                rc = MDB_INVALID;
                                                 current_block = 18368835354285971245;
                                             } else if (*(*env).me_txns).mt1.mtb.mtb_format
                                                 != ((if 0 as std::ffi::c_int != 0 {
@@ -4776,7 +4780,7 @@ unsafe extern "C" fn mdb_env_setup_locks(
                                                             ),
                                                     )
                                             {
-                                                rc = -(30794 as std::ffi::c_int);
+                                                rc = MDB_VERSION_MISMATCH;
                                                 current_block = 18368835354285971245;
                                             } else {
                                                 rc = *__error();
@@ -4827,7 +4831,7 @@ unsafe extern "C" fn mdb_env_setup_locks(
                                                 let fresh18 =
                                                     &mut (*((*env).me_wmutex).as_mut_ptr()).locked;
                                                 *fresh18 = &mut (*(*env).me_txns).mt2.mt2_wlocked;
-                                                return 0 as std::ffi::c_int;
+                                                return MDB_SUCCESS;
                                             }
                                         }
                                     }
@@ -5441,7 +5445,7 @@ unsafe extern "C" fn mdb_cursor_push(
     unsafe {
         if (*mc).mc_snum as std::ffi::c_int >= 32 as std::ffi::c_int {
             (*(*mc).mc_txn).mt_flags.insert(TransactionFlags::MDB_TXN_ERROR);
-            return -(30787 as std::ffi::c_int);
+            return MDB_CURSOR_FULL;
         }
         let fresh20 = (*mc).mc_snum;
         (*mc).mc_snum = ((*mc).mc_snum).wrapping_add(1);
@@ -5499,7 +5503,7 @@ unsafe extern "C" fn mdb_page_get(
         if current_block == 3512920355445576850 {
             if pgno >= (*txn).mt_next_pgno {
                 (*txn).mt_flags.insert(TransactionFlags::MDB_TXN_ERROR);
-                return -(30797 as std::ffi::c_int);
+                return MDB_PAGE_NOTFOUND;
             }
             level = 0 as std::ffi::c_int;
             current_block = 18052530224793637264;
@@ -5685,7 +5689,7 @@ unsafe extern "C" fn mdb_page_search_root(
         }
         if !(*(mp as *mut MDB_page2)).mp2_flags.contains(PageFlags::P_LEAF) {
             (*(*mc).mc_txn).mt_flags.insert(TransactionFlags::MDB_TXN_ERROR);
-            return -(30796 as std::ffi::c_int);
+            return MDB_CORRUPTED;
         }
         (*mc).mc_flags |= CursorFlags::C_INITIALIZED;
         (*mc).mc_flags &= !CursorFlags::C_EOF;
@@ -5748,7 +5752,7 @@ unsafe extern "C" fn mdb_page_search(
         let mut rc: std::ffi::c_int = 0;
         let mut root: pgno_t = 0;
         if (*(*mc).mc_txn).mt_flags.intersects(TransactionFlags::MDB_TXN_BLOCKED) {
-            return -(30782 as std::ffi::c_int);
+            return MDB_BAD_TXN;
         } else {
             if (*(*mc).mc_dbflag).intersects(TransactionDbFlags::DB_STALE) {
                 let mut mc2: MDB_cursor = MDB_cursor {
@@ -5769,7 +5773,7 @@ unsafe extern "C" fn mdb_page_search(
                 if *((*(*mc).mc_txn).mt_dbiseqs).offset((*mc).mc_dbi as isize)
                     != *((*(*(*mc).mc_txn).mt_env).me_dbiseqs).offset((*mc).mc_dbi as isize)
                 {
-                    return -(30780 as std::ffi::c_int);
+                    return MDB_BAD_DBI;
                 }
                 mdb_cursor_init(
                     &mut mc2,
@@ -5788,13 +5792,13 @@ unsafe extern "C" fn mdb_page_search(
                 let mut leaf: *mut MDB_node =
                     mdb_node_search(&mut mc2, &mut (*(*mc).mc_dbx).md_name, &mut exact);
                 if exact == 0 {
-                    return -(30780 as std::ffi::c_int);
+                    return MDB_BAD_DBI;
                 }
                 if (*leaf).mn_flags as std::ffi::c_int
                     & (0x4 as std::ffi::c_int | 0x2 as std::ffi::c_int)
                     != 0x2 as std::ffi::c_int
                 {
-                    return -(30784 as std::ffi::c_int);
+                    return MDB_INCOMPATIBLE;
                 }
                 rc = mdb_node_read(&mut mc2, leaf, &mut data);
                 if rc != 0 {
@@ -5811,7 +5815,7 @@ unsafe extern "C" fn mdb_page_search(
                 if (*(*mc).mc_db).md_flags.bits() as u32 & DatabaseFlags::PERSISTENT_FLAGS.bits()
                     != flags_0.bits()
                 {
-                    return -(30784 as std::ffi::c_int);
+                    return MDB_INCOMPATIBLE;
                 }
                 memcpy(
                     (*mc).mc_db as *mut std::ffi::c_void,
@@ -5822,7 +5826,7 @@ unsafe extern "C" fn mdb_page_search(
             }
             root = (*(*mc).mc_db).md_root;
             if root == !(0 as pgno_t) {
-                return -(30798 as std::ffi::c_int);
+                return MDB_NOTFOUND;
             }
         }
         if root > 1 as pgno_t {
@@ -5858,11 +5862,12 @@ unsafe extern "C" fn mdb_page_search(
             }
         }
         if flags & 2 as std::ffi::c_int != 0 {
-            return 0 as std::ffi::c_int;
+            return MDB_SUCCESS;
         }
         mdb_page_search_root(mc, key, flags)
     }
 }
+
 unsafe extern "C" fn mdb_ovpage_free(
     mut mc: *mut MDB_cursor,
     mut mp: *mut MDB_page,
@@ -5991,6 +5996,7 @@ unsafe extern "C" fn mdb_ovpage_free(
         0 as std::ffi::c_int
     }
 }
+
 unsafe extern "C" fn mdb_node_read(
     mut mc: *mut MDB_cursor,
     mut leaf: *mut MDB_node,
@@ -6007,7 +6013,7 @@ unsafe extern "C" fn mdb_node_read(
                 as size_t;
             (*data).mv_data = ((*leaf).mn_data).as_mut_ptr().offset((*leaf).mn_ksize as isize)
                 as *mut std::ffi::c_void;
-            return 0 as std::ffi::c_int;
+            return MDB_SUCCESS;
         }
         (*data).mv_size = ((*leaf).mn_lo as std::ffi::c_uint
             | ((*leaf).mn_hi as std::ffi::c_uint) << 16 as std::ffi::c_int)
@@ -6096,7 +6102,7 @@ pub unsafe extern "C" fn mdb_get(
             return 22 as std::ffi::c_int;
         }
         if (*txn).mt_flags.intersects(TransactionFlags::MDB_TXN_BLOCKED) {
-            return -(30782 as std::ffi::c_int);
+            return MDB_BAD_TXN;
         }
         mdb_cursor_init(&mut mc, txn, dbi, &mut mx);
         rc = mdb_cursor_set(&mut mc, key, data, MDB_SET, &mut exact);
@@ -6112,7 +6118,7 @@ unsafe extern "C" fn mdb_cursor_sibling(
         let mut indx: *mut MDB_node = std::ptr::null_mut::<MDB_node>();
         let mut mp: *mut MDB_page = std::ptr::null_mut::<MDB_page>();
         if ((*mc).mc_snum as std::ffi::c_int) < 2 as std::ffi::c_int {
-            return -(30798 as std::ffi::c_int);
+            return MDB_NOTFOUND;
         }
         mdb_cursor_pop(mc);
         if if move_right != 0 {
@@ -6236,7 +6242,7 @@ unsafe extern "C" fn mdb_cursor_next(
         if (*mc).mc_flags.intersects(CursorFlags::C_DEL)
             && op as std::ffi::c_uint == MDB_NEXT_DUP as std::ffi::c_uint
         {
-            return -(30798 as std::ffi::c_int);
+            return MDB_NOTFOUND;
         }
         if !(*mc).mc_flags.intersects(CursorFlags::C_INITIALIZED) {
             return mdb_cursor_first(mc, key, data);
@@ -6253,7 +6259,7 @@ unsafe extern "C" fn mdb_cursor_next(
                 ) >> 1 as std::ffi::c_int)
                     .wrapping_sub(1 as std::ffi::c_uint)
             {
-                return -(30798 as std::ffi::c_int);
+                return MDB_NOTFOUND;
             }
             (*mc).mc_flags.toggle(CursorFlags::C_EOF);
         }
@@ -6284,8 +6290,7 @@ unsafe extern "C" fn mdb_cursor_next(
                         std::ptr::null_mut::<MDB_val>(),
                         MDB_NEXT,
                     );
-                    if op as std::ffi::c_uint != MDB_NEXT as std::ffi::c_uint
-                        || rc != -(30798 as std::ffi::c_int)
+                    if op as std::ffi::c_uint != MDB_NEXT as std::ffi::c_uint || rc != MDB_NOTFOUND
                     {
                         if rc == 0 as std::ffi::c_int && !key.is_null() {
                             (*key).mv_size = std::ptr::read_unaligned(
@@ -6304,7 +6309,7 @@ unsafe extern "C" fn mdb_cursor_next(
                     .mc_flags
                     .remove(CursorFlags::C_INITIALIZED | CursorFlags::C_EOF);
                 if op as std::ffi::c_uint == MDB_NEXT_DUP as std::ffi::c_uint {
-                    return -(30798 as std::ffi::c_int);
+                    return MDB_NOTFOUND;
                 }
             }
         }
@@ -6344,7 +6349,7 @@ unsafe extern "C" fn mdb_cursor_next(
                 .offset(16)
                 .offset(((*mc).mc_ki[(*mc).mc_top as usize] as size_t * (*key).mv_size) as isize)
                 as *mut std::ffi::c_void;
-            return 0 as std::ffi::c_int;
+            return MDB_SUCCESS;
         }
         if std::ptr::read_unaligned(
             (mp as *mut u8).offset(offset_of!(MDB_page2, mp2_flags) as isize) as *mut u16,
@@ -6462,8 +6467,7 @@ unsafe extern "C" fn mdb_cursor_prev(
                         std::ptr::null_mut::<MDB_val>(),
                         MDB_PREV,
                     );
-                    if op as std::ffi::c_uint != MDB_PREV as std::ffi::c_uint
-                        || rc != -(30798 as std::ffi::c_int)
+                    if op as std::ffi::c_uint != MDB_PREV as std::ffi::c_uint || rc != MDB_NOTFOUND
                     {
                         if rc == 0 as std::ffi::c_int {
                             if !key.is_null() {
@@ -6486,7 +6490,7 @@ unsafe extern "C" fn mdb_cursor_prev(
                     .mc_flags
                     .remove(CursorFlags::C_INITIALIZED | CursorFlags::C_EOF);
                 if op as std::ffi::c_uint == MDB_PREV_DUP as std::ffi::c_uint {
-                    return -(30798 as std::ffi::c_int);
+                    return MDB_NOTFOUND;
                 }
             }
         }
@@ -6512,7 +6516,7 @@ unsafe extern "C" fn mdb_cursor_prev(
             (*mc).mc_ki[(*mc).mc_top as usize];
         }
         if !(*(mp as *mut MDB_page2)).mp2_flags.contains(PageFlags::P_LEAF) {
-            return -(30796 as std::ffi::c_int);
+            return MDB_CORRUPTED;
         }
         if (*(mp as *mut MDB_page2)).mp2_flags.contains(PageFlags::P_LEAF2) {
             (*key).mv_size = (*(*mc).mc_db).md_pad as size_t;
@@ -6520,7 +6524,7 @@ unsafe extern "C" fn mdb_cursor_prev(
                 .offset(16)
                 .offset(((*mc).mc_ki[(*mc).mc_top as usize] as size_t * (*key).mv_size) as isize)
                 as *mut std::ffi::c_void;
-            return 0 as std::ffi::c_int;
+            return MDB_SUCCESS;
         }
         leaf = (mp as *mut std::ffi::c_char)
             .offset(
@@ -6574,7 +6578,7 @@ unsafe extern "C" fn mdb_cursor_set(
         let mut mp: *mut MDB_page = std::ptr::null_mut::<MDB_page>();
         let mut leaf: *mut MDB_node = std::ptr::null_mut::<MDB_node>();
         if (*key).mv_size == 0 as size_t {
-            return -(30781 as std::ffi::c_int);
+            return MDB_BAD_VALSIZE;
         }
         if !((*mc).mc_xcursor).is_null() {
             (*(*mc).mc_xcursor)
@@ -6596,7 +6600,7 @@ unsafe extern "C" fn mdb_cursor_set(
                 == 0
             {
                 (*mc).mc_ki[(*mc).mc_top as usize] = 0 as indx_t;
-                return -(30798 as std::ffi::c_int);
+                return MDB_NOTFOUND;
             }
             if std::ptr::read_unaligned(
                 (mp as *mut u8).offset(offset_of!(MDB_page2, mp2_flags) as isize) as *mut u16,
@@ -6795,7 +6799,7 @@ unsafe extern "C" fn mdb_cursor_set(
                             }
                             if i == (*mc).mc_top as std::ffi::c_uint {
                                 (*mc).mc_ki[(*mc).mc_top as usize] = nkeys as indx_t;
-                                return -(30798 as std::ffi::c_int);
+                                return MDB_NOTFOUND;
                             }
                             current_block = 8347882395825654554;
                         }
@@ -6814,7 +6818,7 @@ unsafe extern "C" fn mdb_cursor_set(
                             {
                                 rc = 0 as std::ffi::c_int;
                             } else {
-                                return -(30798 as std::ffi::c_int);
+                                return MDB_NOTFOUND;
                             }
                             current_block = 6408777650154919156;
                         } else {
@@ -6851,7 +6855,7 @@ unsafe extern "C" fn mdb_cursor_set(
         if current_block == 4280090506452962206 {
             leaf = mdb_node_search(mc, key, exactp);
             if !exactp.is_null() && *exactp == 0 {
-                return -(30798 as std::ffi::c_int);
+                return MDB_NOTFOUND;
             }
             if leaf.is_null() {
                 rc = mdb_cursor_sibling(mc, 1 as std::ffi::c_int);
@@ -6899,7 +6903,7 @@ unsafe extern "C" fn mdb_cursor_set(
                     ((*mc).mc_ki[(*mc).mc_top as usize] as size_t * (*key).mv_size) as isize,
                 ) as *mut std::ffi::c_void;
             }
-            return 0 as std::ffi::c_int;
+            return MDB_SUCCESS;
         }
         if (*leaf).mn_flags as std::ffi::c_int & 0x4 as std::ffi::c_int == 0x4 as std::ffi::c_int {
             mdb_xcursor_init1(mc, leaf);
@@ -6955,7 +6959,7 @@ unsafe extern "C" fn mdb_cursor_set(
                     if op as std::ffi::c_uint == MDB_GET_BOTH as std::ffi::c_uint
                         || rc > 0 as std::ffi::c_int
                     {
-                        return -(30798 as std::ffi::c_int);
+                        return MDB_NOTFOUND;
                     }
                     rc = 0 as std::ffi::c_int;
                 }
@@ -7056,7 +7060,7 @@ unsafe extern "C" fn mdb_cursor_first(
                     .offset((0 as size_t * (*key).mv_size) as isize)
                     as *mut std::ffi::c_void;
             }
-            return 0 as std::ffi::c_int;
+            return MDB_SUCCESS;
         }
         if std::ptr::read_unaligned(
             (leaf as *mut u8).offset(offset_of!(MDB_node, mn_flags) as isize) as *mut u8,
@@ -7085,7 +7089,7 @@ unsafe extern "C" fn mdb_cursor_first(
             ) as size_t;
             (*key).mv_data = ((*leaf).mn_data).as_mut_ptr() as *mut std::ffi::c_void;
         }
-        0 as std::ffi::c_int
+        return MDB_SUCCESS;
     }
 }
 unsafe extern "C" fn mdb_cursor_last(
@@ -7165,7 +7169,7 @@ unsafe extern "C" fn mdb_cursor_last(
                         ((*mc).mc_ki[(*mc).mc_top as usize] as size_t * (*key).mv_size) as isize,
                     ) as *mut std::ffi::c_void;
             }
-            return 0 as std::ffi::c_int;
+            return MDB_SUCCESS;
         }
         if (*leaf).mn_flags as std::ffi::c_int & 0x4 as std::ffi::c_int == 0x4 as std::ffi::c_int {
             mdb_xcursor_init1(mc, leaf);
@@ -7189,7 +7193,7 @@ unsafe extern "C" fn mdb_cursor_last(
             ) as size_t;
             (*key).mv_data = ((*leaf).mn_data).as_mut_ptr() as *mut std::ffi::c_void;
         }
-        0 as std::ffi::c_int
+        return MDB_SUCCESS;
     }
 }
 #[unsafe(no_mangle)]
@@ -7211,7 +7215,7 @@ pub unsafe extern "C" fn mdb_cursor_get(
             return 22 as std::ffi::c_int;
         }
         if (*(*mc).mc_txn).mt_flags.intersects(TransactionFlags::MDB_TXN_BLOCKED) {
-            return -(30782 as std::ffi::c_int);
+            return MDB_BAD_TXN;
         }
         match op as std::ffi::c_uint {
             4 => {
@@ -7233,7 +7237,7 @@ pub unsafe extern "C" fn mdb_cursor_get(
                     if nkeys == 0 || (*mc).mc_ki[(*mc).mc_top as usize] as std::ffi::c_int >= nkeys
                     {
                         (*mc).mc_ki[(*mc).mc_top as usize] = nkeys as indx_t;
-                        rc = -(30798 as std::ffi::c_int);
+                        rc = MDB_NOTFOUND;
                     } else {
                         rc = 0 as std::ffi::c_int;
                         if (*(mp as *mut MDB_page2)).mp2_flags.contains(PageFlags::P_LEAF2) {
@@ -7292,7 +7296,7 @@ pub unsafe extern "C" fn mdb_cursor_get(
                     rc = 22 as std::ffi::c_int;
                     current_block = 1765866445182206997;
                 } else if ((*mc).mc_xcursor).is_null() {
-                    rc = -(30784 as std::ffi::c_int);
+                    rc = MDB_INCOMPATIBLE;
                     current_block = 1765866445182206997;
                 } else {
                     current_block = 15086062982616303049;
@@ -7306,7 +7310,7 @@ pub unsafe extern "C" fn mdb_cursor_get(
                     rc = 22 as std::ffi::c_int;
                     current_block = 1765866445182206997;
                 } else if !(*(*mc).mc_db).md_flags.intersects(InternalDatabaseFlags::MDB_DUPFIXED) {
-                    rc = -(30784 as std::ffi::c_int);
+                    rc = MDB_INCOMPATIBLE;
                     current_block = 1765866445182206997;
                 } else {
                     rc = 0 as std::ffi::c_int;
@@ -7327,7 +7331,7 @@ pub unsafe extern "C" fn mdb_cursor_get(
                     rc = 22 as std::ffi::c_int;
                     current_block = 1765866445182206997;
                 } else if !(*(*mc).mc_db).md_flags.intersects(InternalDatabaseFlags::MDB_DUPFIXED) {
-                    rc = -(30784 as std::ffi::c_int);
+                    rc = MDB_INCOMPATIBLE;
                     current_block = 1765866445182206997;
                 } else {
                     rc = mdb_cursor_next(mc, key, data, MDB_NEXT_DUP);
@@ -7340,7 +7344,7 @@ pub unsafe extern "C" fn mdb_cursor_get(
                             mx = std::ptr::null_mut::<MDB_cursor>();
                             current_block = 6189203605807418917;
                         } else {
-                            rc = -(30798 as std::ffi::c_int);
+                            rc = MDB_NOTFOUND;
                             current_block = 1765866445182206997;
                         }
                     } else {
@@ -7353,7 +7357,7 @@ pub unsafe extern "C" fn mdb_cursor_get(
                     rc = 22 as std::ffi::c_int;
                     current_block = 1765866445182206997;
                 } else if !(*(*mc).mc_db).md_flags.intersects(InternalDatabaseFlags::MDB_DUPFIXED) {
-                    rc = -(30784 as std::ffi::c_int);
+                    rc = MDB_INCOMPATIBLE;
                     current_block = 1765866445182206997;
                 } else {
                     if !(*mc).mc_flags.intersects(CursorFlags::C_INITIALIZED) {
@@ -7371,7 +7375,7 @@ pub unsafe extern "C" fn mdb_cursor_get(
                                 current_block = 1765866445182206997;
                             }
                         } else {
-                            rc = -(30798 as std::ffi::c_int);
+                            rc = MDB_NOTFOUND;
                             current_block = 1765866445182206997;
                         }
                     } else {
@@ -7427,7 +7431,7 @@ pub unsafe extern "C" fn mdb_cursor_get(
                 if data.is_null() || !(*mc).mc_flags.intersects(CursorFlags::C_INITIALIZED) {
                     rc = 22 as std::ffi::c_int;
                 } else if ((*mc).mc_xcursor).is_null() {
-                    rc = -(30784 as std::ffi::c_int);
+                    rc = MDB_INCOMPATIBLE;
                 } else if (*mc).mc_ki[(*mc).mc_top as usize] as std::ffi::c_uint
                     >= ((*((*mc).mc_pg[(*mc).mc_top as usize] as *mut std::ffi::c_void
                         as *mut MDB_page2))
@@ -7453,7 +7457,7 @@ pub unsafe extern "C" fn mdb_cursor_get(
                                 },
                             ))
                             >> 1 as std::ffi::c_int) as indx_t;
-                    rc = -(30798 as std::ffi::c_int);
+                    rc = MDB_NOTFOUND;
                 } else {
                     (*mc).mc_flags.remove(CursorFlags::C_EOF);
                     let mut leaf_0: *mut MDB_node = ((*mc).mc_pg[(*mc).mc_top as usize]
@@ -7616,7 +7620,7 @@ unsafe extern "C" fn mdb_cursor_touch(mut mc: *mut MDB_cursor) -> std::ffi::c_in
             if *((*(*mc).mc_txn).mt_dbiseqs).offset((*mc).mc_dbi as isize)
                 != *((*(*(*mc).mc_txn).mt_env).me_dbiseqs).offset((*mc).mc_dbi as isize)
             {
-                return -(30780 as std::ffi::c_int);
+                return MDB_BAD_DBI;
             }
             mdb_cursor_init(&mut mc2, (*mc).mc_txn, 1 as MDB_dbi, &mut mcx);
             rc = mdb_page_search(&mut mc2, &mut (*(*mc).mc_dbx).md_name, 1 as std::ffi::c_int);
@@ -7699,7 +7703,7 @@ unsafe extern "C" fn _mdb_cursor_put(
             dcount = (*data.offset(1)).mv_size as std::ffi::c_uint;
             (*data.offset(1)).mv_size = 0 as size_t;
             if !((*(*mc).mc_db).md_flags).contains(InternalDatabaseFlags::MDB_DUPFIXED) {
-                return -(30784 as std::ffi::c_int);
+                return MDB_INCOMPATIBLE;
             }
         }
         nospill = flags & 0x8000 as std::ffi::c_uint;
@@ -7711,7 +7715,7 @@ unsafe extern "C" fn _mdb_cursor_put(
             return if (*(*mc).mc_txn).mt_flags.intersects(TransactionFlags::MDB_TXN_RDONLY) {
                 13 as std::ffi::c_int
             } else {
-                -(30782 as std::ffi::c_int)
+                MDB_BAD_TXN
             };
         }
         if ((*key).mv_size).wrapping_sub(1 as size_t)
@@ -7721,7 +7725,7 @@ unsafe extern "C" fn _mdb_cursor_put(
                 511 as std::ffi::c_int
             }) as size_t
         {
-            return -(30781 as std::ffi::c_int);
+            return MDB_BAD_VALSIZE;
         }
         if (*data).mv_size
             > (if (*(*mc).mc_db).md_flags.intersects(InternalDatabaseFlags::MDB_DUPSORT) {
@@ -7730,7 +7734,7 @@ unsafe extern "C" fn _mdb_cursor_put(
                 0xffffffff
             })
         {
-            return -(30781 as std::ffi::c_int);
+            return MDB_BAD_VALSIZE;
         }
         dkey.mv_size = 0 as size_t;
         if flags & 0x40 as std::ffi::c_uint != 0 {
@@ -7754,12 +7758,12 @@ unsafe extern "C" fn _mdb_cursor_put(
                 if rc == 0 as std::ffi::c_int {
                     rc = ((*(*mc).mc_dbx).md_cmp).expect("non-null function pointer")(key, &mut k2);
                     if rc > 0 as std::ffi::c_int {
-                        rc = -(30798 as std::ffi::c_int);
+                        rc = MDB_NOTFOUND;
                         (*mc).mc_ki[(*mc).mc_top as usize] =
                             ((*mc).mc_ki[(*mc).mc_top as usize]).wrapping_add(1);
                         (*mc).mc_ki[(*mc).mc_top as usize];
                     } else {
-                        rc = -(30799 as std::ffi::c_int);
+                        rc = MDB_KEYEXIST;
                     }
                 }
             } else {
@@ -7767,9 +7771,9 @@ unsafe extern "C" fn _mdb_cursor_put(
             }
             if flags & 0x10 as std::ffi::c_uint != 0 && rc == 0 as std::ffi::c_int {
                 *data = d2;
-                return -(30799 as std::ffi::c_int);
+                return MDB_KEYEXIST;
             }
-            if rc != 0 && rc != -(30798 as std::ffi::c_int) {
+            if rc != 0 && rc != MDB_NOTFOUND {
                 return rc;
             }
         }
@@ -7841,7 +7845,7 @@ unsafe extern "C" fn _mdb_cursor_put(
             ptr = std::ptr::null_mut::<std::ffi::c_char>();
             ksize = (*(*mc).mc_db).md_pad;
             if (*key).mv_size != ksize as size_t {
-                return -(30781 as std::ffi::c_int);
+                return MDB_BAD_VALSIZE;
             }
             ptr = ((*mc).mc_pg[(*mc).mc_top as usize] as *mut std::ffi::c_char).offset(16).offset(
                 ((*mc).mc_ki[(*mc).mc_top as usize] as std::ffi::c_uint).wrapping_mul(ksize)
@@ -7921,7 +7925,7 @@ unsafe extern "C" fn _mdb_cursor_put(
                             return rc2;
                         }
                     }
-                    return 0 as std::ffi::c_int;
+                    return MDB_SUCCESS;
                 }
                 _ => {
                     leaf = ((*mc).mc_pg[(*mc).mc_top as usize] as *mut std::ffi::c_char)
@@ -7976,7 +7980,7 @@ unsafe extern "C" fn _mdb_cursor_put(
                                             as std::ffi::c_uint
                                         != 0
                                     {
-                                        return -(30799 as std::ffi::c_int);
+                                        return MDB_KEYEXIST;
                                     }
                                     current_block = 1849955825383499200;
                                 } else {
@@ -8150,7 +8154,7 @@ unsafe extern "C" fn _mdb_cursor_put(
                                 & 0x2 as std::ffi::c_uint
                                 != 0
                             {
-                                return -(30784 as std::ffi::c_int);
+                                return MDB_INCOMPATIBLE;
                             }
                             if (*leaf).mn_flags as std::ffi::c_int & 0x1 as std::ffi::c_int
                                 == 0x1 as std::ffi::c_int
@@ -8274,7 +8278,7 @@ unsafe extern "C" fn _mdb_cursor_put(
                                                 (*data).mv_size,
                                             );
                                         }
-                                        return 0 as std::ffi::c_int;
+                                        return MDB_SUCCESS;
                                     }
                                 }
                                 rc2 = mdb_ovpage_free(mc, omp);
@@ -8761,7 +8765,7 @@ unsafe extern "C" fn _mdb_cursor_put(
         match current_block {
             5726862278832168375 => return rc,
             3910923109603533376 => {
-                if rc == -(30799 as std::ffi::c_int) {
+                if rc == MDB_KEYEXIST {
                     rc = -(30779 as std::ffi::c_int);
                 }
             }
@@ -8800,7 +8804,7 @@ unsafe extern "C" fn _mdb_cursor_del(
             return if (*(*mc).mc_txn).mt_flags.intersects(TransactionFlags::MDB_TXN_RDONLY) {
                 13 as std::ffi::c_int
             } else {
-                -(30782 as std::ffi::c_int)
+                MDB_BAD_TXN
             };
         }
         if !(*mc).mc_flags.intersects(CursorFlags::C_INITIALIZED) {
@@ -8816,7 +8820,7 @@ unsafe extern "C" fn _mdb_cursor_del(
                 }))
                 >> 1 as std::ffi::c_int
         {
-            return -(30798 as std::ffi::c_int);
+            return MDB_NOTFOUND;
         }
         if flags & 0x8000 as std::ffi::c_uint == 0 && {
             rc = mdb_page_spill(
@@ -8834,7 +8838,7 @@ unsafe extern "C" fn _mdb_cursor_del(
         }
         mp = (*mc).mc_pg[(*mc).mc_top as usize];
         if !(*(mp as *mut MDB_page2)).mp2_flags.contains(PageFlags::P_LEAF) {
-            return -(30796 as std::ffi::c_int);
+            return MDB_CORRUPTED;
         }
         if !(*(mp as *mut MDB_page2)).mp2_flags.contains(PageFlags::P_LEAF2) {
             leaf = (mp as *mut std::ffi::c_char)
@@ -8997,7 +9001,7 @@ unsafe extern "C" fn _mdb_cursor_del(
                 }
             } else if ((*leaf).mn_flags as std::ffi::c_uint ^ flags) & 0x2 as std::ffi::c_uint != 0
             {
-                rc = -(30784 as std::ffi::c_int);
+                rc = MDB_INCOMPATIBLE;
                 current_block = 16844394940769847043;
             } else {
                 current_block = 3689906465960840878;
@@ -9183,7 +9187,7 @@ unsafe extern "C" fn mdb_node_add(
                 (ksize as std::ffi::c_ulong)
                     .wrapping_sub(::core::mem::size_of::<indx_t>() as std::ffi::c_ulong),
             ) as indx_t;
-            return 0 as std::ffi::c_int;
+            return MDB_SUCCESS;
         }
         room = (std::ptr::read_unaligned(mp as *mut MDB_page2).mp2_upper as std::ffi::c_int
             - std::ptr::read_unaligned(mp as *mut MDB_page2).mp2_lower as std::ffi::c_int)
@@ -9252,7 +9256,7 @@ unsafe extern "C" fn mdb_node_add(
         match current_block {
             15594603006322722090 => {
                 (*(*mc).mc_txn).mt_flags.insert(TransactionFlags::MDB_TXN_ERROR);
-                -(30786 as std::ffi::c_int)
+                MDB_PAGE_FULL
             }
             _ => {
                 i = ((std::ptr::read_unaligned(mp as *mut MDB_page2)).mp2_lower
@@ -9852,7 +9856,7 @@ pub unsafe extern "C" fn mdb_cursor_open(
             return 22 as std::ffi::c_int;
         }
         if (*txn).mt_flags.intersects(TransactionFlags::MDB_TXN_BLOCKED) {
-            return -(30782 as std::ffi::c_int);
+            return MDB_BAD_TXN;
         }
         if dbi == 0 as MDB_dbi && !(*txn).mt_flags.contains(TransactionFlags::MDB_TXN_RDONLY) {
             return 22 as std::ffi::c_int;
@@ -9899,7 +9903,7 @@ pub unsafe extern "C" fn mdb_cursor_renew(
             return 22 as std::ffi::c_int;
         }
         if (*txn).mt_flags.intersects(TransactionFlags::MDB_TXN_BLOCKED) {
-            return -(30782 as std::ffi::c_int);
+            return MDB_BAD_TXN;
         }
         mdb_cursor_init(mc, txn, (*mc).mc_dbi, (*mc).mc_xcursor);
         0 as std::ffi::c_int
@@ -9916,16 +9920,16 @@ pub unsafe extern "C" fn mdb_cursor_count(
             return 22 as std::ffi::c_int;
         }
         if ((*mc).mc_xcursor).is_null() {
-            return -(30784 as std::ffi::c_int);
+            return MDB_INCOMPATIBLE;
         }
         if (*(*mc).mc_txn).mt_flags.intersects(TransactionFlags::MDB_TXN_BLOCKED) {
-            return -(30782 as std::ffi::c_int);
+            return MDB_BAD_TXN;
         }
         if !(*mc).mc_flags.intersects(CursorFlags::C_INITIALIZED) {
             return 22 as std::ffi::c_int;
         }
         if (*mc).mc_snum == 0 {
-            return -(30798 as std::ffi::c_int);
+            return MDB_NOTFOUND;
         }
         if (*mc).mc_flags.intersects(CursorFlags::C_EOF) {
             if (*mc).mc_ki[(*mc).mc_top as usize] as std::ffi::c_uint
@@ -9941,7 +9945,7 @@ pub unsafe extern "C" fn mdb_cursor_count(
                     ))
                     >> 1 as std::ffi::c_int
             {
-                return -(30798 as std::ffi::c_int);
+                return MDB_NOTFOUND;
             }
             (*mc).mc_flags.toggle(CursorFlags::C_EOF);
         }
@@ -11119,12 +11123,12 @@ unsafe extern "C" fn mdb_rebalance(mut mc: *mut MDB_cursor) -> std::ffi::c_int {
                 >> 1 as std::ffi::c_int
                 >= minkeys
         {
-            return 0 as std::ffi::c_int;
+            return MDB_SUCCESS;
         }
         if ((*mc).mc_snum as std::ffi::c_int) < 2 as std::ffi::c_int {
             let mut mp: *mut MDB_page = (*mc).mc_pg[0 as usize];
             if (*(mp as *mut MDB_page2)).mp2_flags.contains(PageFlags::P_SUBP) {
-                return 0 as std::ffi::c_int;
+                return MDB_SUCCESS;
             }
             if ((*(mp as *mut MDB_page2)).mp2_lower as std::ffi::c_uint).wrapping_sub(
                 (16 as std::ffi::c_uint).wrapping_sub(if 0 as std::ffi::c_int != 0 {
@@ -11282,7 +11286,7 @@ unsafe extern "C" fn mdb_rebalance(mut mc: *mut MDB_cursor) -> std::ffi::c_int {
                     m2_0 = (*m2_0).mc_next;
                 }
             }
-            return 0 as std::ffi::c_int;
+            return MDB_SUCCESS;
         }
         ptop = ((*mc).mc_top as std::ffi::c_int - 1 as std::ffi::c_int) as std::ffi::c_uint;
         if ((*((*mc).mc_pg[ptop as usize] as *mut MDB_page2)).mp2_lower as std::ffi::c_uint)
@@ -11624,7 +11628,7 @@ unsafe extern "C" fn mdb_cursor_del0(mut mc: *mut MDB_cursor) -> std::ffi::c_int
                 {
                     if (*m3).mc_ki[(*mc).mc_top as usize] as std::ffi::c_uint >= nkeys {
                         rc = mdb_cursor_sibling(m3, 1 as std::ffi::c_int);
-                        if rc == -(30798 as std::ffi::c_int) {
+                        if rc == MDB_NOTFOUND {
                             (*m3).mc_flags.insert(CursorFlags::C_EOF);
                             rc = 0 as std::ffi::c_int;
                             current_block = 2569451025026770673;
@@ -11737,7 +11741,7 @@ pub unsafe extern "C" fn mdb_del(
             return if (*txn).mt_flags.intersects(TransactionFlags::MDB_TXN_RDONLY) {
                 13 as std::ffi::c_int
             } else {
-                -(30782 as std::ffi::c_int)
+                MDB_BAD_TXN
             };
         }
         if !(*((*txn).mt_dbs).offset(dbi as isize))
@@ -12327,7 +12331,7 @@ unsafe extern "C" fn mdb_page_split(
                         4951901818287548553 => {}
                         _ => {
                             if rc != 0 as std::ffi::c_int {
-                                if rc == -(30798 as std::ffi::c_int) {
+                                if rc == MDB_NOTFOUND {
                                     rc = -(30779 as std::ffi::c_int);
                                 }
                             } else {
@@ -12971,7 +12975,7 @@ pub unsafe extern "C" fn mdb_put(
             return if (*txn).mt_flags.intersects(TransactionFlags::MDB_TXN_RDONLY) {
                 13 as std::ffi::c_int
             } else {
-                -(30782 as std::ffi::c_int)
+                MDB_BAD_TXN
             };
         }
         mdb_cursor_init(&mut mc, txn, dbi, &mut mx);
@@ -13108,7 +13112,7 @@ unsafe extern "C" fn mdb_env_cwalk(
         let mut toggle: std::ffi::c_int = 0;
         let mut i: std::ffi::c_uint = 0;
         if *pg == !(0 as pgno_t) {
-            return 0 as std::ffi::c_int;
+            return MDB_SUCCESS;
         }
         mc.mc_snum = 1 as std::ffi::c_ushort;
         mc.mc_txn = (*my).mc_txn;
@@ -13568,7 +13572,7 @@ unsafe extern "C" fn mdb_env_copyfd1(
                                 }
                                 freecount = freecount.wrapping_add(*(data.mv_data as *mut MDB_ID));
                             }
-                            if rc != -(30798 as std::ffi::c_int) {
+                            if rc != MDB_NOTFOUND {
                                 current_block = 10260918000359197151;
                             } else {
                                 freecount = freecount.wrapping_add(
@@ -13604,7 +13608,7 @@ unsafe extern "C" fn mdb_env_copyfd1(
                                 my.mc_txn = txn;
                                 rc = mdb_env_cwalk(&mut my, &mut root, 0 as std::ffi::c_int);
                                 if rc == 0 as std::ffi::c_int && root != new_root {
-                                    rc = -(30784 as std::ffi::c_int);
+                                    rc = MDB_INCOMPATIBLE;
                                 }
                             }
                         }
@@ -14047,7 +14051,7 @@ pub unsafe extern "C" fn mdb_dbi_open(
         }
 
         if (*txn).mt_flags.intersects(TransactionFlags::MDB_TXN_BLOCKED) {
-            return -(30782 as std::ffi::c_int);
+            return MDB_BAD_TXN;
         }
         if name.is_null() {
             *dbi = 1 as MDB_dbi;
@@ -14062,7 +14066,7 @@ pub unsafe extern "C" fn mdb_dbi_open(
                 }
             }
             mdb_default_cmp(txn, 1 as MDB_dbi);
-            return 0 as std::ffi::c_int;
+            return MDB_SUCCESS;
         }
         if ((*((*txn).mt_dbxs).offset(1)).md_cmp).is_none() {
             mdb_default_cmp(txn, 1 as MDB_dbi);
@@ -14083,21 +14087,21 @@ pub unsafe extern "C" fn mdb_dbi_open(
                 ) == 0
             {
                 *dbi = i;
-                return 0 as std::ffi::c_int;
+                return MDB_SUCCESS;
             }
             i = i.wrapping_add(1);
         }
         if unused == 0 && (*txn).mt_numdbs >= (*(*txn).mt_env).me_maxdbs {
-            return -(30791 as std::ffi::c_int);
+            return MDB_DBS_FULL;
         }
         if (*((*txn).mt_dbs).offset(1))
             .md_flags
             .intersects(InternalDatabaseFlags::MDB_DUPSORT | InternalDatabaseFlags::MDB_INTEGERKEY)
         {
             return if flags.intersects(DatabaseFlags::MDB_CREATE) {
-                -(30784 as std::ffi::c_int)
+                MDB_INCOMPATIBLE
             } else {
-                -(30798 as std::ffi::c_int)
+                MDB_NOTFOUND
             };
         }
         dbflag = TransactionDbFlags::DB_NEW
@@ -14126,10 +14130,10 @@ pub unsafe extern "C" fn mdb_dbi_open(
                 & (0x4 as std::ffi::c_int | 0x2 as std::ffi::c_int)
                 != 0x2 as std::ffi::c_int
             {
-                return -(30784 as std::ffi::c_int);
+                return MDB_INCOMPATIBLE;
             }
         } else {
-            if rc != -(30798 as std::ffi::c_int) || !flags.intersects(DatabaseFlags::MDB_CREATE) {
+            if rc != MDB_NOTFOUND || !flags.intersects(DatabaseFlags::MDB_CREATE) {
                 return rc;
             }
             if (*txn).mt_flags.contains(TransactionFlags::MDB_TXN_RDONLY) {
@@ -14228,7 +14232,7 @@ pub unsafe extern "C" fn mdb_stat(
             return 22 as std::ffi::c_int;
         }
         if (*txn).mt_flags.intersects(TransactionFlags::MDB_TXN_BLOCKED) {
-            return -(30782 as std::ffi::c_int);
+            return MDB_BAD_TXN;
         }
         if (*((*txn).mt_dbflags).offset(dbi as isize)).intersects(TransactionDbFlags::DB_STALE) {
             let mut mc: MDB_cursor = MDB_cursor {
@@ -14520,7 +14524,7 @@ unsafe extern "C" fn mdb_drop0(
                     if rc == 0 {
                         continue;
                     }
-                    if rc != -(30798 as std::ffi::c_int) {
+                    if rc != MDB_NOTFOUND {
                         current_block = 10688690059288260727;
                         break;
                     }
@@ -14540,7 +14544,7 @@ unsafe extern "C" fn mdb_drop0(
             if rc != 0 {
                 (*txn).mt_flags.insert(TransactionFlags::MDB_TXN_ERROR);
             }
-        } else if rc == -(30798 as std::ffi::c_int) {
+        } else if rc == MDB_NOTFOUND {
             rc = 0 as std::ffi::c_int;
         }
         (*mc).mc_flags.remove(CursorFlags::C_INITIALIZED);
@@ -14571,7 +14575,7 @@ pub unsafe extern "C" fn mdb_drop(
         if *((*txn).mt_dbiseqs).offset(dbi as isize)
             != *((*(*txn).mt_env).me_dbiseqs).offset(dbi as isize)
         {
-            return -(30780 as std::ffi::c_int);
+            return MDB_BAD_DBI;
         }
         rc = mdb_cursor_open(txn, dbi, &mut mc);
         if rc != 0 {
@@ -14925,7 +14929,7 @@ unsafe extern "C" fn mdb_mutex_failed(
                 if !((*env).me_txn).is_null() {
                     (*env).me_flags.insert(InternalEnvFlags::MDB_FATAL_ERROR);
                     (*env).me_txn = std::ptr::null_mut::<MDB_txn>();
-                    rc = -(30795 as std::ffi::c_int);
+                    rc = MDB_PANIC;
                 }
             }
             rc2 = mdb_reader_check0(env, rlocked, std::ptr::null_mut::<std::ffi::c_int>());
