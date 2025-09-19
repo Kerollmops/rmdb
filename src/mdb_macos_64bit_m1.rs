@@ -362,7 +362,7 @@ pub struct MDB_env {
     pub me_fd: std::ffi::c_int,
     pub me_lfd: std::ffi::c_int,
     pub me_mfd: std::ffi::c_int,
-    pub me_flags: uint32_t,
+    me_flags: InternalEnvFlags,
     pub me_psize: std::ffi::c_uint,
     pub me_os_psize: std::ffi::c_uint,
     pub me_maxreaders: std::ffi::c_uint,
@@ -680,16 +680,18 @@ bitflags! {
     #[derive(Debug, Clone, Copy)]
     pub struct TransactionFlags: u32 {
         /// #mdb_txn_begin() flags
-        const MDB_TXN_BEGIN_FLAGS   = EnvironmentFlags::MDB_NOMETASYNC.bits() | EnvironmentFlags::MDB_NOSYNC.bits() | EnvironmentFlags::MDB_RDONLY.bits();
+        const MDB_TXN_BEGIN_FLAGS   = EnvFlags::MDB_NOMETASYNC.bits()
+            | EnvFlags::MDB_NOSYNC.bits()
+            | EnvFlags::MDB_RDONLY.bits();
         /// don't sync meta for this txn on commit
-        const MDB_TXN_NOMETASYNC    = EnvironmentFlags::MDB_NOMETASYNC.bits();
+        const MDB_TXN_NOMETASYNC    = EnvFlags::MDB_NOMETASYNC.bits();
         /// don't sync this txn on commit
-        const MDB_TXN_NOSYNC        = EnvironmentFlags::MDB_NOSYNC.bits();
+        const MDB_TXN_NOSYNC        = EnvFlags::MDB_NOSYNC.bits();
         /// read-only transaction
-        const MDB_TXN_RDONLY        = EnvironmentFlags::MDB_RDONLY.bits();
+        const MDB_TXN_RDONLY        = EnvFlags::MDB_RDONLY.bits();
         // /* internal txn flags */
         /// /**< copy of #MDB_env flag in writers
-        const MDB_TXN_WRITEMAP      = EnvironmentFlags::MDB_WRITEMAP.bits();
+        const MDB_TXN_WRITEMAP      = EnvFlags::MDB_WRITEMAP.bits();
         /// txn is finished or never began
         const MDB_TXN_FINISHED      = 0x01;
         /// txn is unusable after an error
@@ -701,14 +703,85 @@ bitflags! {
         /// txn has an #MDB_txn.%mt_child
         const MDB_TXN_HAS_CHILD     = 0x10;
         /// most operations on the txn are currently illegal
-        const MDB_TXN_BLOCKED       = TransactionFlags::MDB_TXN_FINISHED.bits() | TransactionFlags::MDB_TXN_ERROR.bits() | TransactionFlags::MDB_TXN_HAS_CHILD.bits();
+        const MDB_TXN_BLOCKED       = TransactionFlags::MDB_TXN_FINISHED.bits()
+            | TransactionFlags::MDB_TXN_ERROR.bits()
+            | TransactionFlags::MDB_TXN_HAS_CHILD.bits();
+    }
+}
+
+bitflags! {
+    /// Internal Environment Flags
+    ///
+    /// They feature all the public flags plus some internals that the user must not use.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    #[repr(C)]
+    struct InternalEnvFlags: u32 {
+        /// mmap at a fixed address (experimental)
+        const MDB_FIXEDMAP = EnvFlags::MDB_FIXEDMAP.bits();
+        /// no environment directory
+        const MDB_NOSUBDIR = EnvFlags::MDB_NOSUBDIR.bits();
+        /// don't fsync after commit
+        const MDB_NOSYNC = EnvFlags::MDB_NOSYNC.bits();
+        /// read only
+        const MDB_RDONLY = EnvFlags::MDB_RDONLY.bits();
+        /// don't fsync metapage after commit
+        const MDB_NOMETASYNC = EnvFlags::MDB_NOMETASYNC.bits();
+        /// use writable mmap
+        const MDB_WRITEMAP = EnvFlags::MDB_WRITEMAP.bits();
+        /// use asynchronous msync when #MDB_WRITEMAP is used
+        const MDB_MAPASYNC = EnvFlags::MDB_MAPASYNC.bits();
+        /// tie reader locktable slots to #MDB_txn objects instead of to threads
+        const MDB_NOTLS = EnvFlags::MDB_NOTLS.bits();
+        /// don't do any locking, caller must manage their own locks
+        const MDB_NOLOCK = EnvFlags::MDB_NOLOCK.bits();
+        /// don't do readahead (no effect on Windows)
+        const MDB_NORDAHEAD = EnvFlags::MDB_NORDAHEAD.bits();
+        /// don't initialize malloc'd memory before writing to datafile
+        const MDB_NOMEMINIT = EnvFlags::MDB_NOMEMINIT.bits();
+        /// use the previous snapshot rather than the latest one
+        const MDB_PREVSNAPSHOT = EnvFlags::MDB_PREVSNAPSHOT.bits();
+
+        // ---- Those are internals ----
+
+        /// Failed to update the meta page. Probably an I/O error.
+        const MDB_FATAL_ERROR = 0x80000000;
+        /// Some fields are initialized.
+        const MDB_ENV_ACTIVE = 0x20000000;
+        /// me_txkey is set
+        const MDB_ENV_TXKEY = 0x10000000;
+        /// fdatasync is unreliable
+        const MDB_FSYNCONLY = 0x08000000;
+
+        // ---- Changeable or not ----
+
+        /// Only a subset of the env flags can be changed at runtime.
+        const CHANGEABLE = InternalEnvFlags::MDB_NOSYNC.bits()
+            | InternalEnvFlags::MDB_NOMETASYNC.bits()
+            | InternalEnvFlags::MDB_MAPASYNC.bits()
+            | InternalEnvFlags::MDB_NOMEMINIT.bits();
+        /// Changing other flags requires closing the
+        /// environment and re-opening it with the new flags.
+        const CHANGELESS = InternalEnvFlags::MDB_FIXEDMAP.bits()
+            | InternalEnvFlags::MDB_NOSUBDIR.bits()
+            | InternalEnvFlags::MDB_RDONLY.bits()
+            | InternalEnvFlags::MDB_WRITEMAP.bits()
+            | InternalEnvFlags::MDB_NOTLS.bits()
+            | InternalEnvFlags::MDB_NOLOCK.bits()
+            | InternalEnvFlags::MDB_NORDAHEAD.bits()
+            | InternalEnvFlags::MDB_PREVSNAPSHOT.bits();
+    }
+}
+
+impl From<EnvFlags> for InternalEnvFlags {
+    fn from(flags: EnvFlags) -> Self {
+        InternalEnvFlags::from_bits_truncate(flags.bits())
     }
 }
 
 bitflags! {
     /// Environment Flags
     #[derive(Debug, Clone, Copy)]
-    struct EnvironmentFlags: u32 {
+    struct EnvFlags: u32 {
         /// mmap at a fixed address (experimental)
         const MDB_FIXEDMAP     = 0x01;
         /// no environment directory
@@ -736,6 +809,12 @@ bitflags! {
     }
 }
 
+impl EnvFlags {
+    fn from_internal(flags: InternalEnvFlags) -> Self {
+        EnvFlags::from_bits_truncate(flags.bits())
+    }
+}
+
 bitflags! {
     /// Flags for node headers.
     #[derive(Debug, Clone, Copy)]
@@ -747,7 +826,10 @@ bitflags! {
         /// data has duplicates
         const F_DUPDATA = 0x04;
         /// valid flags for #mdb_node_add()
-        const NODE_ADD_FLAGS = NodeFlags::F_DUPDATA.bits() | NodeFlags::F_SUBDATA.bits() | WriteFlags::MDB_RESERVE.bits() | WriteFlags::MDB_APPEND.bits();
+        const NODE_ADD_FLAGS = NodeFlags::F_DUPDATA.bits()
+          | NodeFlags::F_SUBDATA.bits()
+          | WriteFlags::MDB_RESERVE.bits()
+          | WriteFlags::MDB_APPEND.bits();
     }
 }
 
@@ -1077,7 +1159,7 @@ unsafe extern "C" fn mdb_page_malloc(
         }
         ret = malloc(sz) as *mut MDB_page;
         if !ret.is_null() {
-            if (*env).me_flags & 0x1000000 as uint32_t == 0 {
+            if !(*env).me_flags.intersects(InternalEnvFlags::MDB_NOMEMINIT) {
                 memset(
                     (ret as *mut std::ffi::c_char).offset(off as isize) as *mut std::ffi::c_void,
                     0 as std::ffi::c_int,
@@ -1674,7 +1756,7 @@ unsafe extern "C" fn mdb_page_alloc(
                     match current_block {
                         11154531721185249356 => {}
                         _ => {
-                            if (*env).me_flags & 0x80000 as uint32_t != 0 {
+                            if (*env).me_flags.intersects(InternalEnvFlags::MDB_WRITEMAP) {
                                 np = ((*env).me_map)
                                     .offset(((*env).me_psize as pgno_t * pgno) as isize)
                                     as *mut MDB_page;
@@ -1797,7 +1879,7 @@ unsafe extern "C" fn mdb_page_unspill(
                     } else {
                         num = 1 as std::ffi::c_int;
                     }
-                    if (*env).me_flags & 0x80000 as uint32_t != 0 {
+                    if (*env).me_flags.intersects(InternalEnvFlags::MDB_WRITEMAP) {
                         np = mp;
                     } else {
                         np = mdb_page_malloc(txn, num as std::ffi::c_uint);
@@ -2106,13 +2188,13 @@ pub unsafe extern "C" fn mdb_env_sync0(
 ) -> std::ffi::c_int {
     unsafe {
         let mut rc: std::ffi::c_int = 0 as std::ffi::c_int;
-        if (*env).me_flags & 0x20000 as uint32_t != 0 {
+        if (*env).me_flags.intersects(InternalEnvFlags::MDB_RDONLY) {
             return 13 as std::ffi::c_int;
         }
-        if force != 0 || (*env).me_flags & 0x10000 as uint32_t == 0 {
-            if (*env).me_flags & 0x80000 as uint32_t != 0 {
+        if force != 0 || !(*env).me_flags.intersects(InternalEnvFlags::MDB_NOSYNC) {
+            if (*env).me_flags.intersects(InternalEnvFlags::MDB_WRITEMAP) {
                 let mut flags: std::ffi::c_int =
-                    if (*env).me_flags & 0x100000 as uint32_t != 0 && force == 0 {
+                    if (*env).me_flags.intersects(InternalEnvFlags::MDB_MAPASYNC) && force == 0 {
                         0x1 as std::ffi::c_int
                     } else {
                         0x10 as std::ffi::c_int
@@ -2301,11 +2383,12 @@ unsafe extern "C" fn mdb_txn_renew0(mut txn: *mut MDB_txn) -> std::ffi::c_int {
                 (*txn).mt_txnid = (*meta).mm_txnid;
                 (*txn).mt_u.reader = std::ptr::null_mut::<MDB_reader>();
             } else {
-                let mut r: *mut MDB_reader = (if (*env).me_flags & 0x200000 as uint32_t != 0 {
-                    (*txn).mt_u.reader as *mut std::ffi::c_void
-                } else {
-                    pthread_getspecific((*env).me_txkey)
-                }) as *mut MDB_reader;
+                let mut r: *mut MDB_reader =
+                    (if (*env).me_flags.intersects(InternalEnvFlags::MDB_NOTLS) {
+                        (*txn).mt_u.reader as *mut std::ffi::c_void
+                    } else {
+                        pthread_getspecific((*env).me_txkey)
+                    }) as *mut MDB_reader;
                 if !r.is_null() {
                     if (*r).mru.mrx.mrb_pid != (*env).me_pid
                         || (*r).mru.mrx.mrb_txnid != -(1 as std::ffi::c_int) as txnid_t
@@ -2385,7 +2468,7 @@ unsafe extern "C" fn mdb_txn_renew0(mut txn: *mut MDB_txn) -> std::ffi::c_int {
                     sb_0.sem_num = (*rmutex).semnum as std::ffi::c_ushort;
                     *(*rmutex).locked = 0 as std::ffi::c_int;
                     semop((*rmutex).semid, &mut sb_0, 1 as size_t);
-                    new_notls = ((*env).me_flags & 0x200000 as uint32_t) as std::ffi::c_int;
+                    new_notls = ((*env).me_flags & InternalEnvFlags::MDB_NOTLS).bits() as i32;
                     if new_notls == 0 && {
                         rc = pthread_setspecific((*env).me_txkey, r as *const std::ffi::c_void);
                         rc != 0
@@ -2406,7 +2489,9 @@ unsafe extern "C" fn mdb_txn_renew0(mut txn: *mut MDB_txn) -> std::ffi::c_int {
                         break;
                     }
                 }
-                if (*r).mru.mrx.mrb_txnid == 0 && (*env).me_flags & 0x20000 as uint32_t != 0 {
+                if (*r).mru.mrx.mrb_txnid == 0
+                    && (*env).me_flags.intersects(InternalEnvFlags::MDB_RDONLY)
+                {
                     meta = mdb_env_pick_meta(env);
                     ::core::ptr::write_volatile(
                         &mut (*r).mru.mrx.mrb_txnid as *mut txnid_t,
@@ -2483,7 +2568,7 @@ unsafe extern "C" fn mdb_txn_renew0(mut txn: *mut MDB_txn) -> std::ffi::c_int {
         *((*txn).mt_dbflags).offset(1) =
             TransactionDbFlags::DB_VALID | TransactionDbFlags::DB_USRVALID;
         *((*txn).mt_dbflags).offset(0) = TransactionDbFlags::DB_VALID;
-        if (*env).me_flags & 0x80000000 as std::ffi::c_uint != 0 {
+        if (*env).me_flags.intersects(InternalEnvFlags::MDB_FATAL_ERROR) {
             rc = -(30795 as std::ffi::c_int);
         } else if (*env).me_maxpg < (*txn).mt_next_pgno {
             rc = -(30785 as std::ffi::c_int);
@@ -2525,8 +2610,8 @@ pub unsafe extern "C" fn mdb_txn_begin(
         let mut size: std::ffi::c_int = 0;
         let mut tsize: std::ffi::c_int = 0;
         flags &= TransactionFlags::MDB_TXN_BEGIN_FLAGS.bits();
-        flags |= (*env).me_flags & TransactionFlags::MDB_TXN_WRITEMAP.bits();
-        if (*env).me_flags & 0x20000 as uint32_t & !flags != 0 {
+        flags |= (*env).me_flags.bits() & TransactionFlags::MDB_TXN_WRITEMAP.bits();
+        if ((*env).me_flags & InternalEnvFlags::MDB_RDONLY).bits() & !flags != 0 {
             return 13 as std::ffi::c_int;
         }
         if !parent.is_null() {
@@ -2719,7 +2804,7 @@ unsafe extern "C" fn mdb_txn_end(mut txn: *mut MDB_txn, mut mode: std::ffi::c_ui
                     &mut (*(*txn).mt_u.reader).mru.mrx.mrb_txnid as *mut txnid_t,
                     -(1 as std::ffi::c_int) as txnid_t,
                 );
-                if (*env).me_flags & 0x200000 as uint32_t == 0 {
+                if !(*env).me_flags.intersects(InternalEnvFlags::MDB_NOTLS) {
                     (*txn).mt_u.reader = std::ptr::null_mut::<MDB_reader>();
                 } else if mode & 0x200000 as std::ffi::c_uint != 0 {
                     ::core::ptr::write_volatile(
@@ -2736,7 +2821,7 @@ unsafe extern "C" fn mdb_txn_end(mut txn: *mut MDB_txn, mut mode: std::ffi::c_ui
             if mode & 0x10 == 0 {
                 mdb_cursors_close(txn, 0 as std::ffi::c_uint);
             }
-            if (*env).me_flags & 0x80000 as uint32_t == 0 {
+            if !(*env).me_flags.intersects(InternalEnvFlags::MDB_WRITEMAP) {
                 mdb_dlist_free(txn);
             }
             (*txn).mt_numdbs = 0 as MDB_dbi;
@@ -2956,9 +3041,9 @@ unsafe extern "C" fn mdb_freelist_save(mut txn: *mut MDB_txn) -> std::ffi::c_int
             (*txn).mt_loose_pgs = std::ptr::null_mut::<MDB_page>();
             (*txn).mt_loose_count = 0 as std::ffi::c_int;
         }
-        clean_limit = if (*env).me_flags
-            & (0x1000000 as std::ffi::c_int | 0x80000 as std::ffi::c_int) as uint32_t
-            != 0
+        clean_limit = if (*env)
+            .me_flags
+            .intersects(InternalEnvFlags::MDB_NOMEMINIT | InternalEnvFlags::MDB_WRITEMAP)
         {
             0x7fffffffffffffff as std::ffi::c_long
         } else {
@@ -3213,7 +3298,7 @@ unsafe extern "C" fn mdb_page_flush(
         let mut n: std::ffi::c_int = 0 as std::ffi::c_int;
         i = keep;
         j = i as std::ffi::c_uint;
-        if (*env).me_flags & 0x80000 as uint32_t != 0 {
+        if (*env).me_flags.intersects(InternalEnvFlags::MDB_WRITEMAP) {
             loop {
                 i += 1;
                 if i > pagecount {
@@ -3311,7 +3396,7 @@ unsafe extern "C" fn mdb_page_flush(
                 wsize = (wsize as size_t).wrapping_add(size) as ssize_t;
                 n += 1;
             }
-            if (*env).me_flags & 0x80000 as uint32_t == 0 {
+            if !(*env).me_flags.intersects(InternalEnvFlags::MDB_WRITEMAP) {
                 i = keep;
                 loop {
                     i += 1;
@@ -3664,8 +3749,14 @@ unsafe extern "C" fn _mdb_txn_commit(mut txn: *mut MDB_txn) -> std::ffi::c_int {
                                         end_mode = (MDB_END_COMMITTED as std::ffi::c_int
                                             | 0x10 as std::ffi::c_int)
                                             as std::ffi::c_uint;
-                                        if (*env).me_flags & 0x2000000 as uint32_t != 0 {
-                                            if (*env).me_flags & 0x400000 as uint32_t == 0 {
+                                        if (*env)
+                                            .me_flags
+                                            .intersects(InternalEnvFlags::MDB_PREVSNAPSHOT)
+                                        {
+                                            if !(*env)
+                                                .me_flags
+                                                .intersects(InternalEnvFlags::MDB_NOLOCK)
+                                            {
                                                 let mut excl: std::ffi::c_int = 0;
                                                 rc = mdb_env_share_locks(env, &mut excl);
                                                 if rc != 0 {
@@ -3679,7 +3770,9 @@ unsafe extern "C" fn _mdb_txn_commit(mut txn: *mut MDB_txn) -> std::ffi::c_int {
                                             match current_block {
                                                 9928889463419475167 => {}
                                                 _ => {
-                                                    (*env).me_flags ^= 0x2000000 as uint32_t;
+                                                    (*env)
+                                                        .me_flags
+                                                        .toggle(InternalEnvFlags::MDB_PREVSNAPSHOT);
                                                     current_block = 9264303918316504035;
                                                 }
                                             }
@@ -3712,7 +3805,7 @@ pub unsafe extern "C" fn mdb_txn_commit(mut txn: *mut MDB_txn) -> std::ffi::c_in
 #[cold]
 unsafe extern "C" fn mdb_env_read_header(
     mut env: *mut MDB_env,
-    mut prev: std::ffi::c_int,
+    mut prev: bool,
     mut meta: *mut MDB_meta,
 ) -> std::ffi::c_int {
     unsafe {
@@ -3764,7 +3857,7 @@ unsafe extern "C" fn mdb_env_read_header(
                 return -(30794 as std::ffi::c_int);
             }
             if off == 0 as std::ffi::c_int
-                || (if prev != 0 {
+                || (if prev {
                     ((*m).mm_txnid < (*meta).mm_txnid) as std::ffi::c_int
                 } else {
                     ((*m).mm_txnid > (*meta).mm_txnid) as std::ffi::c_int
@@ -3790,7 +3883,7 @@ unsafe extern "C" fn mdb_env_init_meta0(mut env: *mut MDB_env, mut meta: *mut MD
         (*meta).mm_dbs[0 as usize].md_pad = (*env).me_psize;
         (*meta).mm_last_pg = (2 as std::ffi::c_int - 1 as std::ffi::c_int) as pgno_t;
         (*meta).mm_dbs[0 as usize].md_flags =
-            InternalDatabaseFlags::from_bits_truncate((*env).me_flags as u16);
+            InternalDatabaseFlags::from_bits_truncate((*env).me_flags.bits() as u16);
         (*meta).mm_dbs[0 as usize].md_flags.insert(InternalDatabaseFlags::MDB_INTEGERKEY); /* this is mm_dbs[FREE_DBI].md_flags */
         (*meta).mm_dbs[0 as usize].md_root = !(0 as pgno_t);
         (*meta).mm_dbs[1 as usize].md_root = !(0 as pgno_t);
@@ -3885,7 +3978,8 @@ unsafe extern "C" fn mdb_env_write_meta(mut txn: *mut MDB_txn) -> std::ffi::c_in
         };
         let mut toggle = (*txn).mt_txnid & 1;
         let mut mp: *mut MDB_meta = (*env).me_metas[toggle];
-        let mut flags = (*txn).mt_flags | TransactionFlags::from_bits_truncate((*env).me_flags);
+        let mut flags =
+            (*txn).mt_flags | TransactionFlags::from_bits_truncate((*env).me_flags.bits());
         let mut mapsize: mdb_size_t = 0;
         let mut off: off_t = 0;
         let mut rc: std::ffi::c_int = 0;
@@ -3908,7 +4002,7 @@ unsafe extern "C" fn mdb_env_write_meta(mut txn: *mut MDB_txn) -> std::ffi::c_in
                 .intersects(TransactionFlags::MDB_TXN_NOMETASYNC | TransactionFlags::MDB_TXN_NOSYNC)
             {
                 let mut meta_size: std::ffi::c_uint = (*env).me_psize;
-                rc = if (*env).me_flags & 0x100000 as uint32_t != 0 {
+                rc = if (*env).me_flags.intersects(InternalEnvFlags::MDB_MAPASYNC) {
                     0x1 as std::ffi::c_int
                 } else {
                     0x10 as std::ffi::c_int
@@ -3979,7 +4073,7 @@ unsafe extern "C" fn mdb_env_write_meta(mut txn: *mut MDB_txn) -> std::ffi::c_in
                 0 as std::ffi::c_int
             }
             _ => {
-                (*env).me_flags |= 0x80000000 as std::ffi::c_uint;
+                (*env).me_flags.insert(InternalEnvFlags::MDB_FATAL_ERROR);
                 rc
             }
         }
@@ -3990,8 +4084,8 @@ unsafe extern "C" fn mdb_env_pick_meta(mut env: *const MDB_env) -> *mut MDB_meta
         let mut metas: *const *mut MDB_meta = ((*env).me_metas).as_ptr();
         *metas.offset(
             (((**metas.offset(0)).mm_txnid < (**metas.offset(1)).mm_txnid) as std::ffi::c_int
-                ^ ((*env).me_flags & 0x2000000 as uint32_t != 0 as uint32_t) as std::ffi::c_int)
-                as isize,
+                ^ ((*env).me_flags.intersects(InternalEnvFlags::MDB_PREVSNAPSHOT) as uint32_t)
+                    as std::ffi::c_int) as isize,
         )
     }
 }
@@ -4026,10 +4120,10 @@ unsafe extern "C" fn mdb_env_map(
 ) -> std::ffi::c_int {
     unsafe {
         let mut p: *mut MDB_page = std::ptr::null_mut::<MDB_page>();
-        let mut flags: std::ffi::c_uint = (*env).me_flags;
+        let mut flags = (*env).me_flags;
         let mut mmap_flags: std::ffi::c_int = 0x1 as std::ffi::c_int;
         let mut prot: std::ffi::c_int = 0x1 as std::ffi::c_int;
-        if flags & 0x80000 as std::ffi::c_uint != 0 {
+        if flags.intersects(InternalEnvFlags::MDB_WRITEMAP) {
             prot |= 0x2 as std::ffi::c_int;
             if ftruncate((*env).me_fd, (*env).me_mapsize as off_t) < 0 as std::ffi::c_int {
                 return *__error();
@@ -4042,7 +4136,7 @@ unsafe extern "C" fn mdb_env_map(
             (*env).me_map = std::ptr::null_mut::<std::ffi::c_char>();
             return *__error();
         }
-        if flags & 0x800000 as std::ffi::c_uint != 0 {
+        if flags.intersects(InternalEnvFlags::MDB_NORDAHEAD) {
             madvise(
                 (*env).me_map as *mut std::ffi::c_void,
                 (*env).me_mapsize as _,
@@ -4086,7 +4180,7 @@ pub unsafe extern "C" fn mdb_env_set_mapsize(
             }
             munmap((*env).me_map as *mut std::ffi::c_void, (*env).me_mapsize as _);
             (*env).me_mapsize = size;
-            old = (if (*env).me_flags & 0x1 as uint32_t != 0 {
+            old = (if (*env).me_flags.intersects(InternalEnvFlags::MDB_FIXEDMAP) {
                 (*env).me_map
             } else {
                 std::ptr::null_mut::<std::ffi::c_char>()
@@ -4191,17 +4285,15 @@ static mut mdb_suffixes: [[*const mdb_nchar_t; 2]; 2] = [
 #[cold]
 unsafe extern "C" fn mdb_fname_init(
     mut path: *const std::ffi::c_char,
-    mut envflags: std::ffi::c_uint,
+    mut envflags: InternalEnvFlags,
     mut fname: *mut MDB_name,
 ) -> std::ffi::c_int {
     unsafe {
-        let mut no_suffix: std::ffi::c_int = (envflags
-            & (0x4000 as std::ffi::c_int | 0x400000 as std::ffi::c_int) as std::ffi::c_uint
-            == (0x4000 as std::ffi::c_int | 0x400000 as std::ffi::c_int) as std::ffi::c_uint)
-            as std::ffi::c_int;
+        let mut no_suffix =
+            envflags.contains(InternalEnvFlags::MDB_NOSUBDIR | InternalEnvFlags::MDB_NOLOCK);
         (*fname).mn_alloced = 0 as std::ffi::c_int;
         (*fname).mn_len = strlen(path) as std::ffi::c_int;
-        if no_suffix != 0 {
+        if no_suffix {
             (*fname).mn_val = path as *mut std::ffi::c_char;
         } else {
             (*fname).mn_val = malloc(
@@ -4235,7 +4327,7 @@ unsafe extern "C" fn mdb_fopen(
                 ((*fname).mn_val).offset((*fname).mn_len as isize),
                 mdb_suffixes
                     [(which as std::ffi::c_uint == MDB_O_LOCKS as std::ffi::c_uint) as usize]
-                    [((*env).me_flags & 0x4000 as uint32_t == 0x4000 as uint32_t) as usize],
+                    [(*env).me_flags.contains(InternalEnvFlags::MDB_NOSUBDIR) as usize],
             );
         }
         fd = open(
@@ -4267,12 +4359,9 @@ unsafe extern "C" fn mdb_fopen(
     }
 }
 #[cold]
-unsafe extern "C" fn mdb_env_open2(
-    mut env: *mut MDB_env,
-    mut prev: std::ffi::c_int,
-) -> std::ffi::c_int {
+unsafe extern "C" fn mdb_env_open2(mut env: *mut MDB_env, mut prev: bool) -> std::ffi::c_int {
     unsafe {
-        let mut flags: std::ffi::c_uint = (*env).me_flags;
+        let mut flags = (*env).me_flags;
         let mut i: std::ffi::c_int = 0;
         let mut newenv: std::ffi::c_int = 0 as std::ffi::c_int;
         let mut rc: std::ffi::c_int = 0;
@@ -4343,7 +4432,7 @@ unsafe extern "C" fn mdb_env_open2(
             (*env).me_mapsize = minsize;
         }
         meta.mm_mapsize = (*env).me_mapsize;
-        if newenv != 0 && flags & 0x1 as std::ffi::c_uint == 0 {
+        if newenv != 0 && !flags.intersects(InternalEnvFlags::MDB_FIXEDMAP) {
             rc = mdb_env_init_meta(env, &mut meta);
             if rc != 0 {
                 return rc;
@@ -4352,7 +4441,7 @@ unsafe extern "C" fn mdb_env_open2(
         }
         rc = mdb_env_map(
             env,
-            if flags & 0x1 as std::ffi::c_uint != 0 {
+            if flags.intersects(InternalEnvFlags::MDB_FIXEDMAP) {
                 meta.mm_address
             } else {
                 std::ptr::null_mut::<std::ffi::c_void>()
@@ -4362,7 +4451,7 @@ unsafe extern "C" fn mdb_env_open2(
             return rc;
         }
         if newenv != 0 {
-            if flags & 0x1 as std::ffi::c_uint != 0 {
+            if flags.intersects(InternalEnvFlags::MDB_FIXEDMAP) {
                 meta.mm_address = (*env).me_map as *mut std::ffi::c_void;
             }
             i = mdb_env_init_meta(env, &mut meta);
@@ -4382,7 +4471,7 @@ unsafe extern "C" fn mdb_env_open2(
             .wrapping_sub(::core::mem::size_of::<indx_t>() as std::ffi::c_ulong)
             as std::ffi::c_uint;
         (*env).me_maxpg = ((*env).me_mapsize / (*env).me_psize as mdb_size_t) as _;
-        if prev != 0 && !((*env).me_txns).is_null() {
+        if prev && !((*env).me_txns).is_null() {
             ::core::ptr::write_volatile(
                 &mut (*(*env).me_txns).mt1.mtb.mtb_txnid as *mut txnid_t,
                 meta.mm_txnid,
@@ -4499,11 +4588,13 @@ unsafe extern "C" fn mdb_env_setup_locks(
         let mut rsize: off_t = 0;
         rc = mdb_fopen(env, fname, MDB_O_LOCKS, mode as mdb_mode_t, &mut (*env).me_lfd);
         if rc != 0 {
-            if rc == 30 as std::ffi::c_int && (*env).me_flags & 0x20000 as uint32_t != 0 {
+            if rc == 30 as std::ffi::c_int
+                && (*env).me_flags.intersects(InternalEnvFlags::MDB_RDONLY)
+            {
                 return 0 as std::ffi::c_int;
             }
         } else {
-            if (*env).me_flags & 0x200000 as uint32_t == 0 {
+            if !(*env).me_flags.intersects(InternalEnvFlags::MDB_NOTLS) {
                 rc = pthread_key_create(
                     &mut (*env).me_txkey,
                     Some(mdb_env_reader_dest as unsafe extern "C" fn(*mut std::ffi::c_void) -> ()),
@@ -4511,7 +4602,7 @@ unsafe extern "C" fn mdb_env_setup_locks(
                 if rc != 0 {
                     current_block = 18368835354285971245;
                 } else {
-                    (*env).me_flags |= 0x10000000 as std::ffi::c_uint;
+                    (*env).me_flags.insert(InternalEnvFlags::MDB_ENV_TXKEY);
                     current_block = 5720623009719927633;
                 }
             } else {
@@ -4761,7 +4852,7 @@ unsafe extern "C" fn mdb_env_setup_locks(
 pub unsafe extern "C" fn mdb_env_open(
     mut env: *mut MDB_env,
     mut path: *const std::ffi::c_char,
-    mut flags: std::ffi::c_uint,
+    mut flags: u32,
     mut mode: mdb_mode_t,
 ) -> std::ffi::c_int {
     unsafe {
@@ -4770,32 +4861,21 @@ pub unsafe extern "C" fn mdb_env_open(
         let mut excl: std::ffi::c_int = -(1 as std::ffi::c_int);
         let mut fname: MDB_name =
             MDB_name { mn_len: 0, mn_alloced: 0, mn_val: std::ptr::null_mut::<mdb_nchar_t>() };
-        if (*env).me_fd != -(1 as std::ffi::c_int)
-            || flags
-                & !(0x10000 as std::ffi::c_int
-                    | 0x40000 as std::ffi::c_int
-                    | 0x100000 as std::ffi::c_int
-                    | 0x1000000 as std::ffi::c_int
-                    | (0x1 as std::ffi::c_int
-                        | 0x4000 as std::ffi::c_int
-                        | 0x20000 as std::ffi::c_int
-                        | 0x80000 as std::ffi::c_int
-                        | 0x200000 as std::ffi::c_int
-                        | 0x400000 as std::ffi::c_int
-                        | 0x800000 as std::ffi::c_int
-                        | 0x2000000 as std::ffi::c_int)) as std::ffi::c_uint
-                != 0
-        {
-            return 22 as std::ffi::c_int;
+        let Some(mut flags) = EnvFlags::from_bits(flags).map(InternalEnvFlags::from) else {
+            return EINVAL;
+        };
+        if (*env).me_fd != -(1 as std::ffi::c_int) {
+            return EINVAL;
         }
-        flags |= (*env).me_flags;
+        flags.insert((*env).me_flags);
         rc = mdb_fname_init(path, flags, &mut fname);
         if rc != 0 {
             return rc;
         }
-        flags |= 0x20000000 as std::ffi::c_uint;
-        if flags & 0x20000 as std::ffi::c_uint != 0 {
-            flags &= !(0x80000 as std::ffi::c_int) as std::ffi::c_uint;
+        flags.insert(InternalEnvFlags::MDB_ENV_ACTIVE);
+        if flags.intersects(InternalEnvFlags::MDB_RDONLY) {
+            // silently ignore WRITEMAP when we're only getting read access
+            flags.remove(InternalEnvFlags::MDB_WRITEMAP);
         } else {
             (*env).me_free_pgs = mdb_midl_alloc(((1) << (16 + 1)) - 1);
             if !(((*env).me_free_pgs).is_some() && {
@@ -4833,14 +4913,11 @@ pub unsafe extern "C" fn mdb_env_open(
             } else {
                 let fresh19 = &mut (*((*env).me_dbxs).offset(0)).md_cmp;
                 *fresh19 = Some(mdb_cmp_long as MDB_cmp_func);
-                if flags
-                    & (0x20000 as std::ffi::c_int | 0x400000 as std::ffi::c_int) as std::ffi::c_uint
-                    == 0
-                {
+                if !flags.intersects(InternalEnvFlags::MDB_RDONLY | InternalEnvFlags::MDB_NOLOCK) {
                     rc = mdb_env_setup_locks(env, &mut fname, mode as std::ffi::c_int, &mut excl);
                     if rc != 0 {
                         current_block = 2122094917359643297;
-                    } else if flags & 0x2000000 as std::ffi::c_uint != 0 && excl == 0 {
+                    } else if flags.intersects(InternalEnvFlags::MDB_PREVSNAPSHOT) && excl == 0 {
                         rc = 35 as std::ffi::c_int;
                         current_block = 2122094917359643297;
                     } else {
@@ -4855,7 +4932,7 @@ pub unsafe extern "C" fn mdb_env_open(
                         rc = mdb_fopen(
                             env,
                             &mut fname,
-                            (if flags & 0x20000 as std::ffi::c_uint != 0 {
+                            (if flags.intersects(InternalEnvFlags::MDB_RDONLY) {
                                 MDB_O_RDONLY as std::ffi::c_int
                             } else {
                                 MDB_O_RDWR as std::ffi::c_int
@@ -4864,10 +4941,8 @@ pub unsafe extern "C" fn mdb_env_open(
                             &mut (*env).me_fd,
                         );
                         if rc == 0 {
-                            if flags
-                                & (0x20000 as std::ffi::c_int | 0x400000 as std::ffi::c_int)
-                                    as std::ffi::c_uint
-                                == 0x20000 as std::ffi::c_uint
+                            if flags & (InternalEnvFlags::MDB_RDONLY | InternalEnvFlags::MDB_NOLOCK)
+                                == InternalEnvFlags::MDB_RDONLY
                             {
                                 rc = mdb_env_setup_locks(
                                     env,
@@ -4888,15 +4963,13 @@ pub unsafe extern "C" fn mdb_env_open(
                                 _ => {
                                     rc = mdb_env_open2(
                                         env,
-                                        (flags & 0x2000000 as std::ffi::c_uint) as std::ffi::c_int,
+                                        flags.intersects(InternalEnvFlags::MDB_PREVSNAPSHOT),
                                     );
                                     if rc == 0 as std::ffi::c_int {
-                                        if flags
-                                            & (0x20000 as std::ffi::c_int
-                                                | 0x80000 as std::ffi::c_int)
-                                                as std::ffi::c_uint
-                                            == 0
-                                        {
+                                        if !flags.intersects(
+                                            InternalEnvFlags::MDB_RDONLY
+                                                | InternalEnvFlags::MDB_WRITEMAP,
+                                        ) {
                                             rc = mdb_fopen(
                                                 env,
                                                 &mut fname,
@@ -4916,10 +4989,9 @@ pub unsafe extern "C" fn mdb_env_open(
                                             2122094917359643297 => {}
                                             _ => {
                                                 if excl > 0 as std::ffi::c_int
-                                                    && flags
-                                                        & 0x2000000 as std::ffi::c_int
-                                                            as std::ffi::c_uint
-                                                        == 0
+                                                    && !flags.intersects(
+                                                        InternalEnvFlags::MDB_PREVSNAPSHOT,
+                                                    )
                                                 {
                                                     rc = mdb_env_share_locks(env, &mut excl);
                                                     if rc != 0 {
@@ -4933,11 +5005,9 @@ pub unsafe extern "C" fn mdb_env_open(
                                                 match current_block {
                                                     2122094917359643297 => {}
                                                     _ => {
-                                                        if flags
-                                                            & 0x20000 as std::ffi::c_int
-                                                                as std::ffi::c_uint
-                                                            == 0
-                                                        {
+                                                        if !flags.intersects(
+                                                            InternalEnvFlags::MDB_RDONLY,
+                                                        ) {
                                                             let mut txn: *mut MDB_txn =
                                                                 std::ptr::null_mut::<MDB_txn>();
                                                             let mut tsize: std::ffi::c_int =
@@ -5025,7 +5095,7 @@ pub unsafe extern "C" fn mdb_env_open(
 unsafe extern "C" fn mdb_env_close0(mut env: *mut MDB_env, mut excl: std::ffi::c_int) {
     unsafe {
         let mut i: std::ffi::c_int = 0;
-        if (*env).me_flags & 0x20000000 as std::ffi::c_uint == 0 {
+        if !(*env).me_flags.intersects(InternalEnvFlags::MDB_ENV_ACTIVE) {
             return;
         }
         if !((*env).me_dbxs).is_null() {
@@ -5049,7 +5119,7 @@ unsafe extern "C" fn mdb_env_close0(mut env: *mut MDB_env, mut excl: std::ffi::c
         if let Some(free_pages) = (*env).me_free_pgs.take() {
             mdb_midl_free(free_pages);
         }
-        if (*env).me_flags & 0x10000000 as std::ffi::c_uint != 0 {
+        if (*env).me_flags.intersects(InternalEnvFlags::MDB_ENV_TXKEY) {
             pthread_key_delete((*env).me_txkey);
         }
         if !((*env).me_map).is_null() {
@@ -5106,7 +5176,7 @@ unsafe extern "C" fn mdb_env_close0(mut env: *mut MDB_env, mut excl: std::ffi::c
         if (*env).me_lfd != -(1 as std::ffi::c_int) {
             close((*env).me_lfd);
         }
-        (*env).me_flags &= !(0x20000000 as std::ffi::c_uint | 0x10000000 as std::ffi::c_uint);
+        (*env).me_flags.remove(InternalEnvFlags::MDB_ENV_ACTIVE | InternalEnvFlags::MDB_ENV_TXKEY);
     }
 }
 #[unsafe(no_mangle)]
@@ -5880,7 +5950,7 @@ unsafe extern "C" fn mdb_ovpage_free(
                     ix = iy;
                 }
                 (*txn).mt_dirty_room += 1;
-                if (*env).me_flags & MDB_WRITEMAP == 0 {
+                if !(*env).me_flags.intersects(InternalEnvFlags::MDB_WRITEMAP) {
                     mdb_dpage_free(env, mp);
                 }
             }
@@ -8110,7 +8180,9 @@ unsafe extern "C" fn _mdb_cursor_put(
                                 if ovpages >= dpages {
                                     if !(*omp).mp_flags.intersects(PageFlags::P_DIRTY)
                                         && (level != 0
-                                            || (*env).me_flags & 0x80000 as uint32_t != 0)
+                                            || (*env)
+                                                .me_flags
+                                                .intersects(InternalEnvFlags::MDB_WRITEMAP))
                                     {
                                         rc = mdb_page_unspill((*mc).mc_txn, omp, &mut omp);
                                         if rc != 0 {
@@ -13716,7 +13788,7 @@ pub unsafe extern "C" fn mdb_env_copy2(
         let mut fname: MDB_name =
             MDB_name { mn_len: 0, mn_alloced: 0, mn_val: std::ptr::null_mut::<mdb_nchar_t>() };
         let mut newfd: std::ffi::c_int = -(1 as std::ffi::c_int);
-        rc = mdb_fname_init(path, (*env).me_flags | 0x400000 as uint32_t, &mut fname);
+        rc = mdb_fname_init(path, (*env).me_flags | InternalEnvFlags::MDB_NOLOCK, &mut fname);
         if rc == 0 as std::ffi::c_int {
             rc = mdb_fopen(env, &mut fname, MDB_O_COPY, 0o666 as mdb_mode_t, &mut newfd);
             if fname.mn_alloced != 0 {
@@ -13747,22 +13819,19 @@ pub unsafe extern "C" fn mdb_env_set_flags(
     mut flag: std::ffi::c_uint,
     mut onoff: std::ffi::c_int,
 ) -> std::ffi::c_int {
+    let Some(flag) = EnvFlags::from_bits(flag).map(InternalEnvFlags::from) else {
+        return EINVAL;
+    };
+    if !(flag & !InternalEnvFlags::CHANGEABLE).is_empty() {
+        return EINVAL;
+    }
     unsafe {
-        if flag
-            & !(0x10000 as std::ffi::c_int
-                | 0x40000 as std::ffi::c_int
-                | 0x100000 as std::ffi::c_int
-                | 0x1000000 as std::ffi::c_int) as std::ffi::c_uint
-            != 0
-        {
-            return 22 as std::ffi::c_int;
-        }
         if onoff != 0 {
             (*env).me_flags |= flag;
         } else {
             (*env).me_flags &= !flag;
         }
-        0 as std::ffi::c_int
+        return 0;
     }
 }
 #[unsafe(no_mangle)]
@@ -13773,22 +13842,10 @@ pub unsafe extern "C" fn mdb_env_get_flags(
 ) -> std::ffi::c_int {
     unsafe {
         if env.is_null() || arg.is_null() {
-            return 22 as std::ffi::c_int;
+            return EINVAL;
         }
-        *arg = (*env).me_flags
-            & (0x10000 as std::ffi::c_int
-                | 0x40000 as std::ffi::c_int
-                | 0x100000 as std::ffi::c_int
-                | 0x1000000 as std::ffi::c_int
-                | (0x1 as std::ffi::c_int
-                    | 0x4000 as std::ffi::c_int
-                    | 0x20000 as std::ffi::c_int
-                    | 0x80000 as std::ffi::c_int
-                    | 0x200000 as std::ffi::c_int
-                    | 0x400000 as std::ffi::c_int
-                    | 0x800000 as std::ffi::c_int
-                    | 0x2000000 as std::ffi::c_int)) as uint32_t;
-        0 as std::ffi::c_int
+        *arg = EnvFlags::from_internal((*env).me_flags).bits();
+        return 0;
     }
 }
 #[unsafe(no_mangle)]
@@ -13799,10 +13856,10 @@ pub unsafe extern "C" fn mdb_env_set_userctx(
 ) -> std::ffi::c_int {
     unsafe {
         if env.is_null() {
-            return 22 as std::ffi::c_int;
+            return EINVAL;
         }
         (*env).me_userctx = ctx;
-        0 as std::ffi::c_int
+        return 0;
     }
 }
 #[unsafe(no_mangle)]
@@ -14866,7 +14923,7 @@ unsafe extern "C" fn mdb_mutex_failed(
                     (*meta).mm_txnid,
                 );
                 if !((*env).me_txn).is_null() {
-                    (*env).me_flags |= 0x80000000 as std::ffi::c_uint;
+                    (*env).me_flags.insert(InternalEnvFlags::MDB_FATAL_ERROR);
                     (*env).me_txn = std::ptr::null_mut::<MDB_txn>();
                     rc = -(30795 as std::ffi::c_int);
                 }
