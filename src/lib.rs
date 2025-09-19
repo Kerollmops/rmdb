@@ -328,3 +328,12 @@ pub const MDB_BAD_VALSIZE: i32 = ReturnCode::MdbBadValsize as i32;
 pub const MDB_BAD_DBI: i32 = ReturnCode::MdbBadDbi as i32;
 pub const MDB_PROBLEM: i32 = ReturnCode::MdbProblem as i32;
 pub const MDB_LAST_ERRCODE: i32 = ReturnCode::MdbProblem as i32;
+
+/// Handle for the DB used to track free pages.
+const FREE_DBI: MDB_dbi = 0;
+/// Handle for the default DB.
+const MAIN_DBI: MDB_dbi = 1;
+/// Number of DBs in metapage (free and main) - also hardcoded elsewhere
+const CORE_DBS: u32 = 2;
+/// Number of meta pages - also hardcoded elsewhere
+const NUM_METAS: usize = 2;

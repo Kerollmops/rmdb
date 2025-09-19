@@ -132,11 +132,11 @@ use libc::{EINVAL, ENOMEM};
 use crate::MDB_cursor_op::*;
 use crate::midl::*;
 use crate::{
-    DatabaseFlags, InternalDatabaseFlags, MDB_BAD_DBI, MDB_BAD_RSLOT, MDB_BAD_TXN, MDB_BAD_VALSIZE,
-    MDB_CORRUPTED, MDB_CURRENT, MDB_CURSOR_FULL, MDB_DBS_FULL, MDB_INCOMPATIBLE, MDB_INVALID,
-    MDB_KEYEXIST, MDB_MAP_FULL, MDB_MAP_RESIZED, MDB_NOTFOUND, MDB_PAGE_FULL, MDB_PAGE_NOTFOUND,
-    MDB_PANIC, MDB_PROBLEM, MDB_READERS_FULL, MDB_RESERVE, MDB_SUCCESS, MDB_TXN_FULL,
-    MDB_VERSION_MISMATCH, MDB_cursor_op,
+    CORE_DBS, DatabaseFlags, FREE_DBI, InternalDatabaseFlags, MAIN_DBI, MDB_BAD_DBI, MDB_BAD_RSLOT,
+    MDB_BAD_TXN, MDB_BAD_VALSIZE, MDB_CORRUPTED, MDB_CURRENT, MDB_CURSOR_FULL, MDB_DBS_FULL,
+    MDB_INCOMPATIBLE, MDB_INVALID, MDB_KEYEXIST, MDB_MAP_FULL, MDB_MAP_RESIZED, MDB_NOTFOUND,
+    MDB_PAGE_FULL, MDB_PAGE_NOTFOUND, MDB_PANIC, MDB_PROBLEM, MDB_READERS_FULL, MDB_RESERVE,
+    MDB_SUCCESS, MDB_TXN_FULL, MDB_VERSION_MISMATCH, MDB_cursor_op, NUM_METAS,
 };
 
 pub type __uint16_t = std::ffi::c_ushort;
@@ -376,7 +376,7 @@ pub struct MDB_env {
     pub me_path: *mut std::ffi::c_char,
     pub me_map: *mut std::ffi::c_char,
     pub me_txns: *mut MDB_txninfo,
-    pub me_metas: [*mut MDB_meta; 2],
+    pub me_metas: [*mut MDB_meta; NUM_METAS],
     pub me_pbuf: *mut std::ffi::c_void,
     pub me_txn: *mut MDB_txn,
     pub me_txn0: *mut MDB_txn,
@@ -950,11 +950,8 @@ pub type C2RustUnnamed_8 = std::ffi::c_uint;
 pub const Paranoid: C2RustUnnamed_9 = 0;
 pub type C2RustUnnamed_9 = std::ffi::c_uint;
 pub const Max_retries: C2RustUnnamed_9 = 2147483647;
-pub const MDB_END_COMMITTED: C2RustUnnamed_12 = 0;
 // pub const mask: C2RustUnnamed_10 = 49232;
 pub type C2RustUnnamed_10 = std::ffi::c_uint;
-pub const MDB_END_EMPTY_COMMIT: C2RustUnnamed_12 = 1;
-pub const MDB_END_RESET: C2RustUnnamed_12 = 3;
 pub type MDB_msg_func =
     unsafe extern "C" fn(*const std::ffi::c_char, *mut std::ffi::c_void) -> std::ffi::c_int;
 pub type C2RustUnnamed_11 = std::ffi::c_uint;
@@ -1218,7 +1215,7 @@ unsafe extern "C" fn mdb_page_loose(
         let mut loose: std::ffi::c_int = 0 as std::ffi::c_int;
         let mut pgno: pgno_t = (*mp).mp_p.p_pgno;
         let mut txn: *mut MDB_txn = (*mc).mc_txn;
-        if (*mp).mp_flags.intersects(PageFlags::P_DIRTY) && (*mc).mc_dbi != 0 as MDB_dbi {
+        if (*mp).mp_flags.intersects(PageFlags::P_DIRTY) && (*mc).mc_dbi != FREE_DBI {
             if !((*txn).mt_parent).is_null() {
                 let mut dl: *mut MDB_ID2 = (*txn).mt_u.dirty_list;
                 if (*dl.offset(0)).mid != 0 {
@@ -1345,7 +1342,7 @@ unsafe extern "C" fn mdb_pages_xkeep(
                             break;
                         }
                         if ((*dp).mp_flags & mask).bits() as u32 == pflags && level <= 1 {
-                            (*dp).mp_flags ^= PageFlags::P_KEEP;
+                            (*dp).mp_flags.toggle(PageFlags::P_KEEP);
                         }
                     }
                 }
@@ -1374,7 +1371,7 @@ unsafe extern "C" fn mdb_page_spill(
             return MDB_SUCCESS;
         }
         i = (*(*m0).mc_db).md_depth as std::ffi::c_uint;
-        if (*m0).mc_dbi >= 2 as MDB_dbi {
+        if (*m0).mc_dbi >= CORE_DBS {
             i = i.wrapping_add((*((*txn).mt_dbs).offset(1)).md_depth as std::ffi::c_uint);
         }
         if !key.is_null() {
@@ -1642,18 +1639,13 @@ unsafe extern "C" fn mdb_page_alloc(
                 if op as std::ffi::c_uint == MDB_FIRST as std::ffi::c_uint {
                     last = (*env).me_pgstate.mf_pglast;
                     oldest = (*env).me_pgoldest;
-                    mdb_cursor_init(
-                        &mut m2,
-                        txn,
-                        0 as MDB_dbi,
-                        std::ptr::null_mut::<MDB_xcursor>(),
-                    );
+                    mdb_cursor_init(&mut m2, txn, FREE_DBI, std::ptr::null_mut::<MDB_xcursor>());
                     if last != 0 {
                         op = MDB_SET_RANGE;
                         key.mv_data = &mut last as *mut txnid_t as *mut std::ffi::c_void;
                         key.mv_size = ::core::mem::size_of::<txnid_t>() as std::ffi::c_ulong;
                     }
-                    if Paranoid as std::ffi::c_int != 0 && (*mc).mc_dbi == 0 as MDB_dbi {
+                    if Paranoid as std::ffi::c_int != 0 && (*mc).mc_dbi == FREE_DBI {
                         retry = -(1 as std::ffi::c_int);
                     }
                 }
@@ -2379,7 +2371,7 @@ unsafe extern "C" fn mdb_txn_renew0(mut txn: *mut MDB_txn) -> std::ffi::c_int {
         let mut nr: std::ffi::c_uint = 0;
         let mut flags = (*txn).mt_flags;
         let mut rc: std::ffi::c_int = 0;
-        let mut new_notls: std::ffi::c_int = 0 as std::ffi::c_int;
+        let mut new_notls = TxnEndMode::empty();
         flags &= TransactionFlags::MDB_TXN_RDONLY;
         if !flags.is_empty() {
             if ti.is_null() {
@@ -2472,8 +2464,11 @@ unsafe extern "C" fn mdb_txn_renew0(mut txn: *mut MDB_txn) -> std::ffi::c_int {
                     sb_0.sem_num = (*rmutex).semnum as std::ffi::c_ushort;
                     *(*rmutex).locked = 0 as std::ffi::c_int;
                     semop((*rmutex).semid, &mut sb_0, 1 as size_t);
-                    new_notls = ((*env).me_flags & InternalEnvFlags::MDB_NOTLS).bits() as i32;
-                    if new_notls == 0 && {
+                    new_notls = TxnEndMode::from_bits(
+                        ((*env).me_flags & InternalEnvFlags::MDB_NOTLS).bits(),
+                    )
+                    .unwrap();
+                    if new_notls.is_empty() && {
                         rc = pthread_setspecific((*env).me_txkey, r as *const std::ffi::c_void);
                         rc != 0
                     } {
@@ -2579,7 +2574,7 @@ unsafe extern "C" fn mdb_txn_renew0(mut txn: *mut MDB_txn) -> std::ffi::c_int {
         } else {
             return MDB_SUCCESS;
         }
-        mdb_txn_end(txn, (new_notls | MDB_END_FAIL_BEGIN as std::ffi::c_int) as std::ffi::c_uint);
+        mdb_txn_end(txn, new_notls | TxnEndMode::MDB_END_FAIL_BEGIN);
         rc
     }
 }
@@ -2716,7 +2711,7 @@ pub unsafe extern "C" fn mdb_txn_begin(
                     rc = mdb_cursor_shadow(parent, txn);
                 }
                 if rc != 0 {
-                    mdb_txn_end(txn, MDB_END_FAIL_BEGINCHILD as std::ffi::c_uint);
+                    mdb_txn_end(txn, TxnEndMode::MDB_END_FAIL_BEGINCHILD);
                 }
                 current_block = 10150597327160359210;
             } else {
@@ -2762,7 +2757,7 @@ pub unsafe extern "C" fn mdb_txn_id(mut txn: *mut MDB_txn) -> mdb_size_t {
 }
 
 /// Export or close DBI handles opened in this txn.
-unsafe extern "C" fn mdb_dbis_update(mut txn: *mut MDB_txn, mut keep: std::ffi::c_int) {
+unsafe extern "C" fn mdb_dbis_update(mut txn: *mut MDB_txn, keep: bool) {
     unsafe {
         let mut i: isize = 0;
         let mut n: MDB_dbi = (*txn).mt_numdbs;
@@ -2775,7 +2770,7 @@ unsafe extern "C" fn mdb_dbis_update(mut txn: *mut MDB_txn, mut keep: std::ffi::
                 break;
             }
             if (*tdbflags.offset(i)).intersects(TransactionDbFlags::DB_NEW) {
-                if keep != 0 {
+                if keep {
                     *((*env).me_dbflags).offset(i) =
                         (*((*txn).mt_dbs).offset(i)).md_flags | InternalDatabaseFlags::MDB_VALID;
                 } else {
@@ -2793,15 +2788,60 @@ unsafe extern "C" fn mdb_dbis_update(mut txn: *mut MDB_txn, mut keep: std::ffi::
                 }
             }
         }
-        if keep != 0 && (*env).me_numdbs < n {
+        if keep && (*env).me_numdbs < n {
             (*env).me_numdbs = n;
         }
     }
 }
-unsafe extern "C" fn mdb_txn_end(mut txn: *mut MDB_txn, mut mode: std::ffi::c_uint) {
+
+// #define MDB_END_NAMES {"committed", "empty-commit", "abort", "reset", "reset-tmp", "fail-begin", "fail-beginchild"}
+/// mdb_txn_end operation number, for logging
+#[repr(u32)]
+enum MdbTxnEnd {
+    MDB_END_COMMITTED,
+    MDB_END_EMPTY_COMMIT,
+    MDB_END_ABORT,
+    MDB_END_RESET,
+    MDB_END_RESET_TMP,
+    MDB_END_FAIL_BEGIN,
+    MDB_END_FAIL_BEGINCHILD,
+}
+
+bitflags! {
+    /// mdb_txn_end: TxnEndMode
+    #[repr(C)]
+    pub struct TxnEndMode: u32 {
+        const MDB_END_COMMITTED = MdbTxnEnd::MDB_END_COMMITTED as u32;
+        const MDB_END_EMPTY_COMMIT = MdbTxnEnd::MDB_END_EMPTY_COMMIT as u32;
+        const MDB_END_ABORT = MdbTxnEnd::MDB_END_ABORT as u32;
+        const MDB_END_RESET = MdbTxnEnd::MDB_END_RESET as u32;
+        const MDB_END_RESET_TMP = MdbTxnEnd::MDB_END_RESET_TMP as u32;
+        const MDB_END_FAIL_BEGIN = MdbTxnEnd::MDB_END_FAIL_BEGIN as u32;
+        const MDB_END_FAIL_BEGINCHILD = MdbTxnEnd::MDB_END_FAIL_BEGINCHILD as u32;
+
+        /// mask for #mdb_txn_end() operation number
+        const MDB_END_OPMASK = 0x0F;
+        /// update env state (DBIs)
+        const MDB_END_UPDATE = 0x10;
+        /// free txn unless it is #MDB_env.%me_txn0
+        const MDB_END_FREE = 0x20;
+        /// release any reader slot if #MDB_NOTLS
+        const MDB_END_SLOT = EnvFlags::MDB_NOTLS.bits();
+    }
+}
+
+/// End a transaction, except successful commit of a nested transaction.
+///
+/// May be called twice for readonly txns: First reset it, then abort.
+/// @param[in] txn the transaction handle to end
+/// @param[in] mode why and how to end the transaction
+unsafe extern "C" fn mdb_txn_end(mut txn: *mut MDB_txn, mut mode: TxnEndMode) {
     unsafe {
         let mut env: *mut MDB_env = (*txn).mt_env;
-        mdb_dbis_update(txn, (mode & 0x10) as std::ffi::c_int);
+
+        // Export or close DBI handles opened in this txn
+        mdb_dbis_update(txn, mode.intersects(TxnEndMode::MDB_END_UPDATE));
+
         if (*txn).mt_flags.contains(TransactionFlags::MDB_TXN_RDONLY) {
             if !((*txn).mt_u.reader).is_null() {
                 ::core::ptr::write_volatile(
@@ -2810,7 +2850,7 @@ unsafe extern "C" fn mdb_txn_end(mut txn: *mut MDB_txn, mut mode: std::ffi::c_ui
                 );
                 if !(*env).me_flags.intersects(InternalEnvFlags::MDB_NOTLS) {
                     (*txn).mt_u.reader = std::ptr::null_mut::<MDB_reader>();
-                } else if mode & 0x200000 as std::ffi::c_uint != 0 {
+                } else if mode.intersects(TxnEndMode::MDB_END_SLOT) {
                     ::core::ptr::write_volatile(
                         &mut (*(*txn).mt_u.reader).mru.mrx.mrb_pid as *mut pid_t,
                         0 as std::ffi::c_int,
@@ -2818,17 +2858,17 @@ unsafe extern "C" fn mdb_txn_end(mut txn: *mut MDB_txn, mut mode: std::ffi::c_ui
                     (*txn).mt_u.reader = std::ptr::null_mut::<MDB_reader>();
                 }
             }
-            (*txn).mt_numdbs = 0 as MDB_dbi;
+            (*txn).mt_numdbs = FREE_DBI;
             (*txn).mt_flags.insert(TransactionFlags::MDB_TXN_FINISHED);
         } else if !(*txn).mt_flags.contains(TransactionFlags::MDB_TXN_FINISHED) {
-            // let mut pghead: Option<&mut MDB_IDL> = (*env).me_pgstate.mf_pghead.as_mut();
-            if mode & 0x10 == 0 {
+            // !(already closed cursors)
+            if !mode.intersects(TxnEndMode::MDB_END_UPDATE) {
                 mdb_cursors_close(txn, 0 as std::ffi::c_uint);
             }
             if !(*env).me_flags.intersects(InternalEnvFlags::MDB_WRITEMAP) {
                 mdb_dlist_free(txn);
             }
-            (*txn).mt_numdbs = 0 as MDB_dbi;
+            (*txn).mt_numdbs = FREE_DBI;
             (*txn).mt_flags = TransactionFlags::MDB_TXN_FINISHED;
             if ((*txn).mt_parent).is_null() {
                 mdb_midl_shrink(&mut (*txn).mt_free_pgs);
@@ -2836,7 +2876,7 @@ unsafe extern "C" fn mdb_txn_end(mut txn: *mut MDB_txn, mut mode: std::ffi::c_ui
                 (*env).me_pgstate.mf_pghead = None;
                 (*env).me_pgstate.mf_pglast = 0;
                 (*env).me_txn = std::ptr::null_mut::<MDB_txn>();
-                mode = 0 as std::ffi::c_uint;
+                mode = TxnEndMode::empty();
                 if !((*env).me_txns).is_null() {
                     let mut sb: sembuf = {
                         sembuf {
@@ -2867,7 +2907,7 @@ unsafe extern "C" fn mdb_txn_end(mut txn: *mut MDB_txn, mut mode: std::ffi::c_ui
             // Note: Freed above when owner assigned to None
             // mdb_midl_free(pghead);
         }
-        if mode & 0x20 as std::ffi::c_uint != 0 {
+        if mode.intersects(TxnEndMode::MDB_END_FREE) {
             free(txn as *mut std::ffi::c_void);
         }
     }
@@ -2881,7 +2921,7 @@ pub unsafe extern "C" fn mdb_txn_reset(mut txn: *mut MDB_txn) {
         if !(*txn).mt_flags.intersects(TransactionFlags::MDB_TXN_RDONLY) {
             return;
         }
-        mdb_txn_end(txn, MDB_END_RESET as std::ffi::c_uint);
+        mdb_txn_end(txn, TxnEndMode::MDB_END_RESET);
     }
 }
 unsafe extern "C" fn _mdb_txn_abort(mut txn: *mut MDB_txn) {
@@ -2894,9 +2934,7 @@ unsafe extern "C" fn _mdb_txn_abort(mut txn: *mut MDB_txn) {
         }
         mdb_txn_end(
             txn,
-            (MDB_END_ABORT as std::ffi::c_int
-                | 0x200000 as std::ffi::c_int
-                | 0x20 as std::ffi::c_int) as std::ffi::c_uint,
+            TxnEndMode::MDB_END_ABORT | TxnEndMode::MDB_END_SLOT | TxnEndMode::MDB_END_FREE,
         );
     }
 }
@@ -2947,7 +2985,7 @@ unsafe extern "C" fn mdb_freelist_save(mut txn: *mut MDB_txn) -> std::ffi::c_int
         let mut mop_len: ssize_t = 0;
         let mut clean_limit: ssize_t = 0;
 
-        mdb_cursor_init(&mut mc, txn, 0 as MDB_dbi, std::ptr::null_mut::<MDB_xcursor>());
+        mdb_cursor_init(&mut mc, txn, FREE_DBI, std::ptr::null_mut::<MDB_xcursor>());
 
         if ((*env).me_pgstate.mf_pghead).is_some() {
             /* Make sure first page of freeDB is touched and on freelist */
@@ -3430,15 +3468,15 @@ unsafe extern "C" fn _mdb_txn_commit(mut txn: *mut MDB_txn) -> std::ffi::c_int {
         let mut current_block: u64;
         let mut rc: std::ffi::c_int = 0;
         let mut i: std::ffi::c_uint = 0;
-        let mut end_mode: std::ffi::c_uint = 0;
+        let mut end_mode = TxnEndMode::empty();
         let mut env: *mut MDB_env = std::ptr::null_mut::<MDB_env>();
         if txn.is_null() {
             return 22 as std::ffi::c_int;
         }
-        end_mode = (MDB_END_EMPTY_COMMIT as std::ffi::c_int
-            | 0x10 as std::ffi::c_int
-            | 0x200000 as std::ffi::c_int
-            | 0x20 as std::ffi::c_int) as std::ffi::c_uint;
+        end_mode = TxnEndMode::MDB_END_EMPTY_COMMIT
+            | TxnEndMode::MDB_END_UPDATE
+            | TxnEndMode::MDB_END_SLOT
+            | TxnEndMode::MDB_END_FREE;
         if !((*txn).mt_child).is_null() {
             rc = _mdb_txn_commit((*txn).mt_child);
             if rc != 0 {
@@ -3653,7 +3691,7 @@ unsafe extern "C" fn _mdb_txn_commit(mut txn: *mut MDB_txn) -> std::ffi::c_int {
                 {
                     current_block = 9264303918316504035;
                 } else {
-                    if (*txn).mt_numdbs > 2 as MDB_dbi {
+                    if (*txn).mt_numdbs > CORE_DBS {
                         let mut mc: MDB_cursor = MDB_cursor {
                             mc_next: std::ptr::null_mut::<MDB_cursor>(),
                             mc_backup: std::ptr::null_mut::<MDB_cursor>(),
@@ -3678,10 +3716,10 @@ unsafe extern "C" fn _mdb_txn_commit(mut txn: *mut MDB_txn) -> std::ffi::c_int {
                         mdb_cursor_init(
                             &mut mc,
                             txn,
-                            1 as MDB_dbi,
+                            MAIN_DBI,
                             std::ptr::null_mut::<MDB_xcursor>(),
                         );
-                        i_0 = 2 as MDB_dbi;
+                        i_0 = CORE_DBS;
                         loop {
                             if i_0 >= (*txn).mt_numdbs {
                                 current_block = 8656139126282042408;
@@ -3750,9 +3788,8 @@ unsafe extern "C" fn _mdb_txn_commit(mut txn: *mut MDB_txn) -> std::ffi::c_int {
                                     if rc != 0 {
                                         current_block = 9928889463419475167;
                                     } else {
-                                        end_mode = (MDB_END_COMMITTED as std::ffi::c_int
-                                            | 0x10 as std::ffi::c_int)
-                                            as std::ffi::c_uint;
+                                        end_mode = TxnEndMode::MDB_END_COMMITTED
+                                            | TxnEndMode::MDB_END_UPDATE;
                                         if (*env)
                                             .me_flags
                                             .intersects(InternalEnvFlags::MDB_PREVSNAPSHOT)
@@ -3824,12 +3861,12 @@ unsafe extern "C" fn mdb_env_read_header(
         };
         let mut p: *mut MDB_page = std::ptr::null_mut::<MDB_page>();
         let mut m: *mut MDB_meta = std::ptr::null_mut::<MDB_meta>();
-        let mut i: std::ffi::c_int = 0;
+        let mut i: usize = 0;
         let mut rc: std::ffi::c_int = 0;
-        let mut off: std::ffi::c_int = 0;
-        off = 0 as std::ffi::c_int;
+        let mut off: usize = 0;
+
         i = off;
-        while i < 2 as std::ffi::c_int {
+        while i < NUM_METAS {
             rc = pread(
                 (*env).me_fd,
                 &mut pbuf as *mut MDB_metabuf as *mut std::ffi::c_void,
@@ -3860,7 +3897,7 @@ unsafe extern "C" fn mdb_env_read_header(
             {
                 return MDB_VERSION_MISMATCH;
             }
-            if off == 0 as std::ffi::c_int
+            if off == 0
                 || (if prev {
                     ((*m).mm_txnid < (*meta).mm_txnid) as std::ffi::c_int
                 } else {
@@ -3870,10 +3907,9 @@ unsafe extern "C" fn mdb_env_read_header(
                 *meta = *m;
             }
             i += 1;
-            off = (off as uint32_t).wrapping_add((*meta).mm_dbs[0 as usize].md_pad)
-                as std::ffi::c_int;
+            off = (off as u32).wrapping_add((*meta).mm_dbs[FREE_DBI as usize].md_pad) as usize;
         }
-        0 as std::ffi::c_int
+        return 0;
     }
 }
 #[cold]
@@ -3884,13 +3920,13 @@ unsafe extern "C" fn mdb_env_init_meta0(mut env: *mut MDB_env, mut meta: *mut MD
             (if 0 as std::ffi::c_int != 0 { 999 as std::ffi::c_int } else { 1 as std::ffi::c_int })
                 as uint32_t;
         (*meta).mm_mapsize = (*env).me_mapsize;
-        (*meta).mm_dbs[0 as usize].md_pad = (*env).me_psize;
-        (*meta).mm_last_pg = (2 as std::ffi::c_int - 1 as std::ffi::c_int) as pgno_t;
-        (*meta).mm_dbs[0 as usize].md_flags =
+        (*meta).mm_dbs[FREE_DBI as usize].md_pad = (*env).me_psize;
+        (*meta).mm_last_pg = (NUM_METAS - 1) as pgno_t;
+        (*meta).mm_dbs[FREE_DBI as usize].md_flags =
             InternalDatabaseFlags::from_bits_truncate((*env).me_flags.bits() as u16);
-        (*meta).mm_dbs[0 as usize].md_flags.insert(InternalDatabaseFlags::MDB_INTEGERKEY); /* this is mm_dbs[FREE_DBI].md_flags */
-        (*meta).mm_dbs[0 as usize].md_root = !(0 as pgno_t);
-        (*meta).mm_dbs[1 as usize].md_root = !(0 as pgno_t);
+        (*meta).mm_dbs[FREE_DBI as usize].md_flags.insert(InternalDatabaseFlags::MDB_INTEGERKEY); /* this is mm_dbs[FREE_DBI as usize].md_flags */
+        (*meta).mm_dbs[FREE_DBI as usize].md_root = !(0 as pgno_t);
+        (*meta).mm_dbs[MAIN_DBI as usize].md_root = !(0 as pgno_t);
     }
 }
 #[cold]
@@ -3905,7 +3941,7 @@ unsafe extern "C" fn mdb_env_init_meta(
         let mut psize: std::ffi::c_uint = 0;
         let mut len: std::ffi::c_int = 0;
         psize = (*env).me_psize;
-        p = calloc(2 as std::ffi::c_ulong, psize as std::ffi::c_ulong) as *mut MDB_page;
+        p = calloc(NUM_METAS as u64, psize as u64) as *mut MDB_page;
         if p.is_null() {
             return 12 as std::ffi::c_int;
         }
@@ -3920,7 +3956,7 @@ unsafe extern "C" fn mdb_env_init_meta(
             len = pwrite(
                 (*env).me_fd,
                 p as *const std::ffi::c_void,
-                psize.wrapping_mul(2 as std::ffi::c_uint) as size_t,
+                (psize as usize).wrapping_mul(NUM_METAS) as u64,
                 0 as off_t,
             ) as std::ffi::c_int;
             if len == -(1 as std::ffi::c_int) && *__error() == 4 as std::ffi::c_int {
@@ -3931,7 +3967,7 @@ unsafe extern "C" fn mdb_env_init_meta(
         }
         if rc == 0 {
             rc = *__error();
-        } else if len as std::ffi::c_uint == psize.wrapping_mul(2 as std::ffi::c_uint) {
+        } else if len as std::ffi::c_uint == psize.wrapping_mul(NUM_METAS as u32) {
             rc = 0 as std::ffi::c_int;
         } else {
             rc = 28 as std::ffi::c_int;
@@ -4030,8 +4066,8 @@ unsafe extern "C" fn mdb_env_write_meta(mut txn: *mut MDB_txn) -> std::ffi::c_in
             ::core::ptr::write_volatile(&mut metab.mm_txnid as *mut txnid_t, (*mp).mm_txnid);
             metab.mm_last_pg = (*mp).mm_last_pg;
             meta.mm_mapsize = mapsize;
-            meta.mm_dbs[0 as usize] = *((*txn).mt_dbs).offset(0);
-            meta.mm_dbs[1 as usize] = *((*txn).mt_dbs).offset(1);
+            meta.mm_dbs[FREE_DBI as usize] = *((*txn).mt_dbs).offset(0);
+            meta.mm_dbs[MAIN_DBI as usize] = *((*txn).mt_dbs).offset(1);
             meta.mm_last_pg = ((*txn).mt_next_pgno).wrapping_sub(1 as pgno_t);
             ::core::ptr::write_volatile(&mut meta.mm_txnid as *mut txnid_t, (*txn).mt_txnid);
             off = 16 as off_t;
@@ -4104,7 +4140,7 @@ pub unsafe extern "C" fn mdb_env_create(mut env: *mut *mut MDB_env) -> std::ffi:
             return 12 as std::ffi::c_int;
         }
         (*e).me_maxreaders = 126 as std::ffi::c_uint;
-        (*e).me_numdbs = 2 as MDB_dbi;
+        (*e).me_numdbs = CORE_DBS;
         (*e).me_maxdbs = (*e).me_numdbs;
         (*e).me_fd = -(1 as std::ffi::c_int);
         (*e).me_lfd = -(1 as std::ffi::c_int);
@@ -4198,7 +4234,7 @@ pub unsafe extern "C" fn mdb_env_set_mapsize(
         if (*env).me_psize != 0 {
             (*env).me_maxpg = ((*env).me_mapsize / (*env).me_psize as mdb_size_t) as _;
         }
-        0 as std::ffi::c_int
+        return MDB_SUCCESS;
     }
 }
 #[unsafe(no_mangle)]
@@ -4211,8 +4247,8 @@ pub unsafe extern "C" fn mdb_env_set_maxdbs(
         if !((*env).me_map).is_null() {
             return 22 as std::ffi::c_int;
         }
-        (*env).me_maxdbs = dbs.wrapping_add(2 as MDB_dbi);
-        0 as std::ffi::c_int
+        (*env).me_maxdbs = dbs + CORE_DBS;
+        return MDB_SUCCESS;
     }
 }
 #[unsafe(no_mangle)]
@@ -4425,13 +4461,14 @@ unsafe extern "C" fn mdb_env_open2(mut env: *mut MDB_env, mut prev: bool) -> std
             mdb_env_init_meta0(env, &mut meta);
             meta.mm_mapsize = 1048576 as mdb_size_t;
         } else {
-            (*env).me_psize = meta.mm_dbs[0 as usize].md_pad;
+            (*env).me_psize = meta.mm_dbs[FREE_DBI as usize].md_pad;
         }
         if (*env).me_mapsize == 0 {
             (*env).me_mapsize = meta.mm_mapsize;
         }
         let mut minsize: mdb_size_t = ((meta.mm_last_pg).wrapping_add(1 as pgno_t)
-            * meta.mm_dbs[0 as usize].md_pad as pgno_t) as _;
+            * meta.mm_dbs[FREE_DBI as usize].md_pad as pgno_t)
+            as _;
         if (*env).me_mapsize < minsize {
             (*env).me_mapsize = minsize;
         }
@@ -5778,7 +5815,7 @@ unsafe extern "C" fn mdb_page_search(
                 mdb_cursor_init(
                     &mut mc2,
                     (*mc).mc_txn,
-                    1 as MDB_dbi,
+                    MAIN_DBI,
                     std::ptr::null_mut::<MDB_xcursor>(),
                 );
                 rc = mdb_page_search(&mut mc2, &mut (*(*mc).mc_dbx).md_name, 0 as std::ffi::c_int);
@@ -7560,7 +7597,7 @@ pub unsafe extern "C" fn mdb_cursor_get(
 unsafe extern "C" fn mdb_cursor_touch(mut mc: *mut MDB_cursor) -> std::ffi::c_int {
     unsafe {
         let mut rc: std::ffi::c_int = 0 as std::ffi::c_int;
-        if (*mc).mc_dbi >= 2 as MDB_dbi
+        if (*mc).mc_dbi >= CORE_DBS
             && !(*(*mc).mc_dbflag)
                 .intersects(TransactionDbFlags::DB_DIRTY | TransactionDbFlags::DB_DUPDATA)
         {
@@ -7622,7 +7659,7 @@ unsafe extern "C" fn mdb_cursor_touch(mut mc: *mut MDB_cursor) -> std::ffi::c_in
             {
                 return MDB_BAD_DBI;
             }
-            mdb_cursor_init(&mut mc2, (*mc).mc_txn, 1 as MDB_dbi, &mut mcx);
+            mdb_cursor_init(&mut mc2, (*mc).mc_txn, MAIN_DBI, &mut mcx);
             rc = mdb_page_search(&mut mc2, &mut (*(*mc).mc_dbx).md_name, 1 as std::ffi::c_int);
             if rc != 0 {
                 return rc;
@@ -9858,7 +9895,7 @@ pub unsafe extern "C" fn mdb_cursor_open(
         if (*txn).mt_flags.intersects(TransactionFlags::MDB_TXN_BLOCKED) {
             return MDB_BAD_TXN;
         }
-        if dbi == 0 as MDB_dbi && !(*txn).mt_flags.contains(TransactionFlags::MDB_TXN_RDONLY) {
+        if dbi == FREE_DBI && !(*txn).mt_flags.contains(TransactionFlags::MDB_TXN_RDONLY) {
             return 22 as std::ffi::c_int;
         }
         if (*((*txn).mt_dbs).offset(dbi as isize))
@@ -13494,7 +13531,7 @@ unsafe extern "C" fn mdb_env_copyfd1(
                 );
                 my.mc_wbuf[1 as usize] = (my.mc_wbuf[0 as usize])
                     .offset((1024 as std::ffi::c_int * 1024 as std::ffi::c_int) as isize);
-                my.mc_next_pgno = 2 as pgno_t;
+                my.mc_next_pgno = NUM_METAS;
                 my.mc_env = env;
                 my.mc_fd = fd;
                 rc = pthread_create(
@@ -13518,8 +13555,7 @@ unsafe extern "C" fn mdb_env_copyfd1(
                         memset(
                             mp as *mut std::ffi::c_void,
                             0 as std::ffi::c_int,
-                            (2 as std::ffi::c_uint).wrapping_mul((*env).me_psize)
-                                as std::ffi::c_ulong,
+                            (NUM_METAS).wrapping_mul((*env).me_psize as usize) as u64,
                         );
                         (*mp).mp_p.p_pgno = 0 as pgno_t;
                         (*mp).mp_flags = PageFlags::P_META;
@@ -13562,7 +13598,7 @@ unsafe extern "C" fn mdb_env_copyfd1(
                             mdb_cursor_init(
                                 &mut mc,
                                 txn,
-                                0 as MDB_dbi,
+                                FREE_DBI,
                                 std::ptr::null_mut::<MDB_xcursor>(),
                             );
                             loop {
@@ -13603,12 +13639,12 @@ unsafe extern "C" fn mdb_env_copyfd1(
                                         1 as txnid_t,
                                     );
                                 }
-                                my.mc_wlen[0 as usize] =
-                                    ((*env).me_psize).wrapping_mul(2 as std::ffi::c_uint) as size_t;
+                                my.mc_wlen[0] =
+                                    ((*env).me_psize as usize).wrapping_mul(NUM_METAS) as u64;
                                 my.mc_txn = txn;
                                 rc = mdb_env_cwalk(&mut my, &mut root, 0 as std::ffi::c_int);
-                                if rc == 0 as std::ffi::c_int && root != new_root {
-                                    rc = MDB_INCOMPATIBLE;
+                                if rc == MDB_SUCCESS && root != new_root {
+                                    rc = MDB_INCOMPATIBLE; // page leak or corrupt DB
                                 }
                             }
                         }
@@ -13653,7 +13689,7 @@ unsafe extern "C" fn mdb_env_copyfd0(
             return rc;
         }
         if !((*env).me_txns).is_null() {
-            mdb_txn_end(txn, MDB_END_RESET_TMP as std::ffi::c_uint);
+            mdb_txn_end(txn, TxnEndMode::MDB_END_RESET_TMP);
             wmutex = ((*env).me_wmutex).as_mut_ptr();
             rc = mdb_sem_wait(wmutex);
             if rc != 0 && {
@@ -13683,7 +13719,7 @@ unsafe extern "C" fn mdb_env_copyfd0(
             current_block = 12349973810996921269;
         }
         if current_block == 12349973810996921269 {
-            wsize = ((*env).me_psize).wrapping_mul(2 as std::ffi::c_uint) as mdb_size_t;
+            wsize = ((*env).me_psize as usize * NUM_METAS) as u64;
             ptr = (*env).me_map;
             w2 = wsize as _;
             while w2 > 0 as size_t {
@@ -14054,7 +14090,7 @@ pub unsafe extern "C" fn mdb_dbi_open(
             return MDB_BAD_TXN;
         }
         if name.is_null() {
-            *dbi = 1 as MDB_dbi;
+            *dbi = MAIN_DBI;
             if flags.intersects(DatabaseFlags::PERSISTENT_FLAGS) {
                 // Note: review this
                 let mut f2 = InternalDatabaseFlags::from_bits_truncate(flags.bits() as u16);
@@ -14065,14 +14101,14 @@ pub unsafe extern "C" fn mdb_dbi_open(
                     (*txn).mt_flags.insert(TransactionFlags::MDB_TXN_DIRTY);
                 }
             }
-            mdb_default_cmp(txn, 1 as MDB_dbi);
+            mdb_default_cmp(txn, MAIN_DBI);
             return MDB_SUCCESS;
         }
         if ((*((*txn).mt_dbxs).offset(1)).md_cmp).is_none() {
-            mdb_default_cmp(txn, 1 as MDB_dbi);
+            mdb_default_cmp(txn, MAIN_DBI);
         }
         len = strlen(name);
-        i = 2 as MDB_dbi;
+        i = CORE_DBS;
         while i < (*txn).mt_numdbs {
             if (*((*txn).mt_dbxs).offset(i as isize)).md_name.mv_size == 0 {
                 if unused == 0 {
@@ -14110,7 +14146,7 @@ pub unsafe extern "C" fn mdb_dbi_open(
         exact = 0 as std::ffi::c_int;
         key.mv_size = len;
         key.mv_data = name as *mut std::ffi::c_void;
-        mdb_cursor_init(&mut mc, txn, 1 as MDB_dbi, std::ptr::null_mut::<MDB_xcursor>());
+        mdb_cursor_init(&mut mc, txn, MAIN_DBI, std::ptr::null_mut::<MDB_xcursor>());
         rc = mdb_cursor_set(&mut mc, &mut key, &mut data, MDB_SET, &mut exact);
         if rc == 0 as std::ffi::c_int {
             let mut node: *mut MDB_node = (mc.mc_pg[mc.mc_top as usize] as *mut std::ffi::c_char)
@@ -14297,7 +14333,7 @@ pub unsafe extern "C" fn mdb_stat(
 pub unsafe extern "C" fn mdb_dbi_close(mut env: *mut MDB_env, mut dbi: MDB_dbi) {
     unsafe {
         let mut ptr: *mut std::ffi::c_char = std::ptr::null_mut::<std::ffi::c_char>();
-        if dbi < 2 as MDB_dbi || dbi >= (*env).me_maxdbs {
+        if dbi < CORE_DBS || dbi >= (*env).me_maxdbs {
             return;
         }
         ptr = (*((*env).me_dbxs).offset(dbi as isize)).md_name.mv_data as *mut std::ffi::c_char;
@@ -14591,10 +14627,10 @@ pub unsafe extern "C" fn mdb_drop(
             m2 = (*m2).mc_next;
         }
         if rc == 0 {
-            if del != 0 && dbi >= 2 as MDB_dbi {
+            if del != 0 && dbi >= CORE_DBS {
                 rc = mdb_del0(
                     txn,
-                    1 as MDB_dbi,
+                    MAIN_DBI,
                     &mut (*(*mc).mc_dbx).md_name,
                     std::ptr::null_mut::<MDB_val>(),
                     0x2 as std::ffi::c_uint,
