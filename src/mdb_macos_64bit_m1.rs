@@ -618,13 +618,35 @@ pub struct MDB_name {
     pub mn_alloced: std::ffi::c_int,
     pub mn_val: *mut mdb_nchar_t,
 }
-pub type mdb_fopen_type = std::ffi::c_uint;
-pub const MDB_O_LOCKS: mdb_fopen_type = 16777734;
-pub const MDB_O_MASK: mdb_fopen_type = 20974083;
-pub const MDB_O_COPY: mdb_fopen_type = 16779777;
-pub const MDB_O_META: mdb_fopen_type = 20971521;
-pub const MDB_O_RDWR: mdb_fopen_type = 514;
-pub const MDB_O_RDONLY: mdb_fopen_type = 0;
+
+bitflags! {
+    /// File type, access mode etc. for #mdb_fopen().
+    //
+    // A comment in mdb_fopen() explains some O_* flag choices.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    #[repr(C)]
+    pub struct MdbFopenType: i32 {
+        /// for RDONLY me_fd
+        const MDB_O_RDONLY = libc::O_RDONLY;
+        /// for me_fd
+        const MDB_O_RDWR = libc::O_RDWR | libc::O_CREAT;
+        /// for me_mfd
+        const MDB_O_META = libc::O_WRONLY | libc::O_DSYNC | libc::O_CLOEXEC;
+        /// for #mdb_env_copy()
+        const MDB_O_COPY = libc::O_WRONLY | libc::O_CREAT | libc::O_EXCL | libc::O_CLOEXEC;
+        /// Bitmask for open() flags in enum #mdb_fopen_type.  The other bits
+        /// distinguish otherwise-equal MDB_O_* constants from each other.
+        const MDB_O_MASK = MdbFopenType::MDB_O_RDWR.bits()
+            | libc::O_CLOEXEC
+            | MdbFopenType::MDB_O_RDONLY.bits()
+            | MdbFopenType::MDB_O_META.bits()
+            | MdbFopenType::MDB_O_COPY.bits();
+        /// for me_lfd
+        const MDB_O_LOCKS = MdbFopenType::MDB_O_RDWR.bits()
+            | libc::O_CLOEXEC
+            | ((MdbFopenType::MDB_O_MASK.bits() + 1) & !MdbFopenType::MDB_O_MASK.bits());
+    }
+}
 
 const P_INVALID: pgno_t = !(0 as pgno_t);
 
@@ -4354,7 +4376,7 @@ unsafe extern "C" fn mdb_fname_init(
 unsafe extern "C" fn mdb_fopen(
     mut env: *const MDB_env,
     mut fname: *mut MDB_name,
-    mut which: mdb_fopen_type,
+    mut which: MdbFopenType,
     mut mode: mdb_mode_t,
     mut res: *mut std::ffi::c_int,
 ) -> std::ffi::c_int {
@@ -4365,33 +4387,30 @@ unsafe extern "C" fn mdb_fopen(
         if (*fname).mn_alloced != 0 {
             strcpy(
                 ((*fname).mn_val).offset((*fname).mn_len as isize),
-                mdb_suffixes
-                    [(which as std::ffi::c_uint == MDB_O_LOCKS as std::ffi::c_uint) as usize]
+                mdb_suffixes[(which == MdbFopenType::MDB_O_LOCKS) as usize]
                     [(*env).me_flags.contains(InternalEnvFlags::MDB_NOSUBDIR) as usize],
             );
         }
         fd = open(
             (*fname).mn_val,
-            (which as std::ffi::c_uint & MDB_O_MASK as std::ffi::c_uint) as std::ffi::c_int,
+            (which & MdbFopenType::MDB_O_MASK).bits(),
             mode as std::ffi::c_int,
         );
         if fd == -(1 as std::ffi::c_int) {
             rc = *__error();
         } else {
-            if which as std::ffi::c_uint != MDB_O_RDONLY as std::ffi::c_uint
-                && which as std::ffi::c_uint != MDB_O_RDWR as std::ffi::c_uint
+            if which != MdbFopenType::MDB_O_RDONLY
+                && which != MdbFopenType::MDB_O_RDWR
                 && 0x1000000 as std::ffi::c_int == 0
                 && {
                     flags = fcntl(fd, 1 as std::ffi::c_int);
                     flags != -(1 as std::ffi::c_int)
                 }
             {
-                fcntl(fd, 2 as std::ffi::c_int, flags | 1 as std::ffi::c_int);
+                fcntl(fd, libc::F_SETFD, flags | libc::FD_CLOEXEC);
             }
-            if which as std::ffi::c_uint == MDB_O_COPY as std::ffi::c_uint
-                && (*env).me_psize >= (*env).me_os_psize
-            {
-                fcntl(fd, 48 as std::ffi::c_int, 1 as std::ffi::c_int);
+            if which == MdbFopenType::MDB_O_COPY && (*env).me_psize >= (*env).me_os_psize {
+                fcntl(fd, libc::F_NOCACHE, 1);
             }
         }
         *res = fd;
@@ -4627,7 +4646,13 @@ unsafe extern "C" fn mdb_env_setup_locks(
         let mut rc: std::ffi::c_int = 0;
         let mut size: off_t = 0;
         let mut rsize: off_t = 0;
-        rc = mdb_fopen(env, fname, MDB_O_LOCKS, mode as mdb_mode_t, &mut (*env).me_lfd);
+        rc = mdb_fopen(
+            env,
+            fname,
+            MdbFopenType::MDB_O_LOCKS,
+            mode as mdb_mode_t,
+            &mut (*env).me_lfd,
+        );
         if rc != 0 {
             if rc == 30 as std::ffi::c_int
                 && (*env).me_flags.intersects(InternalEnvFlags::MDB_RDONLY)
@@ -4973,11 +4998,11 @@ pub unsafe extern "C" fn mdb_env_open(
                         rc = mdb_fopen(
                             env,
                             &mut fname,
-                            (if flags.intersects(InternalEnvFlags::MDB_RDONLY) {
-                                MDB_O_RDONLY as std::ffi::c_int
+                            if flags.intersects(InternalEnvFlags::MDB_RDONLY) {
+                                MdbFopenType::MDB_O_RDONLY
                             } else {
-                                MDB_O_RDWR as std::ffi::c_int
-                            }) as mdb_fopen_type,
+                                MdbFopenType::MDB_O_RDWR
+                            },
                             mode,
                             &mut (*env).me_fd,
                         );
@@ -5014,7 +5039,7 @@ pub unsafe extern "C" fn mdb_env_open(
                                             rc = mdb_fopen(
                                                 env,
                                                 &mut fname,
-                                                MDB_O_META,
+                                                MdbFopenType::MDB_O_META,
                                                 mode,
                                                 &mut (*env).me_mfd,
                                             );
@@ -13830,7 +13855,13 @@ pub unsafe extern "C" fn mdb_env_copy2(
         let mut newfd: std::ffi::c_int = -(1 as std::ffi::c_int);
         rc = mdb_fname_init(path, (*env).me_flags | InternalEnvFlags::MDB_NOLOCK, &mut fname);
         if rc == 0 as std::ffi::c_int {
-            rc = mdb_fopen(env, &mut fname, MDB_O_COPY, 0o666 as mdb_mode_t, &mut newfd);
+            rc = mdb_fopen(
+                env,
+                &mut fname,
+                MdbFopenType::MDB_O_COPY,
+                0o666 as mdb_mode_t,
+                &mut newfd,
+            );
             if fname.mn_alloced != 0 {
                 free(fname.mn_val as *mut std::ffi::c_void);
             }
