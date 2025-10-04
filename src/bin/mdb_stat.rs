@@ -652,7 +652,7 @@ unsafe fn main_0(
                                     match current_block {
                                         17913902266519338787 => {}
                                         _ => {
-                                            if rc == -(30798 as std::ffi::c_int) {
+                                            if rc == MDB_NOTFOUND {
                                                 rc = MDB_SUCCESS;
                                             }
                                             mdb_dbi_close(env, dbi);

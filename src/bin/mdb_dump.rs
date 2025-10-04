@@ -375,7 +375,7 @@ unsafe extern "C" fn dumpit(
             }
         }
         printf(b"DATA=END\n\0" as *const u8 as *const std::ffi::c_char);
-        if rc == -(30798 as std::ffi::c_int) {
+        if rc == MDB_NOTFOUND {
             rc = MDB_SUCCESS;
         }
         rc
@@ -616,8 +616,8 @@ unsafe fn main_0(
                                     prog,
                                     envname,
                                 );
-                                rc = -(30798 as std::ffi::c_int);
-                            } else if rc == -(30798 as std::ffi::c_int) {
+                                rc = MDB_NOTFOUND;
+                            } else if rc == MDB_NOTFOUND {
                                 rc = MDB_SUCCESS;
                             }
                             current_block = 7158658067966855297;
@@ -629,7 +629,7 @@ unsafe fn main_0(
                     match current_block {
                         3406114488404958958 => {}
                         _ => {
-                            if rc != 0 && rc != -(30798 as std::ffi::c_int) {
+                            if rc != 0 && rc != MDB_NOTFOUND {
                                 fprintf(
                                     get_stderr(),
                                     b"%s: %s: %s\n\0" as *const u8 as *const std::ffi::c_char,

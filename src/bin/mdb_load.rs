@@ -995,7 +995,7 @@ unsafe fn main_0(
                                         &mut data,
                                         (putflags | appflag) as std::ffi::c_uint,
                                     );
-                                    if rc == -(30799 as std::ffi::c_int) && putflags != 0 {
+                                    if rc == MDB_KEYEXIST && putflags != 0 {
                                         continue;
                                     }
                                     if rc != 0 {

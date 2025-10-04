@@ -249,7 +249,7 @@ unsafe fn main_0(
                 ::core::mem::size_of::<[std::ffi::c_char; 32]>() as std::ffi::c_ulong as size_t;
             data.mv_data = sval.as_mut_ptr() as *mut std::ffi::c_void;
             rc = mdb_put(txn, dbi, &mut key, &mut data, 0x10 as std::ffi::c_uint);
-            if rc == -(30799 as std::ffi::c_int) || {
+            if rc == MDB_KEYEXIST || {
                 if rc == 0 {
                 } else {
                     fprintf(
@@ -345,7 +345,7 @@ unsafe fn main_0(
                 data.mv_data as *mut std::ffi::c_char,
             );
         }
-        if rc == -(30798 as std::ffi::c_int) {
+        if rc == MDB_NOTFOUND {
         } else {
             fprintf(
                 get_stderr(),
@@ -389,7 +389,7 @@ unsafe fn main_0(
                 *values.offset(i as isize),
             );
             rc = mdb_del(txn, dbi, &mut key, std::ptr::null_mut::<MDB_val>());
-            if rc == -(30798 as std::ffi::c_int) || {
+            if rc == MDB_NOTFOUND || {
                 if rc == 0 {
                 } else {
                     fprintf(
@@ -484,7 +484,7 @@ unsafe fn main_0(
                 data.mv_data as *mut std::ffi::c_char,
             );
         }
-        if rc == -(30798 as std::ffi::c_int) {
+        if rc == MDB_NOTFOUND {
         } else {
             fprintf(
                 get_stderr(),
@@ -510,7 +510,7 @@ unsafe fn main_0(
                 data.mv_data as *mut std::ffi::c_char,
             );
         }
-        if rc == -(30798 as std::ffi::c_int) {
+        if rc == MDB_NOTFOUND {
         } else {
             fprintf(
                 get_stderr(),
