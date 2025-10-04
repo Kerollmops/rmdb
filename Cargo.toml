@@ -6,3 +6,4 @@ edition = "2024"
 [dependencies]
 bitflags = "2.9.0"
 libc = "0.2.175"
+unaligned = "0.1.1"

@@ -128,6 +128,7 @@ use std::mem::offset_of;
 
 use bitflags::bitflags;
 use libc::{EINVAL, ENOMEM};
+use unaligned::Unaligned;
 
 use crate::MDB_cursor_op::*;
 use crate::midl::*;
@@ -1952,7 +1953,11 @@ unsafe extern "C" fn mdb_page_touch(mut mc: *mut MDB_cursor) -> i32 {
         let mut m3: *mut MDB_cursor = std::ptr::null_mut::<MDB_cursor>();
         let mut pgno: pgno_t = 0;
         let mut rc: std::ffi::c_int = 0;
-        if !std::ptr::read_unaligned(mp as *mut MDB_page2).mp2_flags.contains(PageFlags::P_DIRTY) {
+        if !Unaligned::from_mut_ptr(mp as *mut MDB_page2)
+            .get()
+            .mp2_flags
+            .contains(PageFlags::P_DIRTY)
+        {
             if (*txn).mt_flags.intersects(TransactionFlags::MDB_TXN_SPILLS) {
                 np = std::ptr::null_mut::<MDB_page>();
                 rc = mdb_page_unspill(txn, mp, &mut np);
@@ -6355,10 +6360,7 @@ unsafe extern "C" fn mdb_cursor_next(
                     if op as std::ffi::c_uint != MDB_NEXT as std::ffi::c_uint || rc != MDB_NOTFOUND
                     {
                         if rc == 0 as std::ffi::c_int && !key.is_null() {
-                            (*key).mv_size = std::ptr::read_unaligned(
-                                (leaf as *mut u8).offset(offset_of!(MDB_node, mn_ksize) as isize)
-                                    as *mut u16,
-                            ) as size_t;
+                            (*key).mv_size = Unaligned::from_mut_ptr(leaf).get().mn_ksize as size_t;
                             (*key).mv_data =
                                 ((*leaf).mn_data).as_mut_ptr() as *mut std::ffi::c_void;
                         }
@@ -6443,12 +6445,7 @@ unsafe extern "C" fn mdb_cursor_next(
                     0 as std::ffi::c_uint
                 }) as isize,
             ) as *mut MDB_node;
-        if std::ptr::read_unaligned(
-            (leaf as *mut u8).offset(offset_of!(MDB_node, mn_flags) as isize) as *mut u8,
-        ) as std::ffi::c_int
-            & 0x4 as std::ffi::c_int
-            == 0x4 as std::ffi::c_int
-        {
+        if Unaligned::from_mut_ptr(leaf).get().mn_flags & 0x4 == 0x4 {
             mdb_xcursor_init1(mc, leaf);
             rc = mdb_cursor_first(
                 &mut (*(*mc).mc_xcursor).mx_cursor,
@@ -6465,9 +6462,7 @@ unsafe extern "C" fn mdb_cursor_next(
             }
         }
         if !key.is_null() {
-            (*key).mv_size = std::ptr::read_unaligned(
-                (leaf as *mut u8).offset(offset_of!(MDB_node, mn_ksize) as isize) as *mut u16,
-            ) as size_t;
+            (*key).mv_size = Unaligned::from_mut_ptr(leaf).get().mn_ksize as size_t;
             (*key).mv_data = ((*leaf).mn_data).as_mut_ptr() as *mut std::ffi::c_void;
         }
         0 as std::ffi::c_int
@@ -6533,11 +6528,8 @@ unsafe extern "C" fn mdb_cursor_prev(
                     {
                         if rc == 0 as std::ffi::c_int {
                             if !key.is_null() {
-                                (*key).mv_size = std::ptr::read_unaligned(
-                                    (leaf as *mut u8)
-                                        .offset(offset_of!(MDB_node, mn_ksize) as isize)
-                                        as *mut u16,
-                                ) as size_t;
+                                (*key).mv_size =
+                                    Unaligned::from_mut_ptr(leaf).get().mn_ksize as size_t;
                                 (*key).mv_data =
                                     ((*leaf).mn_data).as_mut_ptr() as *mut std::ffi::c_void;
                             }
@@ -6618,9 +6610,7 @@ unsafe extern "C" fn mdb_cursor_prev(
             }
         }
         if !key.is_null() {
-            (*key).mv_size = std::ptr::read_unaligned(
-                (leaf as *mut u8).offset(offset_of!(MDB_node, mn_ksize) as isize) as *mut u16,
-            ) as size_t;
+            (*key).mv_size = Unaligned::from_mut_ptr(leaf).get().mn_ksize as size_t;
             (*key).mv_data = ((*leaf).mn_data).as_mut_ptr() as *mut std::ffi::c_void;
         }
         0 as std::ffi::c_int
@@ -6689,9 +6679,7 @@ unsafe extern "C" fn mdb_cursor_set(
                             0 as std::ffi::c_uint
                         }) as isize,
                     ) as *mut MDB_node;
-                nodekey.mv_size = std::ptr::read_unaligned(
-                    (leaf as *mut u8).offset(offset_of!(MDB_node, mn_ksize) as isize) as *mut u16,
-                ) as size_t;
+                nodekey.mv_size = Unaligned::from_mut_ptr(leaf).get().mn_ksize as size_t;
                 nodekey.mv_data = ((*leaf).mn_data).as_mut_ptr() as *mut std::ffi::c_void;
             }
             rc = ((*(*mc).mc_dbx).md_cmp).expect("non-null function pointer")(key, &mut nodekey);
@@ -6738,10 +6726,8 @@ unsafe extern "C" fn mdb_cursor_set(
                                         0 as std::ffi::c_uint
                                     }) as isize,
                                 ) as *mut MDB_node;
-                            nodekey.mv_size = std::ptr::read_unaligned(
-                                (leaf as *mut u8).offset(offset_of!(MDB_node, mn_ksize) as isize)
-                                    as *mut u16,
-                            ) as size_t;
+                            nodekey.mv_size =
+                                Unaligned::from_mut_ptr(leaf).get().mn_ksize as size_t;
                             nodekey.mv_data =
                                 ((*leaf).mn_data).as_mut_ptr() as *mut std::ffi::c_void;
                         }
@@ -6796,12 +6782,8 @@ unsafe extern "C" fn mdb_cursor_set(
                                             }) as isize,
                                         )
                                         as *mut MDB_node;
-                                    nodekey.mv_size = std::ptr::read_unaligned(
-                                        (leaf as *mut u8)
-                                            .offset(offset_of!(MDB_node, mn_ksize) as isize)
-                                            as *mut u16,
-                                    )
-                                        as size_t;
+                                    nodekey.mv_size =
+                                        Unaligned::from_mut_ptr(leaf).get().mn_ksize as size_t;
                                     nodekey.mv_data =
                                         ((*leaf).mn_data).as_mut_ptr() as *mut std::ffi::c_void;
                                 }
@@ -7043,9 +7025,7 @@ unsafe extern "C" fn mdb_cursor_set(
             || op as std::ffi::c_uint == MDB_SET_KEY as std::ffi::c_uint)
             && !key.is_null()
         {
-            (*key).mv_size = std::ptr::read_unaligned(
-                (leaf as *mut u8).offset(offset_of!(MDB_node, mn_ksize) as isize) as *mut u16,
-            ) as size_t;
+            (*key).mv_size = Unaligned::from_mut_ptr(leaf).get().mn_ksize as size_t;
             (*key).mv_data = ((*leaf).mn_data).as_mut_ptr() as *mut std::ffi::c_void;
         }
         rc
@@ -7124,12 +7104,7 @@ unsafe extern "C" fn mdb_cursor_first(
             }
             return MDB_SUCCESS;
         }
-        if std::ptr::read_unaligned(
-            (leaf as *mut u8).offset(offset_of!(MDB_node, mn_flags) as isize) as *mut u8,
-        ) as std::ffi::c_int
-            & 0x4 as std::ffi::c_int
-            == 0x4 as std::ffi::c_int
-        {
+        if Unaligned::from_mut_ptr(leaf).get().mn_flags & 0x4 == 0x4 {
             mdb_xcursor_init1(mc, leaf);
             rc = mdb_cursor_first(
                 &mut (*(*mc).mc_xcursor).mx_cursor,
@@ -7146,9 +7121,7 @@ unsafe extern "C" fn mdb_cursor_first(
             }
         }
         if !key.is_null() {
-            (*key).mv_size = std::ptr::read_unaligned(
-                (leaf as *mut u8).offset(offset_of!(MDB_node, mn_ksize) as isize) as *mut u16,
-            ) as size_t;
+            (*key).mv_size = Unaligned::from_mut_ptr(leaf).get().mn_ksize as size_t;
             (*key).mv_data = ((*leaf).mn_data).as_mut_ptr() as *mut std::ffi::c_void;
         }
         return MDB_SUCCESS;
@@ -7250,9 +7223,7 @@ unsafe extern "C" fn mdb_cursor_last(
             }
         }
         if !key.is_null() {
-            (*key).mv_size = std::ptr::read_unaligned(
-                (leaf as *mut u8).offset(offset_of!(MDB_node, mn_ksize) as isize) as *mut u16,
-            ) as size_t;
+            (*key).mv_size = Unaligned::from_mut_ptr(leaf).get().mn_ksize as size_t;
             (*key).mv_data = ((*leaf).mn_data).as_mut_ptr() as *mut std::ffi::c_void;
         }
         return MDB_SUCCESS;
@@ -7326,11 +7297,8 @@ pub unsafe extern "C" fn mdb_cursor_get(
                                 )
                                 as *mut MDB_node;
                             if !key.is_null() {
-                                (*key).mv_size = std::ptr::read_unaligned(
-                                    (leaf as *mut u8)
-                                        .offset(offset_of!(MDB_node, mn_ksize) as isize)
-                                        as *mut u16,
-                                ) as size_t;
+                                (*key).mv_size =
+                                    Unaligned::from_mut_ptr(leaf).get().mn_ksize as size_t;
                                 (*key).mv_data =
                                     ((*leaf).mn_data).as_mut_ptr() as *mut std::ffi::c_void;
                             }
@@ -8359,11 +8327,7 @@ unsafe extern "C" fn _mdb_cursor_put(
                                     current_block = 10257223768985283691;
                                     break;
                                 } else if (*key).mv_size
-                                    == std::ptr::read_unaligned(
-                                        (leaf as *mut u8)
-                                            .offset(offset_of!(MDB_node, mn_ksize) as isize)
-                                            as *mut u16,
-                                    ) as size_t
+                                    == Unaligned::from_mut_ptr(leaf).get().mn_ksize as size_t
                                 {
                                     memcpy(
                                         ((*leaf).mn_data).as_mut_ptr() as *mut std::ffi::c_void,
@@ -8525,10 +8489,8 @@ unsafe extern "C" fn _mdb_cursor_put(
                 } else {
                     mdb_leaf_size(env, key, rdata)
                 };
-                if ((std::ptr::read_unaligned::<MDB_page2>(
-                    (*mc).mc_pg[(*mc).mc_top as usize] as *mut MDB_page2,
-                )
-                .mp2_upper as std::ffi::c_int
+                if ((std::ptr::read_unaligned((*mc).mc_pg[(*mc).mc_top as usize] as *mut MDB_page2)
+                    .mp2_upper as std::ffi::c_int
                     - std::ptr::read_unaligned(
                         (*mc).mc_pg[(*mc).mc_top as usize] as *mut std::ffi::c_void
                             as *mut MDB_page2,
@@ -9453,10 +9415,10 @@ unsafe extern "C" fn mdb_node_add(
                     & 0x2 as std::ffi::c_int
                     == 0x2 as std::ffi::c_int
                 {
-                    ndata = ((*node).mn_data).as_mut_ptr().offset(std::ptr::read_unaligned(
-                        (node as *mut u8).offset(offset_of!(MDB_node, mn_ksize) as isize)
-                            as *mut u16,
-                    ) as isize) as *mut std::ffi::c_void;
+                    ndata = ((*node).mn_data)
+                        .as_mut_ptr()
+                        .offset(Unaligned::from_mut_ptr(node).get().mn_ksize as isize)
+                        as *mut std::ffi::c_void;
                     if ofp.is_null() {
                         if flags & 0x1 as std::ffi::c_uint == 0x1 as std::ffi::c_uint {
                             memcpy(
