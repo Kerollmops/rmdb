@@ -8329,21 +8329,17 @@ unsafe extern "C" fn _mdb_cursor_put(
             if current_block == 10601179871800211547 {
                 if mp != fp {
                     (*(mp as *mut MDB_page2)).mp2_flags.insert(PageFlags::P_DIRTY);
-                    std::ptr::write_unaligned(
-                        (mp as *mut u8).offset(offset_of!(MDB_page2, mp2_pad) as isize) as *mut u16,
-                        Unaligned::from_ptr(fp as *const MDB_page2).get().mp2_pad,
-                    );
-                    std::ptr::write_unaligned(
-                        (mp as *mut u8).offset(offset_of!(MDB_page2, mp2_lower) as isize)
-                            as *mut indx_t,
-                        Unaligned::from_ptr(fp as *const MDB_page2).get().mp2_lower,
-                    );
-                    std::ptr::write_unaligned(
-                        (mp as *mut u8).offset(offset_of!(MDB_page2, mp2_upper) as isize)
-                            as *mut indx_t,
-                        (Unaligned::from_ptr(fp as *const MDB_page2).get().mp2_upper as u32)
-                            .wrapping_add(offset) as indx_t,
-                    );
+                    Unaligned::from_mut_ptr(mp as *mut MDB_page2).with_mut(|mp| {
+                        mp.mp2_pad = Unaligned::from_ptr(fp as *const MDB_page2).get().mp2_pad;
+                    });
+                    Unaligned::from_mut_ptr(mp as *mut MDB_page2).with_mut(|mp| {
+                        mp.mp2_lower = Unaligned::from_ptr(fp as *const MDB_page2).get().mp2_lower;
+                    });
+                    Unaligned::from_mut_ptr(mp as *mut MDB_page2).with_mut(|mp| {
+                        mp.mp2_upper = (Unaligned::from_ptr(fp as *const MDB_page2).get().mp2_upper
+                            as u32)
+                            .wrapping_add(offset) as indx_t;
+                    });
                     if fp_flags.intersects(PageFlags::P_LEAF2) {
                         memcpy(
                             (mp as *mut std::ffi::c_char).offset(16) as *mut std::ffi::c_void,
@@ -9296,17 +9292,15 @@ unsafe extern "C" fn mdb_node_add(
                         .offset(indx as isize),
                     ofs,
                 );
-                std::ptr::write_unaligned(
-                    (mp as *mut u8).offset(offset_of!(MDB_page2, mp2_upper) as isize) as *mut u16,
-                    ofs,
-                );
-                std::ptr::write_unaligned(
-                    (mp as *mut u8).offset(offset_of!(MDB_page2, mp2_lower) as isize) as *mut u16,
-                    Unaligned::from_ptr(mp as *const MDB_page2)
+                Unaligned::from_mut_ptr(mp as *mut MDB_page2).with_mut(|mp| {
+                    mp.mp2_upper = ofs;
+                });
+                Unaligned::from_mut_ptr(mp as *mut MDB_page2).with_mut(|mp| {
+                    mp.mp2_lower = Unaligned::from_ptr(mp as *const MDB_page2)
                         .get()
                         .mp2_lower
-                        .wrapping_add(::core::mem::size_of::<indx_t>() as u16),
-                );
+                        .wrapping_add(::core::mem::size_of::<indx_t>() as u16);
+                });
                 node = (mp as *mut u8)
                     .offset(std::ptr::read_unaligned(
                         ((mp as *mut u8).offset(offset_of!(MDB_page2, mp2_ptrs) as isize)
@@ -9326,33 +9320,29 @@ unsafe extern "C" fn mdb_node_add(
                         as std::ffi::c_ushort,
                 );
 
-                std::ptr::write_unaligned(
-                    (node as *mut u8).offset(offset_of!(MDB_node, mn_flags) as isize) as *mut u16,
-                    flags as std::ffi::c_ushort,
-                );
+                Unaligned::from_mut_ptr(node as *mut MDB_node).with_mut(|node| {
+                    node.mn_flags = flags as std::ffi::c_ushort;
+                });
 
                 if Unaligned::from_ptr(mp as *const MDB_page2)
                     .get()
                     .mp2_flags
                     .contains(PageFlags::P_LEAF)
                 {
-                    std::ptr::write_unaligned(
-                        (node as *mut u8).offset(offset_of!(MDB_node, mn_lo) as isize) as *mut u16,
-                        ((*data).mv_size & 0xffff as size_t) as std::ffi::c_ushort,
-                    );
-                    std::ptr::write_unaligned(
-                        (node as *mut u8).offset(offset_of!(MDB_node, mn_hi) as isize) as *mut u16,
-                        ((*data).mv_size >> 16 as std::ffi::c_int) as std::ffi::c_ushort,
-                    );
+                    Unaligned::from_mut_ptr(node as *mut MDB_node).with_mut(|node| {
+                        node.mn_lo = ((*data).mv_size & 0xffff as size_t) as std::ffi::c_ushort;
+                    });
+                    Unaligned::from_mut_ptr(node as *mut MDB_node).with_mut(|node| {
+                        node.mn_hi =
+                            ((*data).mv_size >> 16 as std::ffi::c_int) as std::ffi::c_ushort;
+                    });
                 } else {
-                    std::ptr::write_unaligned(
-                        (node as *mut u8).offset(offset_of!(MDB_node, mn_lo) as isize) as *mut u16,
-                        (pgno & 0xffff as pgno_t) as std::ffi::c_ushort,
-                    );
-                    std::ptr::write_unaligned(
-                        (node as *mut u8).offset(offset_of!(MDB_node, mn_hi) as isize) as *mut u16,
-                        (pgno >> 16 as std::ffi::c_int) as std::ffi::c_ushort,
-                    );
+                    Unaligned::from_mut_ptr(node as *mut MDB_node).with_mut(|node| {
+                        node.mn_lo = (pgno & 0xffff as pgno_t) as std::ffi::c_ushort;
+                    });
+                    Unaligned::from_mut_ptr(node as *mut MDB_node).with_mut(|node| {
+                        node.mn_hi = (pgno >> 16 as std::ffi::c_int) as std::ffi::c_ushort;
+                    });
                     if if -(1 as std::ffi::c_int) as pgno_t > 0xffffffff as pgno_t {
                         32 as std::ffi::c_int
                     } else {
